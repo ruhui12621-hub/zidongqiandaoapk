@@ -160,7 +160,7 @@ class MainActivity : Activity() {
         if (hasLoginToken) {
             yamlValue = makeYaml(found)
             status.text = "登录状态：检测到登录凭据"
-            details.text = "已读取 \${names.size} 个 Cookie 字段。\n关键字段：" +
+            details.text = "已读取 ${names.size} 个 Cookie 字段。\n关键字段：" +
                 names.filter {
                     it.contains("token") || it.contains("account") || it.contains("uid")
                 }.sorted().joinToString(", ") +
@@ -172,7 +172,7 @@ class MainActivity : Activity() {
             details.text = if (found.isBlank()) {
                 "当前没有读取到 HoYoLAB Cookie。请在内置浏览器完成登录，并返回检测。"
             } else {
-                "读取到 \${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。"
+                "读取到 ${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。"
             }
             if (showToast) toast("未发现登录 Cookie，请确认登录成功")
         }
