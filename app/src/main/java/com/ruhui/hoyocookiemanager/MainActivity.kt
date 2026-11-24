@@ -54,6 +54,28 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(text("独立运行 · Cookie 仅保存在本机", 13, false, Color.DKGRAY))
+
+        val previousCrash = CrashLogger.read(this)
+        if (!previousCrash.isNullOrBlank()) {
+            content.addView(text("检测到上次闪退记录", 18, true, Color.rgb(180, 45, 45)).apply {
+                setPadding(0, dp(18), 0, dp(6))
+            })
+            content.addView(text(previousCrash, 12, false, Color.DKGRAY).apply {
+                setTextIsSelectable(true)
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+                setBackgroundColor(Color.rgb(235, 235, 235))
+            })
+            content.addView(button("复制闪退记录") {
+                copy(previousCrash, "闪退记录")
+            })
+            content.addView(button("清除闪退记录") {
+                CrashLogger.clear(this)
+                buildHome()
+                refreshFromWebView()
+                toast("已清除闪退记录")
+            })
+        }
+
         status = text("登录状态：尚未检测", 16, true).apply {
             setPadding(0, dp(22), 0, dp(8))
         }
@@ -138,7 +160,7 @@ class MainActivity : Activity() {
         if (hasLoginToken) {
             yamlValue = makeYaml(found)
             status.text = "登录状态：检测到登录凭据"
-            details.text = "已读取 ${names.size} 个 Cookie 字段。\n关键字段：" +
+            details.text = "已读取 \${names.size} 个 Cookie 字段。\n关键字段：" +
                 names.filter {
                     it.contains("token") || it.contains("account") || it.contains("uid")
                 }.sorted().joinToString(", ") +
@@ -150,7 +172,7 @@ class MainActivity : Activity() {
             details.text = if (found.isBlank()) {
                 "当前没有读取到 HoYoLAB Cookie。请在内置浏览器完成登录，并返回检测。"
             } else {
-                "读取到 ${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。"
+                "读取到 \${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。"
             }
             if (showToast) toast("未发现登录 Cookie，请确认登录成功")
         }
