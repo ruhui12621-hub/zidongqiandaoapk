@@ -41,28 +41,44 @@ class HuaweiCloudActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configYaml = intent.getStringExtra("config_yaml").orEmpty()
-        val root = LinearLayout(this).apply { orientation = 1; setPadding(36, 28, 36, 24) }
+        if (configYaml.isBlank()) configYaml = lastConfigYaml
+        val root = LinearLayout(this).apply {
+            orientation = 1
+            setPadding(dp(18), dp(18), dp(18), dp(16))
+            setBackgroundColor(android.graphics.Color.rgb(15, 17, 23))
+        }
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = 1 }
         scroll.addView(content)
-        content.addView(TextView(this).apply { text = "华为云 FunctionGraph"; textSize = 23f })
+        content.addView(TextView(this).apply {
+            text = "华为云 FunctionGraph"
+            textSize = 24f
+            setTextColor(0xFFECEFF5.toInt())
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, dp(6))
+        })
         content.addView(TextView(this).apply {
             text = "直接使用 APK 获取的 Cookie 更新云端配置，无需复制粘贴。"
-            textSize = 14f; setPadding(0, 10, 0, 14)
+            textSize = 14f; setTextColor(0xFFA7B0C0.toInt()); setPadding(0, dp(8), 0, dp(16))
         })
-        region = field(content, "Region", "cn-east-3")
-        ak = field(content, "AK", "")
-        sk = field(content, "SK", "", true)
+        region = field(content, "Region", HuaweiCloudSession.region.ifBlank { "cn-east-3" })
+        ak = field(content, "AK", HuaweiCloudSession.ak)
+        sk = field(content, "SK", HuaweiCloudSession.sk, true)
         content.addView(Button(this).apply {
             text = "登录并读取函数列表"; isAllCaps = false; setOnClickListener { login() }
         })
-        content.addView(TextView(this).apply { text = "目标云函数（默认 zzzzz）"; setPadding(0, 16, 0, 4) })
+        content.addView(TextView(this).apply {
+            text = "目标云函数（默认 zzzzz）"
+            setTextColor(0xFFE1E6EF.toInt())
+            setPadding(0, dp(18), 0, dp(6))
+        })
         spinner = Spinner(this)
         content.addView(spinner)
         content.addView(TextView(this).apply {
             text = if (configYaml.isBlank()) "尚未从 Cookie 页面接收到有效配置，请返回首页检测 Cookie。"
             else "已自动接收 APK 内生成的 config.yaml（" + configYaml.length + " 个字符）。"
-            setPadding(0, 12, 0, 8)
+            setTextColor(0xFFA7B0C0.toInt())
+            setPadding(0, dp(12), 0, dp(8))
         })
         updateButton = Button(this).apply {
             text = "一键更新云函数配置"; isAllCaps = false; isEnabled = false
@@ -71,18 +87,43 @@ class HuaweiCloudActivity : Activity() {
         content.addView(updateButton)
         status = TextView(this).apply {
             text = "尚未连接华为云。AK/SK 只保留在本页面内存中。"
-            textSize = 13f; setPadding(0, 16, 0, 10)
+            textSize = 13f; setTextColor(0xFFB8C1D1.toInt()); setPadding(0, dp(16), 0, dp(10))
         }
         content.addView(status)
         content.addView(Button(this).apply { text = "返回 Cookie 页面"; isAllCaps = false; setOnClickListener { finish() } })
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        if (HuaweiCloudSession.isLoggedIn()) {
+            projectId = HuaweiCloudSession.projectId
+            regionValue = HuaweiCloudSession.region
+            authAk = HuaweiCloudSession.ak
+            authSk = HuaweiCloudSession.sk
+            functions = HuaweiCloudSession.functions
+            val names = functions.map { it.first }.distinct()
+            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
+            val preferred = names.indexOf(HuaweiCloudSession.selectedFunction).takeIf { it >= 0 }
+                ?: names.indexOf("zzzzz")
+            if (preferred >= 0) spinner.setSelection(preferred)
+            status.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId\n读取到 ${functions.size} 个函数。"
+            updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
+        }
     }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     private fun field(parent: LinearLayout, label: String, value: String, secret: Boolean = false): EditText {
-        parent.addView(TextView(this).apply { text = label; setPadding(0, 8, 0, 2) })
+        parent.addView(TextView(this).apply {
+            text = label
+            setTextColor(0xFFDCE2EC.toInt())
+            setPadding(0, dp(10), 0, dp(4))
+        })
         return EditText(this).also {
-            it.setSingleLine(true); it.setText(value)
+            it.setSingleLine(true)
+            it.setText(value)
+            it.setTextColor(0xFFECEFF5.toInt())
+            it.setHintTextColor(0xFF7F899A.toInt())
+            it.setHint(if (secret) "输入 SK" else "请输入 $label")
+            it.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF65718A.toInt())
             if (secret) it.inputType = 129
             parent.addView(it, LinearLayout.LayoutParams(-1, -2))
         }
@@ -116,6 +157,11 @@ class HuaweiCloudActivity : Activity() {
                 }
                 runOnUiThread {
                     projectId = pid; functions = found
+                    HuaweiCloudSession.ak = authAk
+                    HuaweiCloudSession.sk = authSk
+                    HuaweiCloudSession.region = regionValue
+                    HuaweiCloudSession.projectId = pid
+                    HuaweiCloudSession.functions = found
                     val names = found.map { it.first }.distinct()
                     spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
                     val preferred = names.indexOf("zzzzz")
@@ -132,6 +178,7 @@ class HuaweiCloudActivity : Activity() {
     }
 
     private fun prepareUpdate() {
+        spinner.selectedItem?.toString()?.let { HuaweiCloudSession.selectedFunction = it }
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) { status.text = "请先登录华为云。"; return }
         if (configYaml.isBlank() || !configYaml.contains("cookie:")) { status.text = "没有有效的 Cookie 配置，请返回首页检测。"; return }
         val name = spinner.selectedItem?.toString().orEmpty()
@@ -355,7 +402,9 @@ class HuaweiCloudActivity : Activity() {
     }
 
     override fun onDestroy() {
-        worker.shutdownNow(); authAk = ""; authSk = ""; preparedArchive = null
+        worker.shutdownNow()
+        preparedArchive = null
+        // AK/SK 与函数列表保存在进程内单例；普通返回页面不会退出华为云登录。
         super.onDestroy()
     }
 }
