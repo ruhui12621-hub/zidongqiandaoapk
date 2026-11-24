@@ -94,11 +94,10 @@ open class HuaweiCloudActivity : Activity() {
         }
         content.addView(updateButton)
         cloudStatus = TextView(this).apply {
-            text = "尚未连接华为云。AK/SK 只保留在本页面内存中。"
+            text = "尚未连接华为云。AK/SK 仅保留在当前进程内存中。"
             textSize = 13f; setTextColor(0xFFB8C1D1.toInt()); setPadding(0, dp(16), 0, dp(10))
         }
         content.addView(cloudStatus)
-        content.addView(Button(this).apply { text = "返回 Cookie 页面"; isAllCaps = false; setOnClickListener { finish() } })
         if (HuaweiCloudSession.isLoggedIn()) {
             projectId = HuaweiCloudSession.projectId
             regionValue = HuaweiCloudSession.region
