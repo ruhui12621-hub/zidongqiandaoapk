@@ -74,6 +74,17 @@ class HuaweiCloudActivity : Activity() {
             setPadding(0, dp(18), 0, dp(6))
         })
         spinner = Spinner(this)
+        spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            override fun onItemSelected(
+                parent: android.widget.AdapterView<*>?,
+                view: android.view.View?,
+                position: Int,
+                id: Long
+            ) {
+                spinner.selectedItem?.toString()?.let { HuaweiCloudSession.selectedFunction = it }
+            }
+        }
         content.addView(spinner)
         content.addView(TextView(this).apply {
             text = if (configYaml.isBlank()) "尚未从 Cookie 页面接收到有效配置，请返回首页检测 Cookie。"
