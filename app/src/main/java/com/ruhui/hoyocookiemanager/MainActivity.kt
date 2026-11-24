@@ -90,6 +90,7 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.DKGRAY))
+        content.addView(button("登录华为云 / 管理云函数") { startActivity(android.content.Intent(this, HuaweiCloudActivity::class.java)) })
         content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.DKGRAY).apply {
             setPadding(0, dp(8), 0, dp(4))
             setTextIsSelectable(true)
@@ -120,7 +121,6 @@ class MainActivity : Activity() {
             setPadding(0, dp(22), 0, dp(8))
         }
         content.addView(status)
-        content.addView(button("华为云管理（第一阶段）") { startActivity(android.content.Intent(this, HuaweiCloudActivity::class.java)) })
         content.addView(button("打开 HoYoLAB 登录页面") { showBrowser() })
         content.addView(button("检测并获取 Cookie") { refreshFromWebView(true) })
         content.addView(button("复制纯 Cookie") { copy(cookieValue, "Cookie") })
