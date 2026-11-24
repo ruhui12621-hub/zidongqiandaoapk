@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -106,6 +107,7 @@ class MainActivity : Activity() {
         bar.addView(text("HoYoLAB 登录", 18, true),
             LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
         root.addView(bar)
+        (webView.parent as? ViewGroup)?.removeView(webView)
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
         if (!browserVisible || webView.url.isNullOrBlank()) {
             webView.loadUrl("https://www.hoyolab.com/")
