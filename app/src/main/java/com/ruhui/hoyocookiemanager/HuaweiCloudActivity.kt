@@ -83,8 +83,8 @@ open class HuaweiCloudActivity : Activity() {
         }
         content.addView(spinner)
         content.addView(TextView(this).apply {
-            text = if (configYaml.isBlank()) "尚未从 Cookie 页面接收到有效配置，请返回首页检测 Cookie。"
-            else "已自动接收 APK 内生成的 config.yaml（" + configYaml.length + " 个字符）。"
+            text = if (configYaml.isBlank()) "等待上方 HoYoLAB 登录完成并获取 Cookie。"
+            else "已检测到 Cookie，可以更新云端配置。"
             setTextColor(0xFFA7B0C0.toInt())
             setPadding(0, dp(12), 0, dp(8))
         })
@@ -193,7 +193,6 @@ open class HuaweiCloudActivity : Activity() {
     private fun prepareUpdate() {
         configYaml = configProvider?.invoke().orEmpty()
         HuaweiCloudSession.lastConfigYaml = configYaml
-        updateButton.isEnabled = false
         spinner.selectedItem?.toString()?.let { HuaweiCloudSession.selectedFunction = it }
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) { cloudStatus.text = "请先登录华为云。"; return }
         if (configYaml.isBlank() || !configYaml.contains("cookie:")) { cloudStatus.text = "没有有效的 Cookie 配置，请先在上方 HoYoLAB 登录。"; return }
