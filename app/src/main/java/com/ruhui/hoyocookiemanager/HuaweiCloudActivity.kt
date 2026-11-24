@@ -41,7 +41,8 @@ class HuaweiCloudActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configYaml = intent.getStringExtra("config_yaml").orEmpty()
-        if (configYaml.isBlank()) configYaml = lastConfigYaml
+        if (configYaml.isBlank()) configYaml = HuaweiCloudSession.lastConfigYaml
+        else HuaweiCloudSession.lastConfigYaml = configYaml
         val root = LinearLayout(this).apply {
             orientation = 1
             setPadding(dp(18), dp(18), dp(18), dp(16))
