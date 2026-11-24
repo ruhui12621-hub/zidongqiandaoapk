@@ -268,7 +268,7 @@ open class HuaweiCloudActivity : Activity() {
                 while (page < 10000 && !complete) {
                     val body = JSONObject().put("start_time", startTime.toString()).put("end_time", now.toString())
                         .put("limit", 5000).put("is_desc", true)
-                        .put("search_type", if (page == 0) "init" else "forwards").put("is_count", true)
+                        .put("search_type", if (page == 0) "init" else "forwards").put("is_count", true).put("is_iterative", true)
                     if (scrollId.isNotBlank()) body.put("scroll_id", scrollId)
                     else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
                     val response = signedRequest("POST", queryUrl, body.toString())
