@@ -90,7 +90,7 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.DKGRAY))
-        content.addView(button("登录华为云 / 管理云函数") { startActivity(android.content.Intent(this, HuaweiCloudActivity::class.java)) })
+        content.addView(button("登录华为云 / 管理云函数") {\n            refreshFromWebView()\n            val cloudIntent = android.content.Intent(this, HuaweiCloudActivity::class.java)\n            cloudIntent.putExtra("config_yaml", yamlValue)\n            startActivity(cloudIntent)\n        })
         content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.DKGRAY).apply {
             setPadding(0, dp(8), 0, dp(4))
             setTextIsSelectable(true)
