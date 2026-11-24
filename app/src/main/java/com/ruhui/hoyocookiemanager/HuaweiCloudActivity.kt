@@ -163,17 +163,40 @@ class HuaweiCloudActivity : Activity() {
     }
 
     private fun confirmUpdate(oldSize: Int, newSize: Int) {
-        val preview = ScrollView(this)
-        preview.addView(TextView(this).apply {
-            text = "函数：" + preparedName + "\n目标文件：config/config.yaml\n原 ZIP：" + oldSize +
-                " bytes\n新 ZIP：" + newSize + " bytes\n\n" + configYaml
-            textSize = 12f; setPadding(24, 12, 24, 12); setTextIsSelectable(true)
+        val density = resources.displayMetrics.density
+        val previewHeight = (300 * density).toInt()
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * density).toInt(), (8 * density).toInt(),
+                (20 * density).toInt(), 0)
+        }
+        panel.addView(TextView(this).apply {
+            text = "目标函数：" + preparedName +
+                "\n目标文件：config/config.yaml" +
+                "\n原代码包：" + oldSize + " bytes" +
+                "\n更新后代码包：" + newSize + " bytes" +
+                "\n\n确认后将上传完整 ZIP；ZIP 中只有 config/config.yaml 会被替换。"
+            textSize = 14f
+            setPadding(0, 0, 0, (10 * density).toInt())
         })
-        AlertDialog.Builder(this).setTitle("确认更新云函数？")
-            .setMessage("将只替换 ZIP 中的 config/config.yaml，其他文件保留。请核对配置，确认后才上传。")
-            .setView(preview)
+        val preview = ScrollView(this).apply {
+            isFillViewport = true
+            addView(TextView(this@HuaweiCloudActivity).apply {
+                text = configYaml
+                textSize = 12f
+                setTextIsSelectable(true)
+                setPadding((12 * density).toInt(), (12 * density).toInt(),
+                    (12 * density).toInt(), (12 * density).toInt())
+            })
+        }
+        panel.addView(preview, LinearLayout.LayoutParams(-1, previewHeight))
+        AlertDialog.Builder(this)
+            .setTitle("确认更新云函数？")
+            .setView(panel)
             .setNegativeButton("取消") { _, _ ->
-                preparedArchive = null; status.text = "已取消，云端没有修改。"; updateButton.isEnabled = true
+                preparedArchive = null
+                status.text = "已取消，云端没有修改。"
+                updateButton.isEnabled = true
             }
             .setPositiveButton("确认上传并更新") { _, _ -> uploadPrepared() }
             .show()
