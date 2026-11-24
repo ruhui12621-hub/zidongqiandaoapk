@@ -100,11 +100,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         content.addView(details)
 
-        content.addView(text("华为云 FunctionGraph", 19, true, Color.rgb(235, 238, 245)).apply {
-            setPadding(0, dp(18), 0, dp(6))
-        })
-        content.addView(text("在此直接登录华为云、选择函数并更新配置，无需跳转页面。", 13, false, Color.rgb(160, 168, 182)))
-        addHuaweiCloudPanel(content)
+        addHuaweiCloudPanel(content) { yamlValue }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
