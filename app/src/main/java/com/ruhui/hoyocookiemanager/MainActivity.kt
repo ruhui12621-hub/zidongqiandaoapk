@@ -29,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var details: TextView
     private lateinit var webView: WebView
+    private var popupWebView: WebView? = null
     private var cookieValue = ""
     private var yamlValue = ""
     private var browserVisible = false
@@ -54,6 +55,12 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         // 离开应用时尽力清理；下次启动也会使用全新的 WebView 数据目录。
         try {
+            popupWebView?.let { popup ->
+                (popup.parent as? ViewGroup)?.removeView(popup)
+                popup.stopLoading()
+                popup.destroy()
+                popupWebView = null
+            }
             if (::webView.isInitialized) {
                 webView.stopLoading()
                 webView.clearCache(true)
@@ -134,6 +141,7 @@ class MainActivity : Activity() {
                 settings.domStorageEnabled = true
                 settings.loadsImagesAutomatically = true
                 settings.javaScriptCanOpenWindowsAutomatically = true
+                settings.setSupportMultipleWindows(true)
                 // 强制桌面站点布局。
                 settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                 settings.useWideViewPort = true
@@ -150,6 +158,29 @@ class MainActivity : Activity() {
                             "JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
                                 "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
                         )
+                        return true
+                    }
+
+                    override fun onCreateWindow(
+                        view: WebView,
+                        isDialog: Boolean,
+                        isUserGesture: Boolean,
+                        resultMsg: android.os.Message
+                    ): Boolean {
+                        recordWebDiagnostic("网站请求打开新窗口：userGesture=$isUserGesture，dialog=$isDialog")
+                        val popup = createPopupWebView()
+                        popupWebView?.let { old ->
+                            (old.parent as? ViewGroup)?.removeView(old)
+                            old.destroy()
+                        }
+                        popupWebView = popup
+                        (webView.parent as? ViewGroup)?.let { container ->
+                            container.addView(popup, LinearLayout.LayoutParams(-1, 0, 1f))
+                            webView.visibility = android.view.View.GONE
+                        }
+                        val transport = resultMsg.obj as WebView.WebViewTransport
+                        transport.webView = popup
+                        resultMsg.sendToTarget()
                         return true
                     }
                 }
@@ -215,10 +246,87 @@ class MainActivity : Activity() {
         root.addView(bar)
         (webView.parent as? ViewGroup)?.removeView(webView)
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
+        popupWebView?.let { popup ->
+            (popup.parent as? ViewGroup)?.removeView(popup)
+            popup.destroy()
+            popupWebView = null
+        }
+        webView.visibility = android.view.View.VISIBLE
         if (!browserVisible || webView.url.isNullOrBlank()) {
             webView.loadUrl("https://www.hoyolab.com/")
         }
         browserVisible = true
+    }
+
+
+    // 为 window.open / target=_blank 创建 APK 内部子窗口；CookieManager 与主窗口共享。
+    private fun createPopupWebView(): WebView {
+        return WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadsImagesAutomatically = true
+            settings.javaScriptCanOpenWindowsAutomatically = true
+            settings.setSupportMultipleWindows(false)
+            settings.userAgentString = webView.settings.userAgentString
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
+            settings.setSupportZoom(true)
+            settings.builtInZoomControls = true
+            settings.displayZoomControls = false
+            settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                    recordWebDiagnostic(
+                        "弹窗 JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
+                            "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
+                    )
+                    return true
+                }
+
+                override fun onCloseWindow(window: WebView) {
+                    recordWebDiagnostic("网站关闭了验证子窗口")
+                    (window.parent as? ViewGroup)?.removeView(window)
+                    window.stopLoading()
+                    window.destroy()
+                    if (popupWebView === window) popupWebView = null
+                    if (::webView.isInitialized) webView.visibility = android.view.View.VISIBLE
+                }
+            }
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    super.onPageFinished(view, url)
+                    recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError
+                ) {
+                    super.onReceivedError(view, request, error)
+                    if (request.isForMainFrame) {
+                        recordWebDiagnostic(
+                            "验证子窗口加载失败：${request.url.host}，错误码 ${error.errorCode}，${error.description}"
+                        )
+                    }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    errorResponse: android.webkit.WebResourceResponse
+                ) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (request.isForMainFrame || errorResponse.statusCode >= 400) {
+                        recordWebDiagnostic(
+                            "验证子窗口 HTTP ${errorResponse.statusCode}：${request.url.host}${request.url.encodedPath}"
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun refreshFromWebView(showToast: Boolean = false) {
@@ -328,10 +436,17 @@ class MainActivity : Activity() {
             CookieManager.getInstance().flush()
             cookieValue = ""
             yamlValue = ""
+            popupWebView?.let { popup ->
+                (popup.parent as? ViewGroup)?.removeView(popup)
+                popup.stopLoading()
+                popup.destroy()
+                popupWebView = null
+            }
             if (::webView.isInitialized) {
                 webView.clearCache(true)
                 webView.clearHistory()
                 webView.clearFormData()
+                webView.visibility = android.view.View.VISIBLE
             }
             WebStorage.getInstance().deleteAllData()
             browserVisible = false
