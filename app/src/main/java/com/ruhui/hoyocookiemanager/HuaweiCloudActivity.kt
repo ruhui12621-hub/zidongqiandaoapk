@@ -137,7 +137,8 @@ open class HuaweiCloudActivity : Activity() {
             minHeight = dp(90)
             text = "暂无日志"
         }
-        content.addView(logsOutput, LinearLayout.LayoutParams(-1, dp(260)))
+        val logsScroll = ScrollView(this).apply { addView(logsOutput) }
+        content.addView(logsScroll, LinearLayout.LayoutParams(-1, dp(260)))
         cloudStatus = TextView(this).apply {
             text = "尚未连接华为云。AK/SK 仅保留在当前进程内存中。"
             textSize = 13f; setTextColor(0xFFB8C1D1.toInt()); setPadding(0, dp(16), 0, dp(10))
