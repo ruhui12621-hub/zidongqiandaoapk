@@ -115,6 +115,14 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    protected fun updateHuaweiCloudConfig(value: String) {
+        configYaml = value
+        HuaweiCloudSession.lastConfigYaml = value
+        if (::updateButton.isInitialized) {
+            updateButton.isEnabled = value.isNotBlank() && HuaweiCloudSession.isLoggedIn()
+        }
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun field(parent: LinearLayout, label: String, value: String, secret: Boolean = false): EditText {
