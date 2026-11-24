@@ -80,7 +80,7 @@ class MainActivity : Activity() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(18))
-            setBackgroundColor(Color.rgb(247, 248, 250))
+            setBackgroundColor(Color.rgb(15, 17, 23))
         }
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -90,12 +90,6 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.DKGRAY))
-        content.addView(button("登录华为云 / 管理云函数") {
-            refreshFromWebView()
-            val cloudIntent = android.content.Intent(this, HuaweiCloudActivity::class.java)
-            cloudIntent.putExtra("config_yaml", yamlValue)
-            startActivity(cloudIntent)
-        })
         content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.DKGRAY).apply {
             setPadding(0, dp(8), 0, dp(4))
             setTextIsSelectable(true)
@@ -136,6 +130,17 @@ class MainActivity : Activity() {
             setPadding(0, dp(18), 0, dp(10))
         }
         content.addView(details)
+
+        content.addView(text("云端管理", 18, true, Color.rgb(235, 238, 245)).apply {
+            setPadding(0, dp(22), 0, dp(6))
+        })
+        content.addView(text("使用已获取的 Cookie 更新华为云 FunctionGraph 配置。", 13, false, Color.rgb(160, 168, 182)))
+        content.addView(button("登录华为云 / 管理云函数") {
+            refreshFromWebView()
+            val cloudIntent = android.content.Intent(this, HuaweiCloudActivity::class.java)
+            cloudIntent.putExtra("config_yaml", yamlValue)
+            startActivity(cloudIntent)
+        })
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
@@ -467,9 +472,13 @@ class MainActivity : Activity() {
         Button(this).apply {
             text = label
             isAllCaps = false
+            textSize = 15f
+            setTextColor(Color.rgb(238, 241, 247))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
+            minHeight = dp(48)
             setOnClickListener { action() }
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply {
-                topMargin = dp(7)
+                topMargin = dp(9)
             }
         }
 
@@ -481,7 +490,7 @@ class MainActivity : Activity() {
     ): TextView = TextView(this).apply {
         text = value
         textSize = size.toFloat()
-        setTextColor(color)
+        setTextColor(if (color == Color.BLACK) Color.rgb(235, 238, 245) else color)
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
     }
 
