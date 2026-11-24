@@ -12,7 +12,10 @@ import android.webkit.WebStorage
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -29,6 +32,7 @@ class MainActivity : Activity() {
     private var cookieValue = ""
     private var yamlValue = ""
     private var browserVisible = false
+    private val webDiagnostics = mutableListOf<String>()
 
     private val cookieUrls = listOf(
         "https://www.hoyolab.com/",
@@ -79,6 +83,10 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.DKGRAY))
+        content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.DKGRAY).apply {
+            setPadding(0, dp(8), 0, dp(4))
+            setTextIsSelectable(true)
+        })
 
         val previousCrash = CrashLogger.read(this)
         if (!previousCrash.isNullOrBlank()) {
@@ -111,7 +119,7 @@ class MainActivity : Activity() {
         content.addView(button("复制完整 config.yaml") { copy(yamlValue, "config.yaml") })
         content.addView(button("保存 config.yaml 到应用内部") { saveConfig() })
         content.addView(button("清除登录会话") { clearSession() })
-        details = text("尚未获取 Cookie。点击上方按钮登录。", 13, false, Color.DKGRAY).apply {
+        details = text("尚未获取 Cookie。点击上方按钮登录。\\n\\n" + diagnosticsSummary(), 13, false, Color.DKGRAY).apply {
             setPadding(0, dp(18), 0, dp(10))
         }
         content.addView(details)
@@ -136,11 +144,53 @@ class MainActivity : Activity() {
                 settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                webChromeClient = WebChromeClient()
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                        recordWebDiagnostic(
+                            "JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
+                                "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
+                        )
+                        return true
+                    }
+                }
                 webViewClient = object : WebViewClient() {
+                    override fun onReceivedError(
+                        view: WebView,
+                        request: WebResourceRequest,
+                        error: WebResourceError
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        if (request.isForMainFrame) {
+                            recordWebDiagnostic(
+                                "主页面加载失败：${request.url.host}，错误码 ${error.errorCode}，${error.description}"
+                            )
+                        }
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView,
+                        request: WebResourceRequest,
+                        errorResponse: android.webkit.WebResourceResponse
+                    ) {
+                        super.onReceivedHttpError(view, request, errorResponse)
+                        if (request.isForMainFrame || errorResponse.statusCode >= 400) {
+                            recordWebDiagnostic(
+                                "HTTP ${errorResponse.statusCode}：${request.url.host}${request.url.encodedPath}"
+                            )
+                        }
+                    }
+
+                    override fun onRenderProcessGone(
+                        view: WebView,
+                        detail: android.webkit.RenderProcessGoneDetail
+                    ): Boolean {
+                        recordWebDiagnostic("WebView 渲染进程退出，是否被系统回收：${detail.didCrash()}")
+                        return true
+                    }
                     override fun onPageFinished(view: WebView, url: String) {
                         super.onPageFinished(view, url)
                         status.text = "页面已加载，正在检查 Cookie…"
+                        recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         view.postDelayed({ refreshFromWebView() }, 900)
                     }
                 }
@@ -206,11 +256,43 @@ class MainActivity : Activity() {
             details.text = if (found.isBlank()) {
                 "当前没有读取到 HoYoLAB Cookie。请在内置浏览器完成登录，并返回检测。"
             } else {
-                "读取到 ${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。"
+                "读取到 ${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。\\n\\n" + diagnosticsSummary()
             }
             if (showToast) toast("未发现登录 Cookie，请确认登录成功")
         }
     }
+
+    private fun webViewEngineInfo(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return "Android ${Build.VERSION.RELEASE}；系统 API 低于 26，无法通过公开接口读取 WebView 提供程序版本"
+        }
+        return try {
+            val pkg = WebView.getCurrentWebViewPackage()
+            if (pkg == null) "无法识别 WebView 提供程序"
+            else "${pkg.packageName} · ${pkg.versionName ?: "版本未知"}"
+        } catch (e: Exception) {
+            "读取失败：${e.javaClass.simpleName}"
+        }
+    }
+
+    private fun recordWebDiagnostic(message: String) {
+        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        webDiagnostics.add("$time  $message")
+        while (webDiagnostics.size > 40) webDiagnostics.removeAt(0)
+        if (::details.isInitialized && !browserVisible) {
+            details.text = diagnosticsSummary()
+        }
+    }
+
+    private fun diagnosticsSummary(): String =
+        buildString {
+            append("实际内核：")
+            append(webViewEngineInfo())
+            append("\\n网页诊断记录：")
+            if (webDiagnostics.isEmpty()) append("\\n暂无错误或事件记录")
+            else webDiagnostics.takeLast(12).forEach { append("\\n• "); append(it) }
+        }
 
     private fun makeYaml(cookie: String): String {
         val template = assets.open("config-template.yaml").bufferedReader().use { it.readText() }
