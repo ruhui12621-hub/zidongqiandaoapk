@@ -89,8 +89,8 @@ class MainActivity : Activity() {
         content.addView(text("HoYoLAB Cookie Manager", 24, true).apply {
             setPadding(0, 0, 0, dp(6))
         })
-        content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.DKGRAY))
-        content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.DKGRAY).apply {
+        content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.rgb(160, 168, 182)))
+        content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.rgb(160, 168, 182)).apply {
             setPadding(0, dp(8), 0, dp(4))
             setTextIsSelectable(true)
         })
@@ -100,10 +100,10 @@ class MainActivity : Activity() {
             content.addView(text("检测到上次闪退记录", 18, true, Color.rgb(180, 45, 45)).apply {
                 setPadding(0, dp(18), 0, dp(6))
             })
-            content.addView(text(previousCrash, 12, false, Color.DKGRAY).apply {
+            content.addView(text(previousCrash, 12, false, Color.rgb(160, 168, 182)).apply {
                 setTextIsSelectable(true)
                 setPadding(dp(10), dp(8), dp(10), dp(8))
-                setBackgroundColor(Color.rgb(235, 235, 235))
+                setBackgroundColor(Color.rgb(31, 36, 47))
             })
             content.addView(button("复制闪退记录") {
                 copy(previousCrash, "闪退记录")
@@ -126,7 +126,7 @@ class MainActivity : Activity() {
         content.addView(button("复制完整 config.yaml") { copy(yamlValue, "config.yaml") })
         content.addView(button("保存 config.yaml 到应用内部") { saveConfig() })
         content.addView(button("清除登录会话") { clearSession() })
-        details = text("尚未获取 Cookie。点击上方按钮登录。\\n\\n" + diagnosticsSummary(), 13, false, Color.DKGRAY).apply {
+        details = text("尚未获取 Cookie。点击上方按钮登录。\\n\\n" + diagnosticsSummary(), 13, false, Color.rgb(160, 168, 182)).apply {
             setPadding(0, dp(18), 0, dp(10))
         }
         content.addView(details)
