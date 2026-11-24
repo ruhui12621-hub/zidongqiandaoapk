@@ -120,6 +120,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(22), 0, dp(8))
         }
         content.addView(status)
+        content.addView(button("华为云管理（第一阶段）") { startActivity(android.content.Intent(this, HuaweiCloudActivity::class.java)) })
         content.addView(button("打开 HoYoLAB 登录页面") { showBrowser() })
         content.addView(button("检测并获取 Cookie") { refreshFromWebView(true) })
         content.addView(button("复制纯 Cookie") { copy(cookieValue, "Cookie") })
