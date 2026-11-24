@@ -6,6 +6,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
+import android.os.Process
+import android.webkit.WebStorage
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -35,9 +38,31 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 每次进程启动使用独立 WebView 数据目录，避免复用上一次的登录会话。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WebView.setDataDirectorySuffix("hoyo_private_" + Process.myPid())
+        }
         CookieManager.getInstance().setAcceptCookie(true)
         buildHome()
         refreshFromWebView()
+    }
+
+    override fun onDestroy() {
+        // 离开应用时尽力清理；下次启动也会使用全新的 WebView 数据目录。
+        try {
+            if (::webView.isInitialized) {
+                webView.stopLoading()
+                webView.clearCache(true)
+                webView.clearHistory()
+                webView.destroy()
+            }
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+            WebStorage.getInstance().deleteAllData()
+        } catch (_: Exception) {
+            // 系统强制回收时，下一次启动仍会切换到独立数据目录。
+        }
+        super.onDestroy()
     }
 
     private fun buildHome() {
@@ -53,7 +78,7 @@ class MainActivity : Activity() {
         content.addView(text("HoYoLAB Cookie Manager", 24, true).apply {
             setPadding(0, 0, 0, dp(6))
         })
-        content.addView(text("独立运行 · Cookie 仅保存在本机", 13, false, Color.DKGRAY))
+        content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.DKGRAY))
 
         val previousCrash = CrashLogger.read(this)
         if (!previousCrash.isNullOrBlank()) {
@@ -101,6 +126,15 @@ class MainActivity : Activity() {
                 settings.domStorageEnabled = true
                 settings.loadsImagesAutomatically = true
                 settings.javaScriptCanOpenWindowsAutomatically = true
+                // 强制桌面站点布局。
+                settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.setSupportZoom(true)
+                settings.builtInZoomControls = true
+                settings.displayZoomControls = false
+                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                 webChromeClient = WebChromeClient()
                 webViewClient = object : WebViewClient() {
@@ -212,7 +246,12 @@ class MainActivity : Activity() {
             CookieManager.getInstance().flush()
             cookieValue = ""
             yamlValue = ""
-            if (::webView.isInitialized) webView.clearCache(true)
+            if (::webView.isInitialized) {
+                webView.clearCache(true)
+                webView.clearHistory()
+                webView.clearFormData()
+            }
+            WebStorage.getInstance().deleteAllData()
             browserVisible = false
             buildHome()
             status.text = "登录状态：已清除本地 WebView Cookie"
