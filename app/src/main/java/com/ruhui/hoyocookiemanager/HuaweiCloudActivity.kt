@@ -259,7 +259,7 @@ class HuaweiCloudActivity : Activity() {
             }
         }
         val hits = entries.filter {
-            val p = it.first.name.replace('\\\\', '/')
+            val p = it.first.name.replace('\\', '/')
             p == wanted || p.endsWith("/" + wanted)
         }
         if (hits.size != 1) error(if (hits.isEmpty()) "ZIP 中不存在 " + wanted + "，未执行替换。" else "ZIP 中存在多个目标配置文件，已停止。")
