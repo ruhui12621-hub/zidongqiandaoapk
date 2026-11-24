@@ -24,7 +24,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
-class MainActivity : Activity() {
+class MainActivity : HuaweiCloudActivity() {
     private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var details: TextView
@@ -90,57 +90,21 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.rgb(160, 168, 182)))
-        content.addView(text("实际浏览器内核：${webViewEngineInfo()}", 12, false, Color.rgb(160, 168, 182)).apply {
-            setPadding(0, dp(8), 0, dp(4))
-            setTextIsSelectable(true)
-        })
-
-        val previousCrash = CrashLogger.read(this)
-        if (!previousCrash.isNullOrBlank()) {
-            content.addView(text("检测到上次闪退记录", 18, true, Color.rgb(180, 45, 45)).apply {
-                setPadding(0, dp(18), 0, dp(6))
-            })
-            content.addView(text(previousCrash, 12, false, Color.rgb(160, 168, 182)).apply {
-                setTextIsSelectable(true)
-                setPadding(dp(10), dp(8), dp(10), dp(8))
-                setBackgroundColor(Color.rgb(31, 36, 47))
-            })
-            content.addView(button("复制闪退记录") {
-                copy(previousCrash, "闪退记录")
-            })
-            content.addView(button("清除闪退记录") {
-                CrashLogger.clear(this)
-                buildHome()
-                refreshFromWebView()
-                toast("已清除闪退记录")
-            })
-        }
-
         status = text("登录状态：尚未检测", 16, true).apply {
             setPadding(0, dp(22), 0, dp(8))
         }
         content.addView(status)
         content.addView(button("打开 HoYoLAB 登录页面") { showBrowser() })
-        content.addView(button("检测并获取 Cookie") { refreshFromWebView(true) })
-        content.addView(button("复制纯 Cookie") { copy(cookieValue, "Cookie") })
-        content.addView(button("复制完整 config.yaml") { copy(yamlValue, "config.yaml") })
-        content.addView(button("保存 config.yaml 到应用内部") { saveConfig() })
-        content.addView(button("清除登录会话") { clearSession() })
-        details = text("尚未获取 Cookie。点击上方按钮登录。\\n\\n" + diagnosticsSummary(), 13, false, Color.rgb(160, 168, 182)).apply {
-            setPadding(0, dp(18), 0, dp(10))
+        details = text("请使用上方按钮登录 HoYoLAB。登录完成后会自动检测 Cookie；获取成功即可在下方华为云区域更新配置。", 13, false, Color.rgb(160, 168, 182)).apply {
+            setPadding(0, dp(8), 0, dp(18))
         }
         content.addView(details)
 
-        content.addView(text("云端管理", 18, true, Color.rgb(235, 238, 245)).apply {
-            setPadding(0, dp(22), 0, dp(6))
+        content.addView(text("华为云 FunctionGraph", 19, true, Color.rgb(235, 238, 245)).apply {
+            setPadding(0, dp(18), 0, dp(6))
         })
-        content.addView(text("使用已获取的 Cookie 更新华为云 FunctionGraph 配置。", 13, false, Color.rgb(160, 168, 182)))
-        content.addView(button("登录华为云 / 管理云函数") {
-            refreshFromWebView()
-            val cloudIntent = android.content.Intent(this, HuaweiCloudActivity::class.java)
-            cloudIntent.putExtra("config_yaml", yamlValue)
-            startActivity(cloudIntent)
-        })
+        content.addView(text("在此直接登录华为云、选择函数并更新配置，无需跳转页面。", 13, false, Color.rgb(160, 168, 182)))
+        addHuaweiCloudPanel(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
@@ -362,21 +326,19 @@ class MainActivity : Activity() {
 
         if (hasLoginToken) {
             yamlValue = makeYaml(found)
-            status.text = "登录状态：检测到登录凭据"
-            details.text = "已读取 ${names.size} 个 Cookie 字段。\n关键字段：" +
-                names.filter {
-                    it.contains("token") || it.contains("account") || it.contains("uid")
-                }.sorted().joinToString(", ") +
-                "\n\nCookie 不会自动上传，复制操作由你主动触发。"
+            status.text = "Cookie 状态：已获取"
+            details.text = "HoYoLAB 登录凭据有效。下方华为云区域已可使用此 Cookie 更新配置。"
+            updateHuaweiCloudConfig(yamlValue)
             if (showToast) toast("已获取 Cookie")
         } else {
             yamlValue = ""
-            status.text = "登录状态：未检测到有效登录凭据"
+            status.text = "Cookie 状态：未获取"
             details.text = if (found.isBlank()) {
-                "当前没有读取到 HoYoLAB Cookie。请在内置浏览器完成登录，并返回检测。"
+                "请点击上方 HoYoLAB 登录入口完成登录；登录后将自动检测 Cookie。"
             } else {
-                "读取到 ${names.size} 个 Cookie 字段，但未发现 ltoken / cookie_token。请确认已经完成登录。\\n\\n" + diagnosticsSummary()
+                "已读取到部分 Cookie，但缺少有效登录凭据。请完成 HoYoLAB 登录后重试。"
             }
+            updateHuaweiCloudConfig("")
             if (showToast) toast("未发现登录 Cookie，请确认登录成功")
         }
     }
