@@ -23,8 +23,8 @@ object CrashLogger {
                 }.toString()
                 val content = buildString {
                     appendLine("HoYoLAB Cookie Manager 崩溃记录")
-                    appendLine("时间：\${time}")
-                    appendLine("线程：\${thread.name}")
+                    appendLine("时间：${time}")
+                    appendLine("线程：${thread.name}")
                     appendLine()
                     appendLine(stack)
                 }
