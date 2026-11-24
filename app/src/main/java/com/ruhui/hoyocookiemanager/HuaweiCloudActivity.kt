@@ -27,6 +27,10 @@ open class HuaweiCloudActivity : Activity() {
     private lateinit var cloudStatus: TextView
     private lateinit var spinner: Spinner
     private lateinit var updateButton: Button
+    private lateinit var logsButton: Button
+    private lateinit var logsStatus: TextView
+    private lateinit var logsOutput: TextView
+    private lateinit var logsRange: Spinner
     private var functions = listOf<Pair<String, String>>()
     private var authAk = ""
     private var authSk = ""
@@ -93,6 +97,47 @@ open class HuaweiCloudActivity : Activity() {
             setOnClickListener { prepareUpdate() }
         }
         content.addView(updateButton)
+        content.addView(TextView(this).apply {
+            text = "函数运行日志"
+            textSize = 20f
+            setTextColor(0xFFECEFF5.toInt())
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, dp(26), 0, dp(6))
+        })
+        content.addView(TextView(this).apply {
+            text = "读取当前选中函数的运行输出和错误信息，不会修改云函数。"
+            textSize = 13f
+            setTextColor(0xFFA7B0C0.toInt())
+            setPadding(0, 0, 0, dp(8))
+        })
+        logsRange = Spinner(this)
+        logsRange.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+            listOf("最近 1 小时", "最近 24 小时", "最近 3 天"))
+        content.addView(logsRange)
+        logsButton = Button(this).apply {
+            text = "读取运行日志"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener { fetchFunctionLogs() }
+        }
+        content.addView(logsButton)
+        logsStatus = TextView(this).apply {
+            text = "登录华为云后，选择函数即可读取对应运行日志。"
+            textSize = 13f
+            setTextColor(0xFFA7B0C0.toInt())
+            setPadding(0, dp(8), 0, dp(6))
+        }
+        content.addView(logsStatus)
+        logsOutput = TextView(this).apply {
+            textSize = 12f
+            setTextColor(0xFFE1E6EF.toInt())
+            setTextIsSelectable(true)
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(0xFF202631.toInt())
+            minHeight = dp(90)
+            text = "暂无日志"
+        }
+        content.addView(logsOutput, LinearLayout.LayoutParams(-1, dp(260)))
         cloudStatus = TextView(this).apply {
             text = "尚未连接华为云。AK/SK 仅保留在当前进程内存中。"
             textSize = 13f; setTextColor(0xFFB8C1D1.toInt()); setPadding(0, dp(16), 0, dp(10))
@@ -111,6 +156,7 @@ open class HuaweiCloudActivity : Activity() {
             if (preferred >= 0) spinner.setSelection(preferred)
             cloudStatus.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId\n读取到 ${functions.size} 个函数。"
             updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
+            logsButton.isEnabled = names.isNotEmpty()
         }
     }
 
@@ -183,9 +229,58 @@ open class HuaweiCloudActivity : Activity() {
                         "\n读取到 " + found.size + " 个函数。" +
                         if (configYaml.isBlank()) "\n但未检测到 Cookie 配置，请返回首页重新获取。" else "\n已自动接收 Cookie 配置，可以一键更新。"
                     updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
+                    logsButton.isEnabled = names.isNotEmpty()
                 }
             } catch (e: Exception) {
                 runOnUiThread { cloudStatus.text = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName) }
+            }
+        }
+    }
+
+    private fun fetchFunctionLogs() {
+        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
+            logsStatus.text = "请先登录华为云。"
+            return
+        }
+        val name = spinner.selectedItem?.toString().orEmpty()
+        val selected = functions.firstOrNull { it.first == name }
+        if (selected == null) { logsStatus.text = "请先从上方函数列表选择函数。"; return }
+        logsButton.isEnabled = false
+        logsStatus.text = "正在查询 $name 的运行日志…"
+        logsOutput.text = "正在连接华为云 LTS…"
+        val hours = when (logsRange.selectedItemPosition) { 1 -> 24; 2 -> 72; else -> 1 }
+        worker.execute {
+            try {
+                val detailUrl = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions/" + enc(selected.second) + "/lts-log-detail"
+                val detail = signedGet(detailUrl)
+                val groupId = detail.optString("group_id")
+                val streamId = detail.optString("stream_id")
+                if (groupId.isBlank() || streamId.isBlank()) error("华为云没有返回该函数的 LTS 日志组/日志流。请检查函数是否已开启日志记录。")
+                val now = System.currentTimeMillis()
+                val body = JSONObject().put("start_time", (now - hours * 60L * 60L * 1000L).toString()).put("end_time", now.toString()).put("limit", 50).put("is_desc", true).put("search_type", "init").put("is_count", true)
+                val queryUrl = "https://lts." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/groups/" + enc(groupId) + "/streams/" + enc(streamId) + "/content/query"
+                val response = signedRequest("POST", queryUrl, body.toString())
+                if (response.first !in 200..299) error("LTS 查询失败（HTTP " + response.first + "）：" + response.second.take(1600))
+                val rows = JSONObject(response.second).optJSONArray("logs")
+                val rendered = StringBuilder()
+                if (rows == null || rows.length() == 0) { rendered.append("所选时间范围内没有查询到日志。\n提示：函数日志上报可能有几分钟延迟。") }
+                else for (i in 0 until rows.length()) {
+                    val item = rows.optJSONObject(i) ?: continue
+                    if (rendered.isNotEmpty()) rendered.append("\n\n")
+                    rendered.append(item.optString("content", "(空日志)"))
+                }
+                val count = rows?.length() ?: 0
+                runOnUiThread {
+                    logsStatus.text = "函数：$name    时间范围：最近 ${hours} 小时    本次读取：$count 条"
+                    logsOutput.text = rendered.toString()
+                    logsButton.isEnabled = true
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    logsStatus.text = "读取日志失败：" + (e.message ?: e.javaClass.simpleName)
+                    logsOutput.text = "请检查 LTS 是否已启用，以及当前 AK/SK 是否具有 FunctionGraph 日志配置读取和 LTS 日志查询权限。"
+                    logsButton.isEnabled = true
+                }
             }
         }
     }
@@ -378,7 +473,7 @@ open class HuaweiCloudActivity : Activity() {
         val url = URL(urlText)
         val date = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
         val headers = sortedMapOf("host" to url.host, "x-sdk-date" to date)
-        if (method == "PUT") headers["content-type"] = "application/json"
+        if (method != "GET") headers["content-type"] = if (method == "POST") "application/json;charset=utf8" else "application/json"
         val names = headers.keys.toList()
         val canonicalHeaders = names.joinToString("") { it + ":" + headers[it] + "\n" }
         val signedHeaders = names.joinToString(";")
@@ -397,10 +492,10 @@ open class HuaweiCloudActivity : Activity() {
             requestMethod = method; connectTimeout = 30000; readTimeout = if (method == "PUT") 180000 else 90000
             setRequestProperty("X-Sdk-Date", date); setRequestProperty("Authorization", authorization)
             setRequestProperty("Accept", "application/json")
-            if (method == "PUT") { doOutput = true; setRequestProperty("Content-Type", "application/json") }
+            if (method != "GET") { doOutput = true; setRequestProperty("Content-Type", headers["content-type"]) }
         }
         try {
-            if (method == "PUT") conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (method != "GET") conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             return code to (stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty())
