@@ -19,12 +19,12 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import java.util.concurrent.Executors
 
-class HuaweiCloudActivity : Activity() {
+open class HuaweiCloudActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var region: EditText
     private lateinit var ak: EditText
     private lateinit var sk: EditText
-    private lateinit var status: TextView
+    private lateinit var cloudStatus: TextView
     private lateinit var spinner: Spinner
     private lateinit var updateButton: Button
     private var functions = listOf<Pair<String, String>>()
@@ -33,6 +33,7 @@ class HuaweiCloudActivity : Activity() {
     private var regionValue = "cn-east-3"
     private var projectId = ""
     private var configYaml = ""
+    private var configProvider: (() -> String)? = null
     private var preparedArchive: ByteArray? = null
     private var preparedCode = JSONObject()
     private var preparedUrn = ""
@@ -40,17 +41,12 @@ class HuaweiCloudActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        configYaml = intent.getStringExtra("config_yaml").orEmpty()
-        if (configYaml.isBlank()) configYaml = HuaweiCloudSession.lastConfigYaml
-        else HuaweiCloudSession.lastConfigYaml = configYaml
-        val root = LinearLayout(this).apply {
-            orientation = 1
-            setPadding(dp(18), dp(18), dp(18), dp(16))
-            setBackgroundColor(android.graphics.Color.rgb(15, 17, 23))
-        }
-        val scroll = ScrollView(this)
-        val content = LinearLayout(this).apply { orientation = 1 }
-        scroll.addView(content)
+    }
+
+    protected fun addHuaweiCloudPanel(parent: LinearLayout, configProvider: () -> String) {
+        this.configProvider = configProvider
+        configYaml = HuaweiCloudSession.lastConfigYaml
+        val content = parent
         content.addView(TextView(this).apply {
             text = "华为云 FunctionGraph"
             textSize = 24f
@@ -97,14 +93,12 @@ class HuaweiCloudActivity : Activity() {
             setOnClickListener { prepareUpdate() }
         }
         content.addView(updateButton)
-        status = TextView(this).apply {
+        cloudStatus = TextView(this).apply {
             text = "尚未连接华为云。AK/SK 只保留在本页面内存中。"
             textSize = 13f; setTextColor(0xFFB8C1D1.toInt()); setPadding(0, dp(16), 0, dp(10))
         }
-        content.addView(status)
+        content.addView(cloudStatus)
         content.addView(Button(this).apply { text = "返回 Cookie 页面"; isAllCaps = false; setOnClickListener { finish() } })
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
         if (HuaweiCloudSession.isLoggedIn()) {
             projectId = HuaweiCloudSession.projectId
             regionValue = HuaweiCloudSession.region
@@ -116,7 +110,7 @@ class HuaweiCloudActivity : Activity() {
             val preferred = names.indexOf(HuaweiCloudSession.selectedFunction).takeIf { it >= 0 }
                 ?: names.indexOf("zzzzz")
             if (preferred >= 0) spinner.setSelection(preferred)
-            status.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId\n读取到 ${functions.size} 个函数。"
+            cloudStatus.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId\n读取到 ${functions.size} 个函数。"
             updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
         }
     }
@@ -145,9 +139,9 @@ class HuaweiCloudActivity : Activity() {
         val r = region.text.toString().trim().lowercase(Locale.ROOT)
         val a = ak.text.toString().trim()
         val s = sk.text.toString()
-        if (r.isBlank() || a.isBlank() || s.isBlank()) { status.text = "请填写 Region、AK 和 SK。"; return }
+        if (r.isBlank() || a.isBlank() || s.isBlank()) { cloudStatus.text = "请填写 Region、AK 和 SK。"; return }
         regionValue = r; authAk = a; authSk = s
-        status.text = "正在验证 AK/SK 并读取项目和函数列表…"
+        cloudStatus.text = "正在验证 AK/SK 并读取项目和函数列表…"
         updateButton.isEnabled = false
         worker.execute {
             try {
@@ -178,26 +172,29 @@ class HuaweiCloudActivity : Activity() {
                     spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
                     val preferred = names.indexOf("zzzzz")
                     if (preferred >= 0) spinner.setSelection(preferred)
-                    status.text = "华为云连接成功\nRegion：" + r + "\nProject ID：" + pid +
+                    cloudStatus.text = "华为云连接成功\nRegion：" + r + "\nProject ID：" + pid +
                         "\n读取到 " + found.size + " 个函数。" +
                         if (configYaml.isBlank()) "\n但未检测到 Cookie 配置，请返回首页重新获取。" else "\n已自动接收 Cookie 配置，可以一键更新。"
                     updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
                 }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { cloudStatus.text = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName) }
             }
         }
     }
 
     private fun prepareUpdate() {
+        configYaml = configProvider?.invoke().orEmpty()
+        HuaweiCloudSession.lastConfigYaml = configYaml
+        updateButton.isEnabled = false
         spinner.selectedItem?.toString()?.let { HuaweiCloudSession.selectedFunction = it }
-        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) { status.text = "请先登录华为云。"; return }
-        if (configYaml.isBlank() || !configYaml.contains("cookie:")) { status.text = "没有有效的 Cookie 配置，请返回首页检测。"; return }
+        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) { cloudStatus.text = "请先登录华为云。"; return }
+        if (configYaml.isBlank() || !configYaml.contains("cookie:")) { cloudStatus.text = "没有有效的 Cookie 配置，请先在上方 HoYoLAB 登录。"; return }
         val name = spinner.selectedItem?.toString().orEmpty()
         val selected = functions.firstOrNull { it.first == name }
-        if (selected == null) { status.text = "请从云端函数列表选择目标函数。"; return }
+        if (selected == null) { cloudStatus.text = "请从云端函数列表选择目标函数。"; return }
         updateButton.isEnabled = false
-        status.text = "正在精确核对函数、下载原 ZIP 并替换目标配置…"
+        cloudStatus.text = "正在精确核对函数、下载原 ZIP 并替换目标配置…"
         worker.execute {
             try {
                 val q = "func_name=" + enc(name) + "&precise_search=true&maxitems=10"
@@ -216,7 +213,7 @@ class HuaweiCloudActivity : Activity() {
                     confirmUpdate(original.size, updated.size)
                 }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "准备更新失败：" + (e.message ?: e.javaClass.simpleName); updateButton.isEnabled = true }
+                runOnUiThread { cloudStatus.text = "准备更新失败：" + (e.message ?: e.javaClass.simpleName); updateButton.isEnabled = true }
             }
         }
     }
@@ -254,7 +251,7 @@ class HuaweiCloudActivity : Activity() {
             .setView(panel)
             .setNegativeButton("取消") { _, _ ->
                 preparedArchive = null
-                status.text = "已取消，云端没有修改。"
+                cloudStatus.text = "已取消，云端没有修改。"
                 updateButton.isEnabled = true
             }
             .setPositiveButton("确认上传并更新") { _, _ -> uploadPrepared() }
@@ -262,8 +259,8 @@ class HuaweiCloudActivity : Activity() {
     }
 
     private fun uploadPrepared() {
-        val archive = preparedArchive ?: run { status.text = "待上传代码包已失效，请重新准备。"; updateButton.isEnabled = true; return }
-        updateButton.isEnabled = false; status.text = "正在上传更新 FunctionGraph，请不要关闭页面…"
+        val archive = preparedArchive ?: run { cloudStatus.text = "待上传代码包已失效，请重新准备。"; updateButton.isEnabled = true; return }
+        updateButton.isEnabled = false; cloudStatus.text = "正在上传更新 FunctionGraph，请不要关闭页面…"
         worker.execute {
             try {
                 val payload = JSONObject()
@@ -277,12 +274,12 @@ class HuaweiCloudActivity : Activity() {
                 val response = signedRequest("PUT", url, payload.toString())
                 if (response.first !in 200..299) error("FunctionGraph 更新失败（HTTP " + response.first + "）：" + response.second.take(1800))
                 runOnUiThread {
-                    status.text = "更新成功！\n函数：" + preparedName +
+                    cloudStatus.text = "更新成功！\n函数：" + preparedName +
                         "\n文件：config/config.yaml\n只替换了该配置文件，ZIP 其他内容已保留。"
                     preparedArchive = null; updateButton.isEnabled = true
                 }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "上传更新失败：" + (e.message ?: e.javaClass.simpleName); updateButton.isEnabled = true }
+                runOnUiThread { cloudStatus.text = "上传更新失败：" + (e.message ?: e.javaClass.simpleName); updateButton.isEnabled = true }
             }
         }
     }
@@ -416,7 +413,6 @@ class HuaweiCloudActivity : Activity() {
     override fun onDestroy() {
         worker.shutdownNow()
         preparedArchive = null
-        // AK/SK 与函数列表保存在进程内单例；普通返回页面不会退出华为云登录。
         super.onDestroy()
     }
 }
