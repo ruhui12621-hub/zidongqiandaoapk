@@ -30,7 +30,6 @@ open class HuaweiCloudActivity : Activity() {
     private lateinit var logsButton: Button
     private lateinit var logsStatus: TextView
     private lateinit var logsOutput: TextView
-    private lateinit var logsRange: Spinner
     private var functions = listOf<Pair<String, String>>()
     private var authAk = ""
     private var authSk = ""
@@ -110,10 +109,12 @@ open class HuaweiCloudActivity : Activity() {
             setTextColor(0xFFA7B0C0.toInt())
             setPadding(0, 0, 0, dp(8))
         })
-        logsRange = Spinner(this)
-        logsRange.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-            listOf("最近 1 小时", "最近 24 小时", "最近 3 天"))
-        content.addView(logsRange)
+        content.addView(TextView(this).apply {
+            text = "固定查询最近 7 天，自动分页读取全部日志。"
+            textSize = 13f
+            setTextColor(0xFFA7B0C0.toInt())
+            setPadding(0, 0, 0, dp(8))
+        })
         logsButton = Button(this).apply {
             text = "读取运行日志"
             isAllCaps = false
@@ -240,16 +241,14 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun fetchFunctionLogs() {
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            logsStatus.text = "请先登录华为云。"
-            return
+            logsStatus.text = "请先登录华为云。"; return
         }
         val name = spinner.selectedItem?.toString().orEmpty()
         val selected = functions.firstOrNull { it.first == name }
         if (selected == null) { logsStatus.text = "请先从上方函数列表选择函数。"; return }
         logsButton.isEnabled = false
-        logsStatus.text = "正在查询 $name 的运行日志…"
-        logsOutput.text = "正在连接华为云 LTS…"
-        val hours = when (logsRange.selectedItemPosition) { 1 -> 24; 2 -> 72; else -> 1 }
+        logsStatus.text = "正在查询 $name 最近 7 天的全部运行日志…"
+        logsOutput.text = "正在连接华为云 LTS，并分页读取日志…"
         worker.execute {
             try {
                 val detailUrl = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions/" + enc(selected.second) + "/lts-log-detail"
@@ -258,21 +257,45 @@ open class HuaweiCloudActivity : Activity() {
                 val streamId = detail.optString("stream_id")
                 if (groupId.isBlank() || streamId.isBlank()) error("华为云没有返回该函数的 LTS 日志组/日志流。请检查函数是否已开启日志记录。")
                 val now = System.currentTimeMillis()
-                val body = JSONObject().put("start_time", (now - hours * 60L * 60L * 1000L).toString()).put("end_time", now.toString()).put("limit", 50).put("is_desc", true).put("search_type", "init").put("is_count", true)
+                val startTime = now - 7L * 24L * 60L * 60L * 1000L
                 val queryUrl = "https://lts." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/groups/" + enc(groupId) + "/streams/" + enc(streamId) + "/content/query"
-                val response = signedRequest("POST", queryUrl, body.toString())
-                if (response.first !in 200..299) error("LTS 查询失败（HTTP " + response.first + "）：" + response.second.take(1600))
-                val rows = JSONObject(response.second).optJSONArray("logs")
+                val allLogs = mutableListOf<JSONObject>()
+                val seenLines = mutableSetOf<String>()
+                var scrollId = ""
+                var lineNum = ""
+                var page = 0
+                var complete = false
+                while (page < 10000 && !complete) {
+                    val body = JSONObject().put("start_time", startTime.toString()).put("end_time", now.toString())
+                        .put("limit", 5000).put("is_desc", true)
+                        .put("search_type", if (page == 0) "init" else "forwards").put("is_count", true)
+                    if (scrollId.isNotBlank()) body.put("scroll_id", scrollId)
+                    else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
+                    val response = signedRequest("POST", queryUrl, body.toString())
+                    if (response.first !in 200..299) error("LTS 查询失败（HTTP " + response.first + "）：" + response.second.take(1600))
+                    val result = JSONObject(response.second)
+                    val rows = result.optJSONArray("logs")
+                    val received = rows?.length() ?: 0
+                    if (rows != null) for (i in 0 until rows.length()) {
+                        val item = rows.optJSONObject(i) ?: continue
+                        val key = item.optString("line_num")
+                        if (key.isBlank() || seenLines.add(key)) allLogs.add(item)
+                    }
+                    page++
+                    val nextScroll = result.optString("scrollId")
+                    if (nextScroll.isNotBlank()) scrollId = nextScroll
+                    if (rows != null && rows.length() > 0) lineNum = rows.optJSONObject(rows.length() - 1)?.optString("line_num").orEmpty()
+                    complete = result.optBoolean("isQueryComplete", false) || received == 0 || (received < 5000 && nextScroll.isBlank())
+                    if (!complete && nextScroll.isBlank() && lineNum.isBlank()) error("华为云未返回分页游标，无法保证读取完整。")
+                }
                 val rendered = StringBuilder()
-                if (rows == null || rows.length() == 0) { rendered.append("所选时间范围内没有查询到日志。\n提示：函数日志上报可能有几分钟延迟。") }
-                else for (i in 0 until rows.length()) {
-                    val item = rows.optJSONObject(i) ?: continue
-                    if (rendered.isNotEmpty()) rendered.append("\n\n")
+                if (allLogs.isEmpty()) rendered.append("最近 7 天没有查询到日志。\\n提示：函数日志上报可能有几分钟延迟。")
+                else for (item in allLogs) {
+                    if (rendered.isNotEmpty()) rendered.append("\\n\\n")
                     rendered.append(item.optString("content", "(空日志)"))
                 }
-                val count = rows?.length() ?: 0
                 runOnUiThread {
-                    logsStatus.text = "函数：$name    时间范围：最近 ${hours} 小时    本次读取：$count 条"
+                    logsStatus.text = "函数：$name    时间范围：最近 7 天    共读取：${allLogs.size} 条（${page} 页）" + if (page >= 10000) "\\n已达到安全分页上限，结果可能不完整。" else ""
                     logsOutput.text = rendered.toString()
                     logsButton.isEnabled = true
                 }
@@ -285,7 +308,6 @@ open class HuaweiCloudActivity : Activity() {
             }
         }
     }
-
     private fun prepareUpdate() {
         configYaml = configProvider?.invoke().orEmpty()
         HuaweiCloudSession.lastConfigYaml = configYaml
