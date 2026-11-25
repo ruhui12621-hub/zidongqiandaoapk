@@ -166,6 +166,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             })
             .put("canAddAccount", CloudAccountSyncState.allowsAccountChanges(this))
             .put("cloudConnected", HuaweiCloudSession.isLoggedIn())
+            .put("cloudConnectionLabel", cloudConnectionStatus())
             .put("cloudCredentialsSaved", savedAkSk)
             .put("hoyoPageCookieReady", HuaweiCloudSession.pendingHoyoCookie.isNotBlank())
             .put("hoyoPageCookieAccountId", HuaweiCloudSession.pendingHoyoCookieAccountId)
