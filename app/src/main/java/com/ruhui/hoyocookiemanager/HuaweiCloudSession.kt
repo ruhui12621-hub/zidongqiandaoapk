@@ -15,5 +15,5 @@ object HuaweiCloudSession {
 
     fun isLoggedIn(): Boolean =
         ak.isNotBlank() && sk.isNotBlank() &&
-            region.isNotBlank() && projectId.isNotBlank() && functions.isNotEmpty()
+            region.isNotBlank() && projectId.isNotBlank()
 }
