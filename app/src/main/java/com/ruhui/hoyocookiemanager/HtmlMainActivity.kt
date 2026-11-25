@@ -96,6 +96,11 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         }
     }
 
+    override fun onCloudLoginSyncComplete() {
+        refreshTodayStatuses(force = true)
+        pushState()
+    }
+
     private fun refreshTodayStatuses(force: Boolean = true) {
         if (todayQuerying) return
         if (!force && todayStatuses.isNotEmpty()) return
@@ -172,8 +177,6 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             .put("sklandMessage", AppMessageBus.current(this, AppMessageBus.SKLAND))
             .put("sklandError", AppMessageBus.current(this, AppMessageBus.SKLAND).takeIf { it.startsWith("✕") } ?: "")
             .put("cloudMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
-            .put("logsText", htmlLogsText())
-            .put("logsStatus", htmlLogsStatus())
     }
 
     private inner class HtmlBridge {
@@ -290,7 +293,6 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun fetchLogs() { htmlFetchLogs(); pushState() }
         @JavascriptInterface fun getSavedCloudCredentials(): String {
             val pair = runCatching { AndroidCredentialVault(this@HtmlMainActivity).latest() }.getOrNull()
                 ?: return JSONObject().toString()
