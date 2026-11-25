@@ -162,7 +162,7 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, 0, 0, dp(18))
         })
 
-        fun row(parent: LinearLayout, title: String, subtitle: String, statusText: String, action: () -> Unit) {
+        fun row(parent: LinearLayout, title: String, subtitle: String, statusText: String, detailText: String? = null, action: () -> Unit) {
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -180,6 +180,11 @@ class MainActivity : HuaweiCloudActivity() {
             info.addView(text(subtitle, 12, false, Color.rgb(155, 164, 178)).apply {
                 setPadding(0, dp(5), 0, 0)
             })
+            if (!detailText.isNullOrBlank()) {
+                info.addView(text(detailText, 11, false, Color.rgb(155, 164, 178)).apply {
+                    setPadding(0, dp(5), 0, 0)
+                })
+            }
             item.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
             item.addView(text(statusText, 11, false, Color.rgb(155, 164, 178)))
             item.addView(text("›", 24, false, Color.rgb(155, 164, 178)).apply {
@@ -212,64 +217,30 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(2), 0, dp(8))
         })
 
-        val todayAccounts = AccountStore(this).all()
+        val accounts = AccountStore(this).all()
         val cloudAccountsReady = CloudAccountSyncState.get(this) == CloudAccountSyncState.SYNCED
-        // 今日签到板块只属于已成功加载的账号列表；无账号或云端同步未完成时完全不显示。
-        if (cloudAccountsReady && todayAccounts.isNotEmpty()) {
-            val todayCard = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(14), dp(12), dp(14), dp(12))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(Color.rgb(32, 38, 49))
-                    cornerRadius = dp(13).toFloat()
-                }
-            }
-            val todayHeader = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            todayHeader.addView(text("今日签到", 16, true), LinearLayout.LayoutParams(0, -2, 1f))
-            todayHeader.addView(button(if (todayStatusQuerying) "读取中…" else "刷新日志") {
+        val accountHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        accountHeader.addView(text("账号列表", 17, true), LinearLayout.LayoutParams(0, -2, 1f))
+        if (cloudAccountsReady && accounts.isNotEmpty()) {
+            accountHeader.addView(button(if (todayStatusQuerying) "读取中…" else "刷新签到状态") {
                 refreshTodayCheckinStatus(force = true)
             }.apply {
                 isEnabled = !todayStatusQuerying
                 textSize = 12f
-                minHeight = dp(38)
+                minHeight = dp(36)
             }, LinearLayout.LayoutParams(-2, -2))
-            todayCard.addView(todayHeader)
-            todayCard.addView(text(todayStatusMessage, 11, false, Color.rgb(155, 164, 178)).apply {
-                setPadding(0, dp(5), 0, dp(8))
-            })
-                todayAccounts.forEach { account ->
-                    val line = LinearLayout(this).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity = Gravity.CENTER_VERTICAL
-                        setPadding(0, dp(6), 0, dp(6))
-                    }
-                    line.addView(text(account.name, 13, true), LinearLayout.LayoutParams(0, -2, 1f))
-                    val checkin = todayCheckinStatuses[account.id]
-                        ?: if (todayStatusQuerying) "正在读取…" else "尚未读取"
-                    val color = when {
-                        checkin.contains("成功") -> Color.rgb(115, 210, 150)
-                        checkin.contains("失败") -> Color.rgb(255, 130, 130)
-                        else -> Color.rgb(190, 199, 213)
-                    }
-                    line.addView(text(checkin, 11, false, color))
-                    todayCard.addView(line)
-                }
-            root.addView(todayCard, LinearLayout.LayoutParams(-1, -2).apply {
-                bottomMargin = dp(10)
-            })
         }
-        
-        root.addView(text("账号列表", 17, true).apply {
-            setPadding(0, dp(8), 0, dp(10))
+        root.addView(accountHeader, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(8)
+            bottomMargin = dp(10)
         })
         val accountScroll = ScrollView(this)
         val accountContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         accountScroll.addView(accountContainer)
         root.addView(accountScroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        val accounts = AccountStore(this).all()
         if (accounts.isEmpty()) {
             accountContainer.addView(text("还没有添加账号。点击下方加号，选择 HoYoLAB、森空岛或米游社国服。", 13, false, Color.rgb(145, 155, 172)).apply {
                 setPadding(dp(4), dp(4), dp(4), dp(12))
@@ -299,7 +270,11 @@ class MainActivity : HuaweiCloudActivity() {
                     accountContainer,
                     account.name,
                     "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
-                    identityHint
+                    identityHint,
+                    if (cloudAccountsReady) {
+                        "今日签到：" + (todayCheckinStatuses[account.id]
+                            ?: if (todayStatusQuerying) "正在读取…" else "尚未读取")
+                    } else null
                 ) {
                     if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                         Toast.makeText(this, "请先完成云端配置同步，避免使用过期的本地账号。", Toast.LENGTH_LONG).show()
