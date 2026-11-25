@@ -90,13 +90,14 @@ open class HuaweiCloudActivity : Activity() {
             }
         }
         content.addView(region, LinearLayout.LayoutParams(-1, -2))
-        ak = field(content, "AK", HuaweiCloudSession.ak)
-        sk = field(content, "SK", HuaweiCloudSession.sk, true)
+        val savedCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
+        ak = field(content, "AK", savedCredentials?.first ?: HuaweiCloudSession.ak)
+        sk = field(content, "SK", savedCredentials?.second ?: HuaweiCloudSession.sk, true)
         content.addView(Button(this).apply {
             text = "登录并读取函数列表"; isAllCaps = false; setOnClickListener { login() }
         })
         content.addView(Button(this).apply {
-            text = if (AndroidCredentialVault(this@HuaweiCloudActivity).exists()) "密码保管箱 · 解锁 / 管理" else "创建本地密码保管箱"
+            text = "本地保管箱 · 自动保存 / 管理"
             isAllCaps = false
             setOnClickListener { openCredentialVault() }
         })
@@ -231,109 +232,14 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun openCredentialVault() {
         val vault = AndroidCredentialVault(this)
-        if (vault.exists()) {
-            val password = EditText(this).apply {
-                hint = "输入保管箱密码"
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                setSingleLine(true)
-            }
-            val panel = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(22), dp(8), dp(22), 0)
-                addView(TextView(this@HuaweiCloudActivity).apply {
-                    text = "输入独立保管箱密码，解锁后将 AK/SK 填入登录框。凭据不会发送到任何服务器。"
-                    setTextColor(0xFFA7B0C0.toInt())
-                })
-                addView(password)
-            }
-            AlertDialog.Builder(this)
-                .setTitle("解锁密码保管箱")
-                .setView(panel)
-                .setNegativeButton("取消", null)
-                .setNeutralButton("删除保管箱") { _, _ -> confirmDeleteVault(vault) }
-                .setPositiveButton("解锁并填入") { _, _ ->
-                    val chars = password.text.toString().toCharArray()
-                    try {
-                        val credentials = vault.unlock(chars)
-                        ak.setText(credentials.first)
-                        sk.setText(credentials.second)
-                        authAk = credentials.first
-                        authSk = credentials.second
-                        Toast.makeText(this, "已解锁并填入 AK/SK；请点击登录读取函数列表。", Toast.LENGTH_LONG).show()
-                    } catch (e: Exception) {
-                        Toast.makeText(this, "解锁失败：" + (e.message ?: "密码错误或保管箱损坏"), Toast.LENGTH_LONG).show()
-                    } finally {
-                        chars.fill('\u0000')
-                        password.text?.clear()
-                    }
-                }
-                .show()
-        } else {
-            showCreateVaultDialog(vault)
-        }
-    }
-
-    private fun showCreateVaultDialog(vault: AndroidCredentialVault) {
-        val password = EditText(this).apply {
-            hint = "设置保管箱密码（至少 10 个字符）"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setSingleLine(true)
-        }
-        val confirm = EditText(this).apply {
-            hint = "再次输入密码"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setSingleLine(true)
-        }
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(8), dp(22), 0)
-            addView(TextView(this@HuaweiCloudActivity).apply {
-                text = "创建后，AK/SK 将使用独立密码和 Android Keystore 双重封装加密，保存在本机应用私有目录。请牢记密码；忘记密码无法找回。"
-                setTextColor(0xFFA7B0C0.toInt())
-            })
-            addView(password)
-            addView(confirm)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("创建本地密码保管箱")
-            .setView(panel)
-            .setNegativeButton("取消", null)
-            .setPositiveButton("加密保存当前 AK/SK", null)
-            .create().also { dialog ->
-                dialog.setOnShowListener {
-                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                        val first = password.text.toString()
-                        val second = confirm.text.toString()
-                        if (first.length < 10) {
-                            password.error = "至少需要 10 个字符"
-                            return@setOnClickListener
-                        }
-                        if (first != second) {
-                            confirm.error = "两次输入的密码不一致"
-                            return@setOnClickListener
-                        }
-                        val currentAk = ak.text.toString().trim()
-                        val currentSk = sk.text.toString()
-                        if (currentAk.isBlank() || currentSk.isBlank()) {
-                            Toast.makeText(this, "请先填写 AK 和 SK，再创建保管箱。", Toast.LENGTH_LONG).show()
-                            return@setOnClickListener
-                        }
-                        val chars = first.toCharArray()
-                        try {
-                            vault.save(chars, currentAk, currentSk)
-                            Toast.makeText(this, "密码保管箱已加密保存到本机。", Toast.LENGTH_LONG).show()
-                            dialog.dismiss()
-                        } catch (e: Exception) {
-                            Toast.makeText(this, "保存失败：" + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
-                        } finally {
-                            chars.fill('\u0000')
-                            password.text?.clear()
-                            confirm.text?.clear()
-                        }
-                    }
-                }
-                dialog.show()
-            }
+        val count = runCatching { vault.latest(); if (vault.exists()) "已保存，最多保留 10 组 AK/SK。" else "尚未保存；首次登录成功后会自动创建。" }
+            .getOrElse { "保管箱读取异常：" + (it.message ?: "未知错误") }
+        val builder = AlertDialog.Builder(this)
+            .setTitle("本地 AK/SK 保管箱")
+            .setMessage(count + "\n\n凭据仅保存在本机应用私有目录，使用 Android Keystore + AES-256-GCM 加密。每次打开页面自动填入最近使用的一组，SK 始终以星号显示。")
+            .setPositiveButton("知道了", null)
+        if (vault.exists()) builder.setNegativeButton("删除全部凭据") { _, _ -> confirmDeleteVault(vault) }
+        builder.show()
     }
 
     private fun confirmDeleteVault(vault: AndroidCredentialVault) {
@@ -380,6 +286,12 @@ open class HuaweiCloudActivity : Activity() {
                     val n = f.optString("func_name"); val u = f.optString("func_urn")
                     if (n.isNotBlank() && u.isNotBlank()) found.add(n to u)
                 }
+                var vaultWarning = ""
+                try {
+                    AndroidCredentialVault(this).save(a, s)
+                } catch (vaultError: Exception) {
+                    vaultWarning = "\\n但本次凭据未能写入本地保管箱：" + (vaultError.message ?: vaultError.javaClass.simpleName)
+                }
                 runOnUiThread {
                     projectId = pid; functions = found
                     HuaweiCloudSession.ak = authAk
@@ -387,16 +299,14 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
                     HuaweiCloudSession.functions = found
-                    // Credentials remain only in the in-memory authenticated session; clear editable fields.
-                    ak.text?.clear()
-                    sk.text?.clear()
+                    // Keep SK in a password-type field so the saved secret remains masked on screen.
                     val names = found.map { it.first }.distinct()
                     spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
                     val preferred = names.indexOf("zzzzz")
                     if (preferred >= 0) spinner.setSelection(preferred)
                     cloudStatus.text = "华为云连接成功\nRegion：" + r + "\nProject ID：" + pid +
                         "\n读取到 " + found.size + " 个函数。" +
-                        if (configYaml.isBlank()) "\n但未检测到 Cookie 配置，请返回首页重新获取。" else "\n已自动接收 Cookie 配置，可以一键更新。"
+                        if (configYaml.isBlank()) "\n但未检测到 Cookie 配置，请返回首页重新获取。" else "\n已自动接收 Cookie 配置，可以一键更新。" + vaultWarning
                     updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
                     logsButton.isEnabled = names.isNotEmpty()
                 }
