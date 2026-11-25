@@ -393,7 +393,7 @@ open class HuaweiCloudActivity : Activity() {
         }
         updateButton.isEnabled = false
         setCloudConnectionState("已连接")
-        showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在上传函数包；上传确认后将自动测试运行并检查定时触发器…", null)
+        showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在上传函数包；先测试运行，确认成功后才检查定时触发器…", null)
         worker.execute {
             try {
                 val functionName = if (isHoyolab) HOYOLAB_FUNCTION else SKLAND_FUNCTION
