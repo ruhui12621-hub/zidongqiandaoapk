@@ -385,12 +385,12 @@ class MainActivity : HuaweiCloudActivity() {
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val server = prefs.getString("game_server", "os") ?: "os"
         val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
-        val gamesStart = yaml.indexOf("games:\\n")
-        val cloudStart = yaml.indexOf("\\ncloud_games:", gamesStart + 1)
+        val gamesStart = yaml.indexOf("games:\n")
+        val cloudStart = yaml.indexOf("\ncloud_games:", gamesStart + 1)
         if (gamesStart >= 0 && cloudStart > gamesStart) {
             var gamesSection = yaml.substring(gamesStart, cloudStart)
-            gamesSection = gamesSection.replace("  cn:\\n    enable: false", "  cn:\\n    enable: " + (server == "cn"))
-            gamesSection = gamesSection.replace("  os:\\n    enable: true", "  os:\\n    enable: " + (server == "os"))
+            gamesSection = gamesSection.replace("  cn:\n    enable: false", "  cn:\n    enable: " + (server == "cn"))
+            gamesSection = gamesSection.replace("  os:\n    enable: true", "  os:\n    enable: " + (server == "os"))
             yaml = yaml.substring(0, gamesStart) + gamesSection + yaml.substring(cloudStart)
         }
 
