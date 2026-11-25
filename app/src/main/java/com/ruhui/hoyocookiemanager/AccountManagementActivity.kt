@@ -31,6 +31,11 @@ class AccountManagementActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         accountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
+        if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+            Toast.makeText(this, "请先成功读取华为云配置；当前不允许使用未同步的本地账号。", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         if (accountId.isNullOrBlank()) {
             Toast.makeText(this, "请先从主界面选择要添加的平台", Toast.LENGTH_SHORT).show()
             finish()
@@ -142,7 +147,7 @@ class AccountManagementActivity : Activity() {
         })
 
         root.addView(button("保存账号设置") { saveAccount(account, showToast = true) })
-        root.addView(button("删除此账号", danger = true) {
+        val deleteButton = button("云端删除同步尚未启用", danger = true) {
             AlertDialog.Builder(this)
                 .setTitle("删除账号？")
                 .setMessage("将删除「" + account.name + "」及其本地加密凭据，此操作无法撤销。")
@@ -158,7 +163,11 @@ class AccountManagementActivity : Activity() {
                     Toast.makeText(this, "账号已删除", Toast.LENGTH_SHORT).show()
                     finish()
                 }.show()
-        })
+        }.apply {
+            isEnabled = false
+            alpha = 0.5f
+        }
+        root.addView(deleteButton)
         setContentView(root)
     }
 
