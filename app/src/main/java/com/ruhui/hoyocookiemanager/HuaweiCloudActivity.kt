@@ -425,7 +425,7 @@ open class HuaweiCloudActivity : Activity() {
                     val action = if (created) "创建" else "更新"
                     cloudStatus.text = label + " 函数" + action + "成功。\n本次仅提交了 " + label + " 函数，没有触碰另一个服务。"
                     updateButton.isEnabled = true
-                    showOperationMessage("$label 函数$action成功", "本次仅提交了 $label 函数，没有触碰另一个服务。", true)
+                    showOperationMessage("$label 函数${action}成功", "本次仅提交了 $label 函数，没有触碰另一个服务。", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
