@@ -36,6 +36,7 @@ open class HuaweiCloudActivity : Activity() {
     private var projectId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
+    private lateinit var cookieStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,12 +93,13 @@ open class HuaweiCloudActivity : Activity() {
             isAllCaps = false
             setOnClickListener { openCredentialVault() }
         })
-        content.addView(TextView(this).apply {
-            text = if (configYaml.isBlank()) "等待上方 HoYoLAB 登录完成并获取 Cookie。"
-            else "已检测到 Cookie，可以更新云端配置。"
+        cookieStatus = TextView(this).apply {
+            text = if (configYaml.isBlank()) "HoYoLAB Cookie：等待获取"
+            else "HoYoLAB Cookie：已获取，可以部署"
             setTextColor(0xFFA7B0C0.toInt())
             setPadding(0, dp(12), 0, dp(8))
-        })
+        }
+        content.addView(cookieStatus)
         content.addView(Button(this).apply {
             text = "配置选择"; isAllCaps = false
             setOnClickListener { onConfigure() }
@@ -171,6 +173,13 @@ open class HuaweiCloudActivity : Activity() {
     protected fun updateHuaweiCloudConfig(value: String) {
         configYaml = value
         HuaweiCloudSession.lastConfigYaml = value
+        if (::cookieStatus.isInitialized) {
+            cookieStatus.text = if (value.isNotBlank()) {
+                "HoYoLAB Cookie：已获取，可以部署 / 更新"
+            } else {
+                "HoYoLAB Cookie：尚未获取，请先完成 HoYoLAB 登录"
+            }
+        }
         if (::updateButton.isInitialized) {
             updateButton.isEnabled = value.isNotBlank() && HuaweiCloudSession.isLoggedIn()
         }
@@ -252,6 +261,8 @@ open class HuaweiCloudActivity : Activity() {
                     vaultWarning = "\\n但本次凭据未能写入本地保管箱：" + (vaultError.message ?: vaultError.javaClass.simpleName)
                 }
                 runOnUiThread {
+                    // 登录完成时重新读取一次当前 WebView Cookie，避免登录先后顺序造成按钮状态滞后。
+                    configYaml = configProvider?.invoke().orEmpty()
                     projectId = pid
                     HuaweiCloudSession.ak = authAk
                     HuaweiCloudSession.sk = authSk
@@ -261,6 +272,7 @@ open class HuaweiCloudActivity : Activity() {
                         (if (configYaml.isBlank()) "\n等待获取 HoYoLAB Cookie。" else "\n已接收当前 Cookie，可以一键部署两个服务。") + vaultWarning
                     updateButton.isEnabled = configYaml.isNotBlank()
                     logsButton.isEnabled = true
+                    Toast.makeText(this, "华为云连接成功", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 runOnUiThread { cloudStatus.text = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName) }
