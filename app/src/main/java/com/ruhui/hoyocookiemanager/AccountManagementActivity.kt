@@ -112,13 +112,24 @@ class AccountManagementActivity : Activity() {
         })
         panel.addView(nameInput)
         panel.addView(TextView(this).apply {
+            text = "HoYoLAB / 米游社登录窗口目前仍共用 WebView 会话；切换账号时请先确认网页中登录的是对应账号。"
+            textSize = 12f
+            setTextColor(0xFFFFCC80.toInt())
+            setPadding(0, dp(10), 0, dp(8))
+        })
+        panel.addView(TextView(this).apply {
             text = "选择此账号需要签到的游戏"
             setTextColor(0xFFB8C1D1.toInt())
             setPadding(0, dp(14), 0, dp(4))
         })
         val checks = linkedMapOf<String, CheckBox>()
         gameLabels.filterKeys { key ->
-            account.platform != AccountStore.SKLAND || key == "arknights"
+            when (account.platform) {
+                AccountStore.HOYOLAB -> key != "honkai2" && key != "arknights"
+                AccountStore.MIYOUSHE_CN -> key != "arknights"
+                AccountStore.SKLAND -> key == "arknights"
+                else -> false
+            }
         }.forEach { (key, label) ->
             val check = CheckBox(this).apply {
                 text = label
