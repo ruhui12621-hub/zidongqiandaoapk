@@ -415,9 +415,16 @@ open class HuaweiCloudActivity : Activity() {
                         val stableId = MessageDigest.getInstance("SHA-256")
                             .digest(token.toByteArray(Charsets.UTF_8))
                             .joinToString("") { "%02x".format(it) }
-                        val account = store.add(AccountStore.SKLAND, platformUserId = stableId)
+                        val account = store.add(
+                            AccountStore.SKLAND,
+                            platformUserId = stableId,
+                            games = setOf("endfield")
+                        )
                         SklandTokenVault(this, account.id).save(token)
-                        store.update(account.copy(credentialReady = true))
+                        store.update(account.copy(
+                            games = if (account.games.isEmpty()) setOf("endfield") else account.games,
+                            credentialReady = true
+                        ))
                         imported++
                     }
                 }
