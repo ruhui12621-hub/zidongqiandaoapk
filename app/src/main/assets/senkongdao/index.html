@@ -113,7 +113,7 @@
 <body>
   <div class="container">
     <h1>森空岛 Token 解析 · 操作导航</h1>
-    <p class="subtitle">登录森空岛 → 复制 Token 页面 JSON → 粘贴到下方自动解析 → 复制 Token → 更新华为云函数。</p>
+    <p class="subtitle">登录森空岛 → 粘贴 Token 页面 JSON → 自动解析并加密保存 → 返回主页一键部署。</p>
 
     <!-- 步骤 1 -->
     <div class="card">
@@ -172,7 +172,7 @@
         <div class="step-num">4</div>
         <div class="step-body">
           <p class="step-title">更新华为云函数</p>
-          <p class="step-desc">打开华为云函数控制台，编辑 <code>INPUT_HYPERGRYPH_TOKEN.txt</code>，粘贴 Token 后点击“部署代码”。</p>
+          <p class="step-desc">解析成功后，Token 已由 APK 加密保存。返回主页并登录华为云，点击“一键部署 / 更新云函数”，APK 会自动把 Token 写入森空岛部署包并上传。</p>
           <a class="link-btn secondary" href="https://console.huaweicloud.com/functiongraph" target="_self" rel="noopener noreferrer">打开华为云函数控制台</a>
           <span class="url-text">https://console.huaweicloud.com/functiongraph</span>
         </div>
@@ -182,9 +182,9 @@
     <div class="tips">
       <strong>说明</strong>
       <ul>
-        <li>本页面<strong>不会联网请求森空岛接口</strong>，只在你本地解析粘贴进来的文本，所以可以放心托管或本地打开。</li>
+        <li>本页面<strong>不会联网请求森空岛接口</strong>；解析结果通过 APK 本地桥接加密保存，不会显示在主界面。</li>
         <li>由于浏览器的跨域与 Cookie 限制，网页无法自动替你拉取 Token JSON，手动复制粘贴这一步无法省略。</li>
-        <li>Token 等同于登录凭证，请勿分享。多账号时每行一个 Token 填入云函数。</li>
+        <li>Token 等同于登录凭证，请勿分享。APK 仅保存最近一次解析的 Token，并在部署时写入云函数。</li>
         <li>如果复制按钮无效，通常是浏览器不允许非 HTTPS 页面使用剪贴板 API，可手动长按选中复制。</li>
       </ul>
     </div>
