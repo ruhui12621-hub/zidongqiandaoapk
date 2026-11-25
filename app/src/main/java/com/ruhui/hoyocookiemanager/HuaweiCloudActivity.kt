@@ -21,7 +21,7 @@ import java.util.concurrent.Executors
 
 open class HuaweiCloudActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
-    private lateinit var region: EditText
+    private lateinit var region: Spinner
     private lateinit var ak: EditText
     private lateinit var sk: EditText
     private lateinit var cloudStatus: TextView
@@ -34,6 +34,8 @@ open class HuaweiCloudActivity : Activity() {
     private var authAk = ""
     private var authSk = ""
     private var regionValue = "cn-east-3"
+    private val regionCodes = listOf("cn-east-3", "cn-east-2", "cn-north-4", "cn-north-1", "cn-south-1", "ap-southeast-1")
+    private val regionLabels = listOf("华东-上海一（默认）", "华东-上海二", "华北-北京四", "华北-北京一", "华南-广州", "亚太-新加坡")
     private var projectId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
@@ -46,7 +48,7 @@ open class HuaweiCloudActivity : Activity() {
         super.onCreate(savedInstanceState)
     }
 
-    protected fun addHuaweiCloudPanel(parent: LinearLayout, configProvider: () -> String) {
+    protected fun addHuaweiCloudPanel(parent: LinearLayout, configProvider: () -> String, onConfigure: () -> Unit) {
         this.configProvider = configProvider
         configYaml = HuaweiCloudSession.lastConfigYaml
         val content = parent
@@ -61,7 +63,31 @@ open class HuaweiCloudActivity : Activity() {
             text = "直接使用 APK 获取的 Cookie 更新云端配置，无需复制粘贴。"
             textSize = 14f; setTextColor(0xFFA7B0C0.toInt()); setPadding(0, dp(8), 0, dp(16))
         })
-        region = field(content, "Region", HuaweiCloudSession.region.ifBlank { "cn-east-3" })
+        content.addView(TextView(this).apply {
+            text = "华为云地区"
+            setTextColor(0xFFDCE2EC.toInt())
+            setPadding(0, dp(10), 0, dp(4))
+        })
+        region = Spinner(this)
+        region.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, regionLabels)
+        val savedRegion = getSharedPreferences("app_settings", MODE_PRIVATE).getString("cloud_region", "cn-east-3") ?: "cn-east-3"
+        region.setSelection(regionCodes.indexOf(savedRegion).takeIf { it >= 0 } ?: 0)
+        region.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                val code = regionCodes.getOrElse(position) { "cn-east-3" }
+                getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", code).apply()
+                if (regionValue != code && HuaweiCloudSession.isLoggedIn()) {
+                    HuaweiCloudSession.region = code
+                    projectId = ""
+                    functions = emptyList()
+                    cloudStatus.text = "地区已切换为 $code，请重新登录并读取该地区的函数列表。"
+                    updateButton.isEnabled = false
+                    logsButton.isEnabled = false
+                }
+            }
+        }
+        content.addView(region, LinearLayout.LayoutParams(-1, -2))
         ak = field(content, "AK", HuaweiCloudSession.ak)
         sk = field(content, "SK", HuaweiCloudSession.sk, true)
         content.addView(Button(this).apply {
@@ -90,6 +116,10 @@ open class HuaweiCloudActivity : Activity() {
             else "已检测到 Cookie，可以更新云端配置。"
             setTextColor(0xFFA7B0C0.toInt())
             setPadding(0, dp(12), 0, dp(8))
+        })
+        content.addView(Button(this).apply {
+            text = "配置选择"; isAllCaps = false
+            setOnClickListener { onConfigure() }
         })
         updateButton = Button(this).apply {
             text = "一键更新云函数配置"; isAllCaps = false; isEnabled = false
@@ -148,6 +178,7 @@ open class HuaweiCloudActivity : Activity() {
         if (HuaweiCloudSession.isLoggedIn()) {
             projectId = HuaweiCloudSession.projectId
             regionValue = HuaweiCloudSession.region
+            region.setSelection(regionCodes.indexOf(regionValue).takeIf { it >= 0 } ?: 0)
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
             functions = HuaweiCloudSession.functions
@@ -191,11 +222,13 @@ open class HuaweiCloudActivity : Activity() {
     }
 
     private fun login() {
-        val r = region.text.toString().trim().lowercase(Locale.ROOT)
+        val r = regionCodes.getOrElse(region.selectedItemPosition) { "cn-east-3" }
         val a = ak.text.toString().trim()
         val s = sk.text.toString()
         if (r.isBlank() || a.isBlank() || s.isBlank()) { cloudStatus.text = "请填写 Region、AK 和 SK。"; return }
         regionValue = r; authAk = a; authSk = s
+        HuaweiCloudSession.region = r
+        getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", r).apply()
         cloudStatus.text = "正在验证 AK/SK 并读取项目和函数列表…"
         updateButton.isEnabled = false
         worker.execute {
