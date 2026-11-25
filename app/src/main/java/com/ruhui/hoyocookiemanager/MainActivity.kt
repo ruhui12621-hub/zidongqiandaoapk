@@ -385,8 +385,14 @@ class MainActivity : HuaweiCloudActivity() {
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val server = prefs.getString("game_server", "os") ?: "os"
         val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
-        yaml = yaml.replace("  cn:\n    enable: false", "  cn:\n    enable: " + (server == "cn"))
-        yaml = yaml.replace("  os:\n    enable: true", "  os:\n    enable: " + (server == "os"))
+        val gamesStart = yaml.indexOf("games:\\n")
+        val cloudStart = yaml.indexOf("\\ncloud_games:", gamesStart + 1)
+        if (gamesStart >= 0 && cloudStart > gamesStart) {
+            var gamesSection = yaml.substring(gamesStart, cloudStart)
+            gamesSection = gamesSection.replace("  cn:\\n    enable: false", "  cn:\\n    enable: " + (server == "cn"))
+            gamesSection = gamesSection.replace("  os:\\n    enable: true", "  os:\\n    enable: " + (server == "os"))
+            yaml = yaml.substring(0, gamesStart) + gamesSection + yaml.substring(cloudStart)
+        }
 
         val supported = mapOf(
             "cn" to listOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
