@@ -44,30 +44,27 @@ class AndroidCredentialVault(private val context: android.content.Context) {
     fun save(ak: String, sk: String) {
         require(ak.isNotBlank() && sk.isNotBlank()) { "AK 和 SK 不能为空。" }
         val fingerprint = fingerprint(ak, sk)
-        val entries = readEntries()
-        val kept = JSONArray()
-        var inserted = false
+        val entries = try {
+            readEntries()
+        } catch (e: Exception) {
+            // A legacy password-protected vault cannot be silently decrypted by this version.
+            // After a successful fresh cloud login, replace it with the new passwordless vault.
+            if (e.message?.contains("旧版带密码保管箱") == true) JSONArray() else throw e
+        }
+        val newest = JSONArray().put(entry(ak, sk, fingerprint))
+        var kept = 0
         for (i in 0 until entries.length()) {
             val old = entries.getJSONObject(i)
-            if (MessageDigest.isEqual(
-                    fingerprint.toByteArray(Charsets.UTF_8),
-                    old.optString("fingerprint").toByteArray(Charsets.UTF_8)
-                )) {
-                if (!inserted) {
-                    kept.put(entry(ak, sk, fingerprint))
-                    inserted = true
-                }
-            } else if (kept.length() < MAX_ENTRIES) {
-                kept.put(old)
+            val same = MessageDigest.isEqual(
+                fingerprint.toByteArray(Charsets.UTF_8),
+                old.optString("fingerprint").toByteArray(Charsets.UTF_8)
+            )
+            if (!same && kept < MAX_ENTRIES - 1) {
+                newest.put(old)
+                kept++
             }
         }
-        if (!inserted) {
-            val newest = JSONArray().put(entry(ak, sk, fingerprint))
-            for (i in 0 until minOf(kept.length(), MAX_ENTRIES - 1)) newest.put(kept.getJSONObject(i))
-            writeEntries(newest)
-        } else {
-            writeEntries(kept)
-        }
+        writeEntries(newest)
     }
 
     @Synchronized
