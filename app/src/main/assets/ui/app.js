@@ -22,7 +22,7 @@ function renderHome(){
  const sync=state.syncLabel||"等待连接华为云";
  let html=pageTitle("账号总览","每个账号独立显示今日签到结果。");
  html+='<button class="card status-card status-card-link" data-page="cloud" aria-label="登录华为云"><div class="status-icon">☁</div><div class="status-copy"><strong>登录华为云</strong><span>'+esc(sync)+'</span></div><span class="pill '+(state.syncState==="synced"?"ok":state.syncState==="failed"?"bad":"warn")+'">'+(state.cloudConnected?"已连接":state.cloudCredentialsSaved?"凭据已保存":"未登录")+'</span><span class="chevron">›</span></button>';
- html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2><button class="text-button" data-action="refresh-today" '+(state.todayQuerying?"disabled":"")+'>'+(state.todayQuerying?"正在刷新…":"刷新信息")+'</button></div>';
+ html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2><button class="refresh-button" data-action="refresh-today" '+(state.todayQuerying?"disabled":"")+' aria-label="刷新今日签到信息"><span class="refresh-icon" aria-hidden="true">↻</span><span>'+(state.todayQuerying?"正在刷新…":"刷新信息")+'</span></button></div>';
  if(!state.accounts||!state.accounts.length){html+='<div class="card empty"><div class="empty-icon">◎</div><strong>云端暂未读取到账号</strong><p>连接华为云后将自动读取现有函数配置。账号信息不会保存到本机。</p></div>'}
  else state.accounts.forEach(a=>{
   const gameStates=Object.values(a.gameTodayStatuses||{});
