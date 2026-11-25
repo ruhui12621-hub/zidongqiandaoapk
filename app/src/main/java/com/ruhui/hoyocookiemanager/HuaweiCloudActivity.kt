@@ -467,8 +467,11 @@ open class HuaweiCloudActivity : Activity() {
     private fun listFunctionTriggers(functionUrn: String): org.json.JSONArray {
         val url = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/triggers/" + enc(functionUrn)
         val response = signedGet(url)
-        if (!response.has("triggers") || response.optJSONArray("triggers") == null) error("华为云未返回可确认的触发器列表；为避免误覆盖，未创建任何触发器。")
-        return response.getJSONArray("triggers")
+        // FunctionGraph 的触发器列表接口在部分响应中直接返回 JSON 数组，
+        // 另一些响应则使用 {"triggers": [...]} 包装；两种格式都安全识别。
+        response.optJSONArray("triggers")?.let { return it }
+        response.optJSONArray("_root_array")?.let { return it }
+        error("华为云未返回可确认的触发器列表；为避免误覆盖，未创建任何触发器。")
     }
 
     private fun ensureDailyTimerIfMissing(functionUrn: String): String {
@@ -625,7 +628,13 @@ open class HuaweiCloudActivity : Activity() {
     private fun signedGet(url: String): JSONObject {
         val response = signedRequest("GET", url, "")
         if (response.first !in 200..299) error("华为云请求失败（HTTP " + response.first + "）：" + response.second)
-        return JSONObject(response.second)
+        val body = response.second.trim()
+        if (body.startsWith("[")) {
+            // 统一封装根节点数组，避免 JSONObject(String) 因接口直接返回 [] 而崩溃。
+            return JSONObject().put("_root_array", org.json.JSONArray(body))
+        }
+        if (body.isBlank()) error("华为云 GET 接口返回空响应。")
+        return JSONObject(body)
     }
 
     private fun signedRequest(method: String, urlText: String, body: String): Pair<Int, String> {
