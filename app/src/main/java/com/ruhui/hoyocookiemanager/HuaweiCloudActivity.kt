@@ -519,6 +519,52 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    /**
+     * Initializes the existing cloud operations as a hidden backend for the HTML UI.
+     * Native widgets are never displayed; HTML owns all visible controls.
+     */
+    protected fun prepareHtmlCloudBackend(host: android.widget.FrameLayout) {
+        val hidden = LinearLayout(this).apply {
+            visibility = android.view.View.GONE
+            orientation = LinearLayout.VERTICAL
+        }
+        host.addView(hidden, android.widget.FrameLayout.LayoutParams(1, 1))
+        addHuaweiCloudPanel(
+            hidden,
+            "hoyolab",
+            { HuaweiCloudSession.lastConfigYaml },
+            loginOnly = false
+        )
+    }
+
+    @android.webkit.JavascriptInterface
+    protected fun htmlCloudLogin(regionCode: String, accessKey: String, secretKey: String) {
+        runOnUiThread {
+            val index = regionCodes.indexOf(regionCode).takeIf { it >= 0 } ?: 0
+            region.setSelection(index)
+            ak.setText(accessKey)
+            sk.setText(secretKey)
+            login()
+        }
+    }
+
+    @android.webkit.JavascriptInterface
+    protected fun htmlDeploy(service: String, yaml: String) {
+        runOnUiThread {
+            if (service == "hoyolab") updateHuaweiCloudConfig(yaml)
+            deployPackages(if (service == "skland") "skland" else "hoyolab")
+        }
+    }
+
+    @android.webkit.JavascriptInterface
+    protected fun htmlFetchLogs() {
+        runOnUiThread { fetchFunctionLogs() }
+    }
+
+    protected fun htmlCloudBackendReady(): Boolean =
+        ::region.isInitialized && ::ak.isInitialized && ::sk.isInitialized &&
+            ::loginButton.isInitialized && ::updateButton.isInitialized && ::logsButton.isInitialized
+
     protected fun updateHuaweiCloudConfig(value: String) {
         configYaml = value
         HuaweiCloudSession.lastConfigYaml = value
