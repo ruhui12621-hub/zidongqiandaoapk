@@ -23,6 +23,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var browserFrame: FrameLayout
+    private lateinit var chromeView: WebView
     private var mainView: WebView? = null
     private var popupView: WebView? = null
     private var probeView: WebView? = null
@@ -72,104 +73,58 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private fun buildHome() {
         loginMode = false
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(10), dp(16), dp(16))
-            setBackgroundColor(Color.rgb(15, 17, 23))
-        }
-        // 先挂载最小可见根布局，避免后续华为云面板初始化异常时整个 Activity 看起来毫无反应。
-        setContentView(root)
-        root.addView(TextView(this).apply {
-            text = "森空岛"
-            textSize = 21f
-            setTextColor(Color.WHITE)
-            setPadding(0, dp(8), 0, dp(12))
-        })
-        status = TextView(this).apply {
-            text = if (hasToken()) "Token：已加密保存" else "登录状态：等待检测"
-            textSize = 14f
-            setTextColor(if (hasToken()) 0xFF75D69C.toInt() else 0xFFB8C1D1.toInt())
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setBackgroundColor(0xFF202631.toInt())
-        }
-        root.addView(status)
-        root.addView(TextView(this).apply {
-            text = "登录成功后自动检测并解析 Token，在本机加密保存。界面、日志和剪贴板均不会显示凭据原文。"
-            textSize = 13f
-            setTextColor(0xFF9BA7B8.toInt())
-            setPadding(0, dp(10), 0, dp(8))
-        })
-        root.addView(button("打开森空岛") {
-            try {
-                showLogin()
-            } catch (e: Exception) {
-                val detail = "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
-                AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口启动失败", detail, false)
-                status.text = "登录窗口启动失败，详情已记录到森空岛操作消息"
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(12, 15, 22)) }
+        status = TextView(this).apply { text = if (hasToken()) "Token：已加密保存" else "登录状态：等待检测" }
+        if (!::chromeView.isInitialized) {
+            chromeView = WebView(this).apply {
+                setBackgroundColor(Color.rgb(12, 15, 22))
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = true
+                settings.allowContentAccess = false
+                addJavascriptInterface(SklandChromeBridge(), "SklandUi")
+                webChromeClient = WebChromeClient()
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean =
+                        !request.url.toString().startsWith("file:///android_asset/ui/")
+                    override fun onPageFinished(view: WebView, url: String) { pushSklandUi() }
+                }
+                loadUrl("file:///android_asset/ui/skland.html")
             }
-        })
-        root.addView(TextView(this).apply {
-            text = "森空岛操作消息"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            setPadding(0, dp(16), 0, dp(6))
-        })
-        val message = TextView(this).apply {
-            text = AppMessageBus.current(this@SenkongdaoActivity, AppMessageBus.SKLAND)
-            textSize = 12f
-            setTextColor(0xFFBEC7D5.toInt())
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setBackgroundColor(0xFF202631.toInt())
         }
-        root.addView(message)
-        root.addView(button("刷新消息") {
-            message.text = AppMessageBus.current(this@SenkongdaoActivity, AppMessageBus.SKLAND)
-        })
-        root.addView(TextView(this).apply {
-            text = "登录后自动检测 Token，并按当前账号 ID 独立加密保存。"
-            textSize = 13f
-            setTextColor(0xFF9BA7B8.toInt())
-            setPadding(0, dp(10), 0, dp(8))
-        })
+        (chromeView.parent as? ViewGroup)?.removeView(chromeView)
+        root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(166)))
+        setContentView(root)
+        pushSklandUi()
+    }
 
+    private fun pushSklandUi() {
+        if (!::chromeView.isInitialized) return
+        val payload = JSONObject().put("loginMode", loginMode)
+            .put("status", if (::status.isInitialized) status.text.toString() else "等待检测")
+            .put("tokenSaved", hasToken())
+            .put("message", AppMessageBus.current(this, AppMessageBus.SKLAND))
+        chromeView.post {
+            chromeView.evaluateJavascript(
+                "window.updateSklandState && window.updateSklandState(" + JSONObject.quote(payload.toString()) + ")", null
+            )
+        }
+    }
+
+    private inner class SklandChromeBridge {
+        @android.webkit.JavascriptInterface fun openLogin() { runOnUiThread { showLogin() } }
+        @android.webkit.JavascriptInterface fun back() { runOnUiThread { leaveLogin() } }
+        @android.webkit.JavascriptInterface fun refresh() { runOnUiThread { if (loginMode) scheduleCheck(); pushSklandUi() } }
     }
 
     private fun showLogin() {
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "正在创建全屏桌面版 WebView…", null)
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "正在打开桌面版登录网页…", null)
         loginMode = true
-        // Keep the Activity's content edge-to-edge within the available window, but
-        // allow adjustResize to make room for the soft keyboard during login.
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(15, 17, 23))
-        }
-        // 关键：切换到登录界面时必须把新根布局挂载到 Activity；否则 WebView 虽然创建并 loadUrl，屏幕仍显示旧主页。
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(12, 15, 22)) }
         setContentView(root)
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "登录界面布局已挂载，正在创建 WebView。", null)
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
-        }
-        bar.addView(button("‹ 返回") { leaveLogin() })
-        bar.addView(TextView(this).apply {
-            text = "森空岛 · 桌面版"
-            textSize = 17f
-            setTextColor(Color.WHITE)
-            setPadding(dp(10), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        status = TextView(this).apply {
-            text = if (hasToken()) "已保存" else "未登录"
-            textSize = 11f
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            setTextColor(0xFFB8C1D1.toInt())
-            maxWidth = dp(76)
-        }
-        bar.addView(status, LinearLayout.LayoutParams(dp(76), -2))
-        root.addView(bar)
+        (chromeView.parent as? ViewGroup)?.removeView(chromeView)
+        root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(166)))
         browserFrame = FrameLayout(this)
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
         val main = DesktopWebView.create(this, multiWindow = true)
@@ -183,14 +138,13 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         probe.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (url.substringBefore('?').trimEnd('/') != TOKEN_URL.trimEnd('/')) return
-                view.evaluateJavascript("(function(){return document.body ? document.body.innerText : '';})()") {
-                    parseResponse(it)
-                }
+                view.evaluateJavascript("(function(){return document.body ? document.body.innerText : '';})()") { parseResponse(it) }
             }
         }
         browserFrame.addView(probe, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM or Gravity.END))
         main.loadUrl(HOME_URL)
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "全屏桌面版登录页面已启动，正在加载森空岛。", true)
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "桌面版登录页面已启动，正在加载森空岛。", true)
+        pushSklandUi()
         pollHandler.removeCallbacks(pollTask)
         pollHandler.postDelayed(pollTask, 2500L)
     }
@@ -243,6 +197,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         lastCheck = now
         checking = true
         status.text = "检测中"
+        pushSklandUi()
         probeView?.loadUrl(TOKEN_URL)
     }
 
@@ -253,6 +208,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             if (json.optInt("code", -1) != 0) {
                 checking = false
                 status.text = "未登录"
+                pushSklandUi()
                 return
             }
             val token = json.optJSONObject("data")?.optString("content").orEmpty()
@@ -260,6 +216,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             if (token.isBlank() || token.any(Char::isWhitespace)) {
                 checking = false
                 status.text = "等待登录"
+                pushSklandUi()
                 return
             }
             val selectedAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
@@ -275,9 +232,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             status.text = "已保存"
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录成功", "已自动解析登录状态并在本机加密保存 Token；未将凭据写入消息栏。", true)
             status.setTextColor(0xFF75D69C.toInt())
+            pushSklandUi()
         } catch (e: Exception) {
             checking = false
             status.text = "等待登录"
+            pushSklandUi()
             AppMessageBus.post(
                 this, AppMessageBus.SKLAND,
                 "森空岛登录检测异常",
@@ -300,6 +259,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         pollHandler.removeCallbacks(pollTask)
         destroyAll()
         buildHome()
+        pushSklandUi()
     }
 
     @Deprecated("Deprecated in Java")
@@ -338,6 +298,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     override fun onDestroy() {
         pollHandler.removeCallbacks(pollTask)
         destroyAll()
+        if (::chromeView.isInitialized) { chromeView.stopLoading(); chromeView.removeJavascriptInterface("SklandUi"); chromeView.destroy() }
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         super.onDestroy()
     }
