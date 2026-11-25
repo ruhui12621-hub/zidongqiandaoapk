@@ -24,7 +24,15 @@ function renderHome(){
  html+='<div class="card status-card"><div class="status-icon">☁</div><div class="status-copy"><strong>云端配置</strong><span>'+esc(sync)+'</span></div><span class="pill '+(state.syncState==="synced"?"ok":state.syncState==="failed"?"bad":"warn")+'">'+(state.cloudConnected?"已连接":state.cloudCredentialsSaved?"凭据已保存":"未连接")+'</span></div>';
  html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2><button class="text-button" data-action="refresh">刷新状态 ↻</button></div>';
  if(!state.accounts||!state.accounts.length){html+='<div class="card empty"><div class="empty-icon">◎</div><strong>云端暂未读取到账号</strong><p>先连接华为云并读取现有函数配置。账号信息不会保存到本机。</p><button class="secondary" data-action="sync">重新读取云端</button></div>'}
- else state.accounts.forEach(a=>{html+='<button class="account-card" data-account="'+esc(a.id)+'"><div class="account-avatar">'+esc(platformInitial(a.platform))+'</div><div class="account-main"><strong>'+esc(a.name)+'</strong><small>'+esc(a.platformLabel)+'</small></div><span class="account-status">'+esc(a.todayStatus||"今日状态未知")+'</span><span class="chevron">›</span></button>'});
+ else state.accounts.forEach(a=>{
+  const gameStates=Object.values(a.gameTodayStatuses||{});
+  const aggregate=gameStates.some(x=>x==="failed")?"今日签到失败":
+    gameStates.some(x=>x==="success")?"今日签到成功":
+    gameStates.length>0&&gameStates.every(x=>x==="unconfigured")?"未配置":
+    a.todayStatus||"今日状态未知";
+  const statusTone=aggregate==="今日签到成功"?"ok":aggregate==="今日签到失败"?"bad":aggregate==="未配置"?"muted":"warn";
+  html+='<button class="account-card" data-account="'+esc(a.id)+'"><div class="account-avatar">'+esc(platformInitial(a.platform))+'</div><div class="account-main"><strong>'+esc(a.name)+'</strong><small>'+esc(a.platformLabel)+'</small></div><span class="account-status '+statusTone+'">'+esc(aggregate)+'</span><span class="chevron">›</span></button>'
+ });
  html+='<button class="primary" data-action="add" '+(!state.canAddAccount?'disabled':'')+'>＋ 添加账号</button>';
  html+='<p class="hint" style="margin:12px 4px 0">账号与游戏配置以华为云为准。此设备不保存 HoYoLAB Cookie。</p>';
  return html
@@ -38,7 +46,16 @@ function renderDetail(a){
   const serverLabel=server==="cn"?"国服":"国际服";
   const selected=selectedHoyoGames(a);
   const options=hoyoGameOptions[server];
-  html+='<div class="card"><div class="card-title">今日签到信息</div><div class="metric"><span>今日签到</span><strong>'+esc(a.todayStatus||"状态未知")+'</strong></div></div>';
+  const cloudEnabled=new Set((a.games||[]).map(g=>g.key));
+  const gameStates=a.gameTodayStatuses||{};
+  const gameRows=options.map(([key,label])=>{
+   const enabled=cloudEnabled.has(key);
+   const result=enabled?(gameStates[key]||"unknown"):"unconfigured";
+   const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
+   const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
+   return '<tr><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
+  }).join("");
+  html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
   html+='<div class="metric" style="margin-bottom:12px"><span>网页 Cookie 获取状态</span><strong style="color:'+(pageCookieReady?'var(--green)':'var(--amber)')+'">'+(pageCookieReady?'已获取 · '+serverLabel:'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
