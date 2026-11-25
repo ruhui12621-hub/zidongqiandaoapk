@@ -23,7 +23,7 @@ function renderHome(){
  let html=pageTitle("账号总览","每个账号独立显示今日签到结果。");
  html+='<div class="card status-card"><div class="status-icon">☁</div><div class="status-copy"><strong>云端配置</strong><span>'+esc(sync)+'</span></div><span class="pill '+(state.syncState==="synced"?"ok":state.syncState==="failed"?"bad":"warn")+'">'+(state.cloudConnected?"已连接":state.cloudCredentialsSaved?"凭据已保存":"未连接")+'</span></div>';
  html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2><button class="text-button" data-action="refresh">刷新状态 ↻</button></div>';
- if(!state.accounts||!state.accounts.length){html+='<div class="card empty"><div class="empty-icon">◎</div><strong>云端暂未读取到账号</strong><p>先连接华为云并读取现有函数配置。账号信息不会保存到本机。</p><button class="secondary" data-action="sync">重新读取云端</button></div>'}
+ if(!state.accounts||!state.accounts.length){html+='<div class="card empty"><div class="empty-icon">◎</div><strong>云端暂未读取到账号</strong><p>连接华为云后将自动读取现有函数配置。账号信息不会保存到本机。</p></div>'}
  else state.accounts.forEach(a=>{
   const gameStates=Object.values(a.gameTodayStatuses||{});
   const aggregate=gameStates.some(x=>x==="failed")?"今日签到失败":
@@ -85,14 +85,11 @@ function renderDetail(a){
  return html
 }
 function renderCloud(){
- let html=pageTitle("华为云","连接 FunctionGraph，读取配置、更新函数并查看运行日志。");
- html+='<div class="card status-card"><div class="status-icon">☁</div><div class="status-copy"><strong>连接状态</strong><span>'+esc(state.syncLabel||"等待连接")+'</span></div><span class="pill '+(state.cloudConnected?"ok":"warn")+'">'+(state.cloudConnected?"已连接":"未连接")+'</span></div>';
+ let html=pageTitle("华为云","管理华为云连接与凭据。");
  html+='<div class="card"><div class="card-title">云端凭据</div><div class="field-row"><label>Region</label><select id="cloud-region"><option value="cn-east-3">华东-上海一</option><option value="cn-east-2">华东-上海二</option><option value="cn-north-4">华北-北京四</option><option value="cn-north-1">华北-北京一</option><option value="cn-south-1">华南-广州</option><option value="ap-southeast-1">中国-香港</option><option value="ap-southeast-3">亚太-新加坡</option></select></div>';
  html+='<div class="field-row"><label>AK</label><input id="cloud-ak" autocomplete="off" autocapitalize="off" placeholder="输入华为云 Access Key"></div>';
  html+='<div class="field-row"><label>SK</label><input id="cloud-sk" type="password" autocomplete="off" placeholder="输入华为云 Secret Key"></div>';
- html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><button class="primary" data-action="cloud-login">登录并连接华为云</button><button class="secondary" data-action="sync">重新读取云端配置</button></div>';
- html+='<div class="card"><div class="card-title">云函数维护</div><p class="hint">HoYoLAB 请进入对应账号详情页，在“更新上传”板块获取网页 Cookie 后更新；森空岛仍可在此更新。部署前会先测试运行，成功后才检查定时触发器。</p><button class="secondary" data-action="deploy-skland">更新森空岛云函数</button></div>';
- html+='<div class="card"><div class="card-title">最近一周函数运行日志</div><p class="hint">'+esc(state.logsStatus||"读取 HoYoLAB 与森空岛两个服务最近 7 天的运行输出。")+'</p><button class="secondary" data-action="logs">读取运行日志</button><div id="logs-output" class="message-box" style="margin-top:12px">'+esc(state.logsText||"点击上方按钮读取最近一周日志。")+'</div></div>';
+ html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><button class="primary" data-action="cloud-login">登录并连接华为云</button><div class="cloud-connection-inline"><span class="connection-dot '+(state.cloudConnected?'connected':'')+'"></span><span>连接状态：'+(state.cloudConnected?'已连接':esc(state.syncLabel||"未连接"))+'</span></div></div>';
  return html
 }
 function renderMessages(){
@@ -123,7 +120,7 @@ document.addEventListener("click",e=>{
  const pageButton=e.target.closest("[data-page]");if(pageButton){selectedId=null;page=pageButton.dataset.page;render();return}
  const action=e.target.closest("[data-action]")?.dataset.action;if(!action)return;
  if(action==="refresh"){native("refresh");refresh();toast("正在刷新");}
- if(action==="sync"){native("syncCloud");toast("正在读取云端配置");}
+ 
  if(action==="add"){if(state.canAddAccount)showModal();else toast("请先成功读取云端配置")}
  if(action==="modal-close"&&e.target.classList.contains("modal-backdrop"))$("#modal-root").innerHTML="";
  if(action==="modal-close"&&e.target.closest(".modal"))$("#modal-root").innerHTML="";
@@ -147,7 +144,7 @@ document.addEventListener("click",e=>{
  }
  if(action==="deploy-hoyo"){native("deploy","hoyolab");toast("正在更新 HoYoLAB 函数")}
  if(action==="deploy-skland"){native("deploy","skland");toast("正在更新森空岛函数")}
- if(action==="logs"){native("fetchLogs");toast("正在读取最近一周日志")}
+ 
  if(action==="message-refresh"){refresh();toast("消息已刷新")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
