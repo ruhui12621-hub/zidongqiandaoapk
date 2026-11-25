@@ -55,6 +55,7 @@ class MainActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
+        migrateLegacyAccounts()
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         buildLauncher()
         val requestedPlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
@@ -82,6 +83,50 @@ class MainActivity : HuaweiCloudActivity() {
             // 系统回收时，WebView 数据目录仍会保留登录状态。
         }
         super.onDestroy()
+    }
+
+    /**
+     * One-time migration of the previous single-account credentials into the new registry.
+     * Existing encrypted credentials are copied before the legacy Skland vault is removed.
+     */
+    private fun migrateLegacyAccounts() {
+        val store = AccountStore(this)
+        val manager = CookieManager.getInstance()
+
+        fun migrateHoyo(platform: String, urls: List<String>) {
+            val cookie = urls.mapNotNull { manager.getCookie(it) }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString("; ")
+            if (cookie.isBlank()) return
+            val identity = HoYoAccountIdentity.fromCookie(cookie, platform)
+            val account = store.add(platform, platformUserId = identity)
+            runCatching {
+                HoYoCookieVault(this, account.id).save(cookie)
+                store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
+            }
+        }
+
+        migrateHoyo(
+            AccountStore.HOYOLAB,
+            listOf("https://www.hoyolab.com/", "https://act.hoyolab.com/", "https://bbs-api-os.hoyolab.com/")
+        )
+        migrateHoyo(
+            AccountStore.MIYOUSHE_CN,
+            listOf("https://www.miyoushe.com/", "https://bbs.mihoyo.com/", "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/")
+        )
+
+        val legacySkland = runCatching { SklandTokenVault(this).latest() }.getOrNull()
+        if (!legacySkland.isNullOrBlank() && store.all().none {
+                it.platform == AccountStore.SKLAND && it.credentialReady
+            }) {
+            runCatching {
+                val account = store.add(AccountStore.SKLAND)
+                SklandTokenVault(this, account.id).save(legacySkland)
+                store.update(account.copy(credentialReady = true))
+                SklandTokenVault(this).delete()
+            }
+        }
     }
 
     private fun buildLauncher() {
