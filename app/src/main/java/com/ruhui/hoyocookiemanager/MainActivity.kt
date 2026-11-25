@@ -39,7 +39,6 @@ class MainActivity : HuaweiCloudActivity() {
     private var showingLauncher = true
     private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
-    private var launcherMessageView: TextView? = null
 
     private val cookieUrls = listOf(
         "https://www.hoyolab.com/",
@@ -97,44 +96,22 @@ class MainActivity : HuaweiCloudActivity() {
         }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(14) })
         root.addView(button("森空岛") {
             try {
-                AppMessageBus.post(this, "森空岛页面启动", "正在启动独立登录页面…", null)
-                refreshLauncherMessage()
                 startActivity(android.content.Intent(this, SenkongdaoActivity::class.java))
             } catch (e: Exception) {
                 val detail = "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
-                AppMessageBus.post(this, "森空岛页面启动失败", detail, false)
-                refreshLauncherMessage()
-                toast("森空岛页面启动失败，详情已写入消息栏")
+                AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面启动失败", detail, false)
+                toast("森空岛页面启动失败，请进入森空岛查看消息")
             }
         }, LinearLayout.LayoutParams(-1, dp(58)))
-        root.addView(text("通用消息", 16, true).apply {
-            setPadding(0, dp(24), 0, dp(6))
-        })
-        launcherMessageView = text(AppMessageBus.current(this), 13, false, Color.rgb(225, 230, 239)).apply {
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setBackgroundColor(Color.rgb(32, 38, 49))
-            setTextIsSelectable(true)
-        }
-        root.addView(launcherMessageView, LinearLayout.LayoutParams(-1, -2))
-        root.addView(button("复制消息") {
-            val message = AppMessageBus.current(this)
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("通用消息", message))
-            toast("消息已复制")
-        })
         setContentView(root)
-    }
-
-    private fun refreshLauncherMessage() {
-        launcherMessageView?.text = AppMessageBus.current(this)
     }
 
     override fun onResume() {
         super.onResume()
-        refreshLauncherMessage()
     }
 
     private fun buildHome() {
+        AppMessageBus.setActiveChannel(AppMessageBus.HOYOLAB)
         showingLauncher = false
         showingBrowser = false
         if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
