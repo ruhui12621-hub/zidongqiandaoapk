@@ -486,11 +486,6 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun showConfigSelection() {
-        val server = detectedGameServer
-        if (server == null) {
-            toast("请先登录并获取 Cookie，程序会自动识别服务器")
-            return
-        }
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val savedGames = prefs.getStringSet("selected_games", setOf("zzz"))?.toMutableSet() ?: mutableSetOf("zzz")
         val labels = linkedMapOf(
@@ -501,29 +496,19 @@ class MainActivity : HuaweiCloudActivity() {
             "honkai_sr" to "崩坏：星穹铁道",
             "zzz" to "绝区零"
         )
-        val supported = mapOf(
-            "cn" to listOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
-            "os" to listOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
-        )
         val checks = linkedMapOf<String, CheckBox>()
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(4))
         }
         panel.addView(TextView(this).apply {
-            text = "已识别服务器：" + if (server == "cn") "国服" else "国际服"
+            text = "选择需要更新的游戏（可多选）"
             textSize = 14f
             setTextColor(Color.rgb(170, 190, 220))
         })
-        panel.addView(TextView(this).apply {
-            text = "游戏（可多选）"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            setPadding(0, dp(14), 0, dp(6))
-        })
-        supported.getValue(server).forEach { key ->
+        labels.forEach { (key, label) ->
             val check = CheckBox(this).apply {
-                text = labels[key] ?: key
+                text = label
                 setTextColor(Color.rgb(230, 234, 242))
                 isChecked = savedGames.contains(key)
                 setPadding(0, dp(3), 0, dp(3))
@@ -543,7 +528,8 @@ class MainActivity : HuaweiCloudActivity() {
                     return@setPositiveButton
                 }
                 prefs.edit().putStringSet("selected_games", chosen.toSet()).apply()
-                if (cookieValue.isNotBlank()) {
+                val server = detectedGameServer
+                if (cookieValue.isNotBlank() && server != null) {
                     yamlValue = makeYaml(cookieValue, server)
                     updateHuaweiCloudConfig(yamlValue)
                 }
