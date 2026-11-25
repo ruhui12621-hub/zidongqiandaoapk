@@ -55,7 +55,7 @@ function renderCloud(){
  html+='<div class="field-row"><label>SK</label><input id="cloud-sk" type="password" autocomplete="off" placeholder="输入华为云 Secret Key"></div>';
  html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><button class="primary" data-action="cloud-login">登录并连接华为云</button><button class="secondary" data-action="sync">重新读取云端配置</button></div>';
  html+='<div class="card"><div class="card-title">云函数维护</div><p class="hint">HoYoLAB 更新会使用当前进程中读取的云端配置；森空岛更新使用当前账号 Token。部署前会先测试运行，成功后才检查定时触发器。</p><button class="primary" data-action="deploy-hoyo">更新 HoYoLAB 云函数</button><button class="secondary" data-action="deploy-skland">更新森空岛云函数</button></div>';
- html+='<div class="card"><div class="card-title">最近一周函数运行日志</div><p class="hint">读取 HoYoLAB 与森空岛两个服务最近 7 天的运行输出。</p><button class="secondary" data-action="logs">读取运行日志</button><div id="logs-output" class="message-box" style="margin-top:12px">点击上方按钮读取最近一周日志。</div></div>';
+ html+='<div class="card"><div class="card-title">最近一周函数运行日志</div><p class="hint">'+esc(state.logsStatus||"读取 HoYoLAB 与森空岛两个服务最近 7 天的运行输出。")+'</p><button class="secondary" data-action="logs">读取运行日志</button><div id="logs-output" class="message-box" style="margin-top:12px">'+esc(state.logsText||"点击上方按钮读取最近一周日志。")+'</div></div>';
  return html
 }
 function renderMessages(){
