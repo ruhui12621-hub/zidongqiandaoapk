@@ -147,7 +147,7 @@ class MainActivity : HuaweiCloudActivity() {
         } else if (!showingLauncher) {
             buildLauncher()
         } else {
-            super.onBackPressed()
+            finishAffinity()
         }
     }
 
