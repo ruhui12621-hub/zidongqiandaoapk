@@ -25,6 +25,7 @@ open class HuaweiCloudActivity : Activity() {
     private lateinit var sk: EditText
     private lateinit var cloudStatus: TextView
     private lateinit var updateButton: Button
+    private lateinit var sklandUpdateButton: Button
     private lateinit var logsButton: Button
     private lateinit var logsStatus: TextView
     private lateinit var logsOutput: TextView
@@ -86,13 +87,16 @@ open class HuaweiCloudActivity : Activity() {
         ak = field(content, "AK", savedCredentials?.first ?: HuaweiCloudSession.ak)
         sk = field(content, "SK", savedCredentials?.second ?: HuaweiCloudSession.sk, true)
         content.addView(Button(this).apply {
-            text = "登录并读取函数列表"; isAllCaps = false; setOnClickListener { login() }
+            text = "登录并连接华为云"; isAllCaps = false; setOnClickListener { login() }
         })
-        content.addView(Button(this).apply {
-            text = "本地保管箱 · 自动保存 / 管理"
-            isAllCaps = false
-            setOnClickListener { openCredentialVault() }
-        })
+        cloudStatus = TextView(this).apply {
+            text = "华为云状态：尚未连接"
+            textSize = 14f
+            setTextColor(0xFFB8C1D1.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setBackgroundColor(0xFF202631.toInt())
+        }
+        content.addView(cloudStatus)
         cookieStatus = TextView(this).apply {
             text = if (configYaml.isBlank()) "HoYoLAB Cookie：等待获取"
             else "HoYoLAB Cookie：已获取，可以部署"
@@ -105,10 +109,15 @@ open class HuaweiCloudActivity : Activity() {
             setOnClickListener { onConfigure() }
         })
         updateButton = Button(this).apply {
-            text = "一键部署 / 更新云函数"; isAllCaps = false; isEnabled = false
-            setOnClickListener { deployPackages() }
+            text = "更新 HoYoLAB 云函数"; isAllCaps = false; isEnabled = false
+            setOnClickListener { deployPackages("hoyolab") }
         }
         content.addView(updateButton)
+        sklandUpdateButton = Button(this).apply {
+            text = "更新森空岛云函数"; isAllCaps = false; isEnabled = false
+            setOnClickListener { deployPackages("skland") }
+        }
+        content.addView(sklandUpdateButton)
         content.addView(TextView(this).apply {
             text = "函数运行日志"
             textSize = 20f
@@ -153,11 +162,6 @@ open class HuaweiCloudActivity : Activity() {
         }
         val logsScroll = ScrollView(this).apply { addView(logsOutput) }
         content.addView(logsScroll, LinearLayout.LayoutParams(-1, dp(260)))
-        cloudStatus = TextView(this).apply {
-            text = "尚未连接华为云。AK/SK 仅保留在当前进程内存中。"
-            textSize = 13f; setTextColor(0xFFB8C1D1.toInt()); setPadding(0, dp(16), 0, dp(10))
-        }
-        content.addView(cloudStatus)
         if (HuaweiCloudSession.isLoggedIn()) {
             projectId = HuaweiCloudSession.projectId
             regionValue = HuaweiCloudSession.region
@@ -166,6 +170,7 @@ open class HuaweiCloudActivity : Activity() {
             authSk = HuaweiCloudSession.sk
             cloudStatus.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId"
             updateButton.isEnabled = configYaml.isNotBlank()
+            sklandUpdateButton.isEnabled = true
             logsButton.isEnabled = true
         }
     }
@@ -182,6 +187,9 @@ open class HuaweiCloudActivity : Activity() {
         }
         if (::updateButton.isInitialized) {
             updateButton.isEnabled = value.isNotBlank() && HuaweiCloudSession.isLoggedIn()
+        }
+        if (::sklandUpdateButton.isInitialized) {
+            sklandUpdateButton.isEnabled = HuaweiCloudSession.isLoggedIn()
         }
     }
 
@@ -205,34 +213,6 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-
-    private fun openCredentialVault() {
-        val vault = AndroidCredentialVault(this)
-        val count = runCatching { vault.latest(); if (vault.exists()) "已保存，最多保留 10 组 AK/SK。" else "尚未保存；首次登录成功后会自动创建。" }
-            .getOrElse { "保管箱读取异常：" + (it.message ?: "未知错误") }
-        val builder = AlertDialog.Builder(this)
-            .setTitle("本地 AK/SK 保管箱")
-            .setMessage(count + "\n\n凭据仅保存在本机应用私有目录，使用 Android Keystore + AES-256-GCM 加密。每次打开页面自动填入最近使用的一组，SK 始终以星号显示。")
-            .setPositiveButton("知道了", null)
-        if (vault.exists()) builder.setNegativeButton("删除全部凭据") { _, _ -> confirmDeleteVault(vault) }
-        builder.show()
-    }
-
-    private fun confirmDeleteVault(vault: AndroidCredentialVault) {
-        AlertDialog.Builder(this)
-            .setTitle("删除本地密码保管箱？")
-            .setMessage("将删除加密凭据文件并销毁 Android Keystore 对应密钥。此操作不可撤销，不会删除当前已登录的内存会话。")
-            .setNegativeButton("取消", null)
-            .setPositiveButton("删除") { _, _ ->
-                try {
-                    vault.delete()
-                    Toast.makeText(this, "本地密码保管箱已删除。", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "删除失败：" + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
-                }
-            }
-            .show()
-    }
 
     private fun login() {
         val r = regionCodes.getOrElse(region.selectedItemPosition) { "cn-east-3" }
@@ -261,18 +241,20 @@ open class HuaweiCloudActivity : Activity() {
                     vaultWarning = "\\n但本次凭据未能写入本地保管箱：" + (vaultError.message ?: vaultError.javaClass.simpleName)
                 }
                 runOnUiThread {
-                    // 登录完成时重新读取一次当前 WebView Cookie，避免登录先后顺序造成按钮状态滞后。
+                    // 登录成功后才保存凭据；Toast 不再承担连接状态提示。
                     configYaml = configProvider?.invoke().orEmpty()
                     projectId = pid
                     HuaweiCloudSession.ak = authAk
                     HuaweiCloudSession.sk = authSk
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
-                    cloudStatus.text = "华为云连接成功\nRegion：" + r + "\nProject ID：" + pid +
-                        (if (configYaml.isBlank()) "\n等待获取 HoYoLAB Cookie。" else "\n已接收当前 Cookie，可以一键部署两个服务。") + vaultWarning
+                    val sklandReady = !runCatching { SklandTokenVault(this).latest() }.getOrNull().isNullOrBlank()
+                    cloudStatus.text = "● 华为云已连接\nRegion：" + r + "\nProject ID：" + pid +
+                        (if (configYaml.isBlank()) "\nHoYoLAB：等待 Cookie" else "\nHoYoLAB：Cookie 已就绪") +
+                        (if (sklandReady) "\n森空岛：Token 已就绪" else "\n森空岛：等待 Token") + vaultWarning
                     updateButton.isEnabled = configYaml.isNotBlank()
+                    sklandUpdateButton.isEnabled = true
                     logsButton.isEnabled = true
-                    Toast.makeText(this, "华为云连接成功", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 runOnUiThread { cloudStatus.text = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName) }
@@ -368,46 +350,53 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun deployPackages() {
-        configYaml = configProvider?.invoke().orEmpty()
-        HuaweiCloudSession.lastConfigYaml = configYaml
+    private fun deployPackages(service: String) {
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            cloudStatus.text = "请先登录华为云。"; return
+            cloudStatus.text = "华为云尚未连接，请先登录。"; return
         }
-        if (configYaml.isBlank() || !configYaml.contains("cookie:")) {
-            cloudStatus.text = "没有有效的 HoYoLAB Cookie 配置，请先完成登录。"; return
+        val isHoyolab = service == "hoyolab"
+        if (isHoyolab) {
+            configYaml = configProvider?.invoke().orEmpty()
+            HuaweiCloudSession.lastConfigYaml = configYaml
+            if (configYaml.isBlank() || !configYaml.contains("cookie:")) {
+                cloudStatus.text = "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。"; return
+            }
         }
-        updateButton.isEnabled = false
-        cloudStatus.text = "正在准备 APK 内置部署包，并写入当前 Cookie…"
+        val targetButton = if (isHoyolab) updateButton else sklandUpdateButton
+        targetButton.isEnabled = false
+        cloudStatus.text = if (isHoyolab) "正在单独更新 HoYoLAB 函数…" else "正在单独更新森空岛函数…"
         worker.execute {
             try {
-                val sklandToken = SklandTokenVault(this).latest()
-                    ?.takeIf { it.isNotBlank() }
-                    ?: error("尚未获取森空岛 Token。请先打开森空岛页面，粘贴 Token JSON 并完成解析；应用会加密保存。")
-                val hoyolabOriginal = readPackagedZip("cloud/hoyolab.zip")
-                val sklandOriginal = readPackagedZip("cloud/skland.zip")
-                val hoyolabArchive = replaceZip(hoyolabOriginal, "config/config.yaml", configYaml)
-                val sklandArchive = replaceZip(
-                    sklandOriginal,
-                    "code/INPUT_HYPERGRYPH_TOKEN.txt",
-                    sklandToken.trim() + "\n"
-                )
-                runOnUiThread { cloudStatus.text = "正在直接上传两个服务，请不要关闭页面…" }
-                val hoyolabCreated = createOrUpdateFunction(HOYOLAB_FUNCTION, HOYOLAB_HANDLER, hoyolabArchive)
-                runOnUiThread { cloudStatus.text = "HoYoLAB 部署完成，正在部署森空岛…" }
-                val sklandCreated = createOrUpdateFunction(SENKONGDAO_FUNCTION, SENKONGDAO_HANDLER, sklandArchive)
+                val created = if (isHoyolab) {
+                    val archive = replaceZip(
+                        readPackagedZip("cloud/hoyolab.zip"),
+                        "config/config.yaml",
+                        configYaml
+                    )
+                    createOrUpdateFunction(HOYOLAB_FUNCTION, HOYOLAB_HANDLER, archive)
+                } else {
+                    val token = SklandTokenVault(this).latest()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: error("尚未获取森空岛 Token。请先登录森空岛并完成 Token 获取。")
+                    val archive = replaceZip(
+                        readPackagedZip("cloud/skland.zip"),
+                        "code/INPUT_HYPERGRYPH_TOKEN.txt",
+                        token.trim() + "\n"
+                    )
+                    createOrUpdateFunction(SENKONGDAO_FUNCTION, SENKONGDAO_HANDLER, archive)
+                }
                 runOnUiThread {
-                    cloudStatus.text = "两个服务部署完成。\nHoYoLAB：" +
-                        (if (hoyolabCreated) "已创建" else "已更新") +
-                        "\n森空岛：" + (if (sklandCreated) "已创建" else "已更新") +
-                        "\n当前 Cookie 已写入 HoYoLAB 配置。"
-                    updateButton.isEnabled = true
+                    val label = if (isHoyolab) "HoYoLAB" else "森空岛"
+                    val action = if (created) "创建" else "更新"
+                    cloudStatus.text = label + " 函数" + action + "成功。\n本次仅提交了 " + label + " 函数，没有触碰另一个服务。"
+                    targetButton.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    cloudStatus.text = "部署失败：" + (e.message ?: e.javaClass.simpleName) +
-                        "\n已完成的服务不会回滚；再次点击会继续更新。"
-                    updateButton.isEnabled = true
+                    cloudStatus.text = (if (isHoyolab) "HoYoLAB" else "森空岛") +
+                        " 更新失败：" + (e.message ?: e.javaClass.simpleName) +
+                        "\n另一个服务不会受到影响。"
+                    targetButton.isEnabled = true
                 }
             }
         }
