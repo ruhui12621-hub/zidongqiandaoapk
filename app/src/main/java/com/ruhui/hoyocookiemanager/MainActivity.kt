@@ -30,6 +30,8 @@ class MainActivity : HuaweiCloudActivity() {
     private var detectedGameServer: String? = null
     private var activeAccountId: String? = null
     private var activePlatform: String? = null
+    private var lastLoggedCookieAccountId: String? = null
+    private var lastLoggedCookieServer: String? = null
     private var returnToAccountDetail = false
     private var browserVisible = false
     private var showingBrowser = false
@@ -409,6 +411,16 @@ class MainActivity : HuaweiCloudActivity() {
             HuaweiCloudSession.pendingHoyoCookie = found
             HuaweiCloudSession.pendingHoyoCookieServer = server
             HuaweiCloudSession.pendingHoyoCookieAccountId = account.id
+            if (lastLoggedCookieAccountId != account.id || lastLoggedCookieServer != server) {
+                lastLoggedCookieAccountId = account.id
+                lastLoggedCookieServer = server
+                AppMessageBus.post(
+                    this, AppMessageBus.HOYOLAB,
+                    if (server == "cn") "米游社登录成功" else "HoYoLAB 登录成功",
+                    "已识别当前登录账号并成功获取 Cookie（${if (server == "cn") "国服" else "国际服"}）。账号：${account.name}。凭据内容不会写入消息栏。",
+                    true
+                )
+            }
             if (showToast) toast("已获取 Cookie，识别为${if (server == "cn") "国服" else "国际服"}")
         } else {
             yamlValue = ""
