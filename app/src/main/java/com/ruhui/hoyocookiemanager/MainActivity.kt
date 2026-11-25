@@ -100,9 +100,12 @@ class MainActivity : HuaweiCloudActivity() {
                 .joinToString("; ")
             if (cookie.isBlank()) return
             val identity = HoYoAccountIdentity.fromCookie(cookie, platform)
-            val account = identity?.let { store.add(platform, platformUserId = it) }
-                ?: store.all().firstOrNull { it.platform == platform && it.credentialReady }
-                ?: store.add(platform)
+            val account = if (identity != null) {
+                store.add(platform, platformUserId = identity)
+            } else {
+                store.all().firstOrNull { it.platform == platform } ?: store.add(platform)
+            }
+            if (identity == null && store.all().any { it.id != account.id && it.platform == platform }) return
             runCatching {
                 HoYoCookieVault(this, account.id).save(cookie)
                 store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
