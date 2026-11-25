@@ -177,16 +177,20 @@ class MainActivity : HuaweiCloudActivity() {
             }
             val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             info.addView(text(title, 16, true))
-            info.addView(text(subtitle, 12, false, Color.rgb(155, 164, 178)).apply {
-                setPadding(0, dp(5), 0, 0)
-            })
+            if (subtitle.isNotBlank()) {
+                info.addView(text(subtitle, 12, false, Color.rgb(155, 164, 178)).apply {
+                    setPadding(0, dp(5), 0, 0)
+                })
+            }
             if (!detailText.isNullOrBlank()) {
-                info.addView(text(detailText, 11, false, Color.rgb(155, 164, 178)).apply {
+                info.addView(text(detailText, 12, false, Color.rgb(155, 164, 178)).apply {
                     setPadding(0, dp(5), 0, 0)
                 })
             }
             item.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-            item.addView(text(statusText, 11, false, Color.rgb(155, 164, 178)))
+            if (statusText.isNotBlank()) {
+                item.addView(text(statusText, 11, false, Color.rgb(155, 164, 178)))
+            }
             item.addView(text("›", 24, false, Color.rgb(155, 164, 178)).apply {
                 setPadding(dp(8), 0, 0, 0)
             })
@@ -247,34 +251,20 @@ class MainActivity : HuaweiCloudActivity() {
             })
         } else {
             accounts.forEach { account ->
-                val gameNames = account.games.mapNotNull {
-                    when (it) {
-                        "genshin" -> "原神"
-                        "honkai2" -> "崩坏2"
-                        "honkai3rd" -> "崩坏3"
-                        "tears_of_themis" -> "未定事件簿"
-                        "honkai_sr" -> "星穹铁道"
-                        "zzz" -> "绝区零"
-                        "arknights" -> "明日方舟"
-                        else -> null
-                    }
+                val rawCheckinStatus = todayCheckinStatuses[account.id].orEmpty()
+                val checkinLabel = when {
+                    !cloudAccountsReady -> "今日状态待同步"
+                    rawCheckinStatus.contains("成功") -> "今日已签到"
+                    rawCheckinStatus.contains("失败") -> "今日签到失败"
+                    todayStatusQuerying && rawCheckinStatus.isBlank() -> "正在读取今日签到状态…"
+                    else -> "今日签到状态未知"
                 }
-                val platformLabel = AccountStore.platformLabel(account.platform)
-                val identityHint = when {
-                account.credentialReady && account.platformUserId != null -> "凭据已保存 · ID 已识别"
-                account.credentialReady -> "凭据已保存 · 本地 ID"
-                account.platformUserId != null -> "ID 已识别 · 待登录"
-                else -> "等待登录"
-            }
                 row(
                     accountContainer,
                     account.name,
-                    "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
-                    identityHint,
-                    if (cloudAccountsReady) {
-                        "今日签到：" + (todayCheckinStatuses[account.id]
-                            ?: if (todayStatusQuerying) "正在读取…" else "尚未读取")
-                    } else null
+                    "",
+                    "",
+                    checkinLabel
                 ) {
                     if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                         Toast.makeText(this, "请先完成云端配置同步，避免使用过期的本地账号。", Toast.LENGTH_LONG).show()
