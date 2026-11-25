@@ -209,26 +209,34 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             }
         }
 
-        @JavascriptInterface fun openAccount(id: String) { selectedAccountId = id; pushState() }
-        @JavascriptInterface fun backToHome() { selectedAccountId = null; pushState() }
+        @JavascriptInterface fun openAccount(id: String) {
+            runOnUiThread { selectedAccountId = id; pushState() }
+        }
+        @JavascriptInterface fun backToHome() {
+            runOnUiThread { selectedAccountId = null; pushState() }
+        }
 
         @JavascriptInterface fun openHoyoLogin(id: String) {
-            val account = AccountStore(this@HtmlMainActivity).find(id) ?: return
-            startActivity(
-                Intent(this@HtmlMainActivity, MainActivity::class.java)
-                    .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
-                    .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
-                    .putExtra("return_to_account_detail", true)
-            )
+            runOnUiThread {
+                val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
+                startActivity(
+                    Intent(this@HtmlMainActivity, MainActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
+                        .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
+                        .putExtra("return_to_account_detail", true)
+                )
+            }
         }
 
         @JavascriptInterface fun openSklandLogin(id: String) {
-            val account = AccountStore(this@HtmlMainActivity).find(id) ?: return
-            startActivity(
-                Intent(this@HtmlMainActivity, SenkongdaoActivity::class.java)
-                    .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
-                    .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
-            )
+            runOnUiThread {
+                val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
+                startActivity(
+                    Intent(this@HtmlMainActivity, SenkongdaoActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
+                        .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
+                )
+            }
         }
 
         @JavascriptInterface fun cloudLogin(region: String, ak: String, sk: String) {
@@ -242,6 +250,12 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         }
 
         @JavascriptInterface fun fetchLogs() { htmlFetchLogs(); pushState() }
+        @JavascriptInterface fun getSavedCloudCredentials(): String {
+            val pair = runCatching { AndroidCredentialVault(this@HtmlMainActivity).latest() }.getOrNull()
+                ?: return JSONObject().toString()
+            return JSONObject().put("ak", pair.first).put("sk", pair.second).toString()
+        }
+
         @JavascriptInterface fun getMessages(channel: String): String =
             if (channel == "skland") AppMessageBus.current(this@HtmlMainActivity, AppMessageBus.SKLAND)
             else AppMessageBus.current(this@HtmlMainActivity, AppMessageBus.HOYOLAB)
