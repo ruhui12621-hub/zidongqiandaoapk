@@ -4,6 +4,9 @@ const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
 let page="home",selectedId=null,messageTab="hoyolab",cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
+const gameSelections={};
+const hoyoGameOptions={cn:[["genshin","原神"],["honkai2","崩坏2"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]],os:[["genshin","原神"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]]};
+function selectedHoyoGames(a){if(!gameSelections[a.id])gameSelections[a.id]=new Set((a.games||[]).map(g=>g.key));return gameSelections[a.id]}
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const account=()=>state.accounts.find(x=>x.id===selectedId);
 const platformInitial=p=>p==="skland"?"森":p==="miyoushe_cn"?"米":"H";
@@ -31,19 +34,19 @@ function renderDetail(a){
  let html='<div class="detail-head"><button class="back-button" data-action="back">‹</button><div class="detail-title"><h1>'+esc(a.name)+'</h1><p>'+esc(a.platformLabel)+' · 账号详情</p></div></div>';
  if(a.platform==="hoyolab"||a.platform==="miyoushe_cn"){
   const pageCookieReady=!!(state.hoyoPageCookieReady&&state.hoyoPageCookieAccountId===a.id);
-  const serverLabel=state.hoyoPageCookieServer==="cn"?"国服":state.hoyoPageCookieServer==="os"?"国际服":"";
-  html+='<div class="card"><div class="card-title">云端信息</div>';
-  html+='<div class="metric" style="margin-bottom:12px"><span>账号游戏区</span><strong>'+(a.platform==="miyoushe_cn"?"国服 · 米游社":"国际服 · HoYoLAB")+'</strong></div>';
-  html+='<div class="game-list">';
-  if(a.games&&a.games.length)a.games.forEach(g=>html+='<span class="game-chip enabled">'+esc(g.label)+'</span>');
-  else html+='<span class="hint">云端配置未识别到已启用的游戏</span>';
-  html+='</div><p class="hint">以上账号与游戏信息来自华为云函数配置；更新 Cookie 不会改动其他云端设置。</p>';
-  html+='<div class="metric"><span>今日签到</span><strong>'+esc(a.todayStatus||"状态未知")+'</strong></div></div>';
+  const server=a.platform==="miyoushe_cn"?"cn":"os";
+  const serverLabel=server==="cn"?"国服":"国际服";
+  const selected=selectedHoyoGames(a);
+  const options=hoyoGameOptions[server];
+  html+='<div class="card"><div class="card-title">今日签到信息</div><div class="metric"><span>今日签到</span><strong>'+esc(a.todayStatus||"状态未知")+'</strong></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
-  html+='<div class="metric" style="margin-bottom:12px"><span>网页 Cookie 获取状态</span><strong style="color:'+(pageCookieReady?'var(--green)':'var(--amber)')+'">'+(pageCookieReady?'已获取'+(serverLabel?' · '+serverLabel:''):'未获取')+'</strong></div>';
+  html+='<div class="metric" style="margin-bottom:12px"><span>网页 Cookie 获取状态</span><strong style="color:'+(pageCookieReady?'var(--green)':'var(--amber)')+'">'+(pageCookieReady?'已获取 · '+serverLabel:'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
+  html+='<div class="game-select-title">选择要启用的游戏</div><div class="game-select-list">';
+  options.forEach(([key,label])=>{html+='<label class="game-select-option"><input type="checkbox" data-game="'+esc(key)+'" '+(selected.has(key)?'checked':'')+'><span>'+esc(label)+'</span></label>'});
+  html+='</div>';
   html+='<button class="primary" data-action="deploy-hoyo-account" '+(!pageCookieReady||!state.cloudConnected?'disabled':'')+'>更新云函数并上传</button>';
-  html+='<p class="hint">上传时使用 APK 内置函数 ZIP，并将本次网页获取的 Cookie 写入云端原配置对应位置；其他云端配置保持不变。请先连接华为云。</p></div>';
+  html+='<p class="hint">默认勾选云端当前启用的游戏。上传时会同时更新游戏选择和本次网页 Cookie；其他云端配置保持不变。</p></div>';
  }else{
   html+='<div class="card"><div class="card-title">凭据获取状态</div>';
   html+='<div class="metric"><span>森空岛 Token</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
@@ -105,7 +108,7 @@ document.addEventListener("click",e=>{
  if(action==="modal-close"&&e.target.closest(".modal"))$("#modal-root").innerHTML="";
  if(action==="back"){selectedId=null;native("backToHome");render()}
  if(action==="hoyo-login"){const a=account();if(a)native("openHoyoLogin",a.id)}
- if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id);toast("正在合并云端配置并上传")}
+ if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id,JSON.stringify(Array.from(selectedHoyoGames(a))));toast("正在合并云端配置并上传")}
  if(action==="skland-login"){const a=account();if(a)native("openSklandLogin",a.id)}
  if(action==="copy-skland-error"){native("copyText",state.sklandMessage||"暂无操作记录")}
  if(action==="cloud-login"){
@@ -118,6 +121,9 @@ document.addEventListener("click",e=>{
  if(action==="message-refresh"){refresh();toast("消息已刷新")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
+document.addEventListener("change",e=>{
+ if(e.target.matches("input[data-game]")){const a=account();if(a){const selected=selectedHoyoGames(a);if(e.target.checked)selected.add(e.target.dataset.game);else selected.delete(e.target.dataset.game)}}
+});
 document.addEventListener("input",e=>{
  if(e.target.id==="cloud-region")cloudDraft.region=e.target.value;
  if(e.target.id==="cloud-ak")cloudDraft.ak=e.target.value;
