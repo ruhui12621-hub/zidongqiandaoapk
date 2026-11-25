@@ -387,6 +387,9 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
                     HuaweiCloudSession.functions = found
+                    // Credentials remain only in the in-memory authenticated session; clear editable fields.
+                    ak.text?.clear()
+                    sk.text?.clear()
                     val names = found.map { it.first }.distinct()
                     spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
                     val preferred = names.indexOf("zzzzz")
