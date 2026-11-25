@@ -159,6 +159,9 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             .put("canAddAccount", CloudAccountSyncState.allowsAccountChanges(this))
             .put("cloudConnected", HuaweiCloudSession.isLoggedIn())
             .put("cloudCredentialsSaved", savedAkSk)
+            .put("hoyoPageCookieReady", HuaweiCloudSession.pendingHoyoCookie.isNotBlank())
+            .put("hoyoPageCookieAccountId", HuaweiCloudSession.pendingHoyoCookieAccountId)
+            .put("hoyoPageCookieServer", HuaweiCloudSession.pendingHoyoCookieServer)
             .put("region", HuaweiCloudSession.region)
             .put("todayQuerying", todayQuerying)
             .put("todaySummary", todaySummary)
@@ -220,6 +223,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         @JavascriptInterface fun openHoyoLogin(id: String) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
+                HuaweiCloudSession.clearPendingHoyoCookie()
+                pushState()
                 startActivity(
                     Intent(this@HtmlMainActivity, MainActivity::class.java)
                         .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
@@ -274,6 +279,11 @@ class HtmlMainActivity : HuaweiCloudActivity() {
 
         @JavascriptInterface fun deploy(service: String) {
             htmlDeploy(service, "")
+            pushState()
+        }
+
+        @JavascriptInterface fun deployHoyoAccount(id: String) {
+            htmlDeployHoyoAccount(id)
             pushState()
         }
 
