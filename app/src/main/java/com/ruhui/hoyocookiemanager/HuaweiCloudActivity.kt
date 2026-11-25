@@ -317,18 +317,25 @@ open class HuaweiCloudActivity : Activity() {
                     // 不能用全局 cookie 正则，否则会先命中国服空值并误判整个同步失败。
                     var inGames = false
                     var inOs = false
+                    var inAccount = false
+                    var cnCookie: String? = null
                     var osCookie: String? = null
                     yaml.lineSequence().forEach { line ->
                         val indent = line.takeWhile { it == ' ' }.length
                         val keyLine = line.trim()
-                        if (indent == 0 && keyLine == "games:") {
-                            inGames = true
-                            inOs = false
-                            return@forEach
+                        if (indent == 0) {
+                            inAccount = keyLine == "account:"
+                            if (keyLine == "games:") {
+                                inGames = true
+                                inOs = false
+                            } else {
+                                inGames = false
+                                inOs = false
+                            }
                         }
-                        if (indent == 0 && inGames) {
-                            inGames = false
-                            inOs = false
+                        if (inAccount && indent == 2 && keyLine.startsWith("cookie:")) {
+                            val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
+                            cnCookie = raw.removeSurrounding("\"").removeSurrounding("'").trim()
                         }
                         if (inGames && indent == 2 && keyLine == "os:") {
                             inOs = true
@@ -375,6 +382,64 @@ open class HuaweiCloudActivity : Activity() {
                             keyLine.substringAfter(':').trim().equals("true", true)) {
                             currentGame?.let(enabledOsGames::add)
                         }
+                    }
+
+                    val enabledCnGames = linkedSetOf<String>()
+                    val supportedCnGames = setOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
+                    var inCnGames = false
+                    var currentCnGame: String? = null
+                    yaml.lineSequence().forEach { line ->
+                        val indent = line.takeWhile { it == ' ' }.length
+                        val keyLine = line.trim()
+                        if (indent == 0) {
+                            inCnGames = keyLine == "games:"
+                            currentCnGame = null
+                            return@forEach
+                        }
+                        if (!inCnGames) return@forEach
+                        if (indent == 2) {
+                            inCnGames = keyLine == "cn:"
+                            currentCnGame = null
+                            return@forEach
+                        }
+                        if (!inCnGames) return@forEach
+                        if (indent == 4 && keyLine.endsWith(":")) {
+                            currentCnGame = keyLine.removeSuffix(":").takeIf { it in supportedCnGames }
+                            return@forEach
+                        }
+                        if (indent == 6 && keyLine.startsWith("checkin:") &&
+                            keyLine.substringAfter(':').trim().equals("true", true)) {
+                            currentCnGame?.let(enabledCnGames::add)
+                        }
+                    }
+
+                    val cnValue = cnCookie.orEmpty()
+                    if (cnValue.isNotBlank() && cnValue != "null" && cnValue != "~" &&
+                        cnValue != "__HOYOLAB_COOKIE__") {
+                        val identity = HoYoAccountIdentity.fromCookie(cnValue, AccountStore.MIYOUSHE_CN)
+                        val existing = store.all().firstOrNull {
+                            it.platform == AccountStore.MIYOUSHE_CN &&
+                                (identity == null || it.platformUserId == identity)
+                        }
+                        val account = existing ?: store.add(
+                            AccountStore.MIYOUSHE_CN,
+                            platformUserId = identity,
+                            games = enabledCnGames
+                        )
+                        val fields = cnValue.split(';').mapNotNull { part ->
+                            val key = part.trim().substringBefore('=').trim().lowercase()
+                            val value = part.trim().substringAfter('=', "").trim()
+                            if (key.isBlank() || value.isBlank()) null else key to value
+                        }.toMap()
+                        val tokenReady = setOf("stoken", "stoken_v2", "cookie_token", "ltoken").any { !fields[it].isNullOrBlank() }
+                        store.update(account.copy(
+                            platformUserId = identity ?: account.platformUserId,
+                            games = enabledCnGames,
+                            credentialReady = true,
+                            cookieReady = true,
+                            tokenReady = tokenReady
+                        ))
+                        imported++
                     }
 
                     val cookie = osCookie.orEmpty()
