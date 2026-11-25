@@ -210,7 +210,7 @@ open class HuaweiCloudActivity : Activity() {
             region.setSelection(regionCodes.indexOf(regionValue).takeIf { it >= 0 } ?: 0)
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
-            cloudStatus.text = "● 华为云已连接\nRegion：$regionValue\nProject ID：$projectId"
+            cloudStatus.text = "[已连接]"
             updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
             logsButton.isEnabled = true
         }
@@ -434,7 +434,7 @@ open class HuaweiCloudActivity : Activity() {
                 runOnUiThread {
                     val label = if (isHoyolab) "HoYoLAB" else "森空岛"
                     val action = if (created) "创建" else "更新"
-                    cloudStatus.text = label + " 函数" + action + "成功。\n本次仅提交了 " + label + " 函数，没有触碰另一个服务。"
+                    cloudStatus.text = "[已连接]"
                     updateButton.isEnabled = true
                     showOperationMessage("$label 函数${action}成功", "本次仅提交了 $label 函数，没有触碰另一个服务。", true)
                 }
