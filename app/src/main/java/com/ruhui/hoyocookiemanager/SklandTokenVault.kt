@@ -50,6 +50,13 @@ class SklandTokenVault(context: android.content.Context) {
     }
 
     @Synchronized
+    fun delete() {
+        if (file.exists() && !file.delete()) error("无法删除森空岛 Token 保管文件。")
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(alias)) store.deleteEntry(alias)
+    }
+
+    @Synchronized
     fun latest(): String? {
         if (!file.isFile) return null
         val outer = JSONObject(file.readText(Charsets.UTF_8))
