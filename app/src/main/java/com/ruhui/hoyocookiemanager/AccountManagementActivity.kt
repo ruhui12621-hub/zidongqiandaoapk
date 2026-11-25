@@ -93,29 +93,49 @@ class AccountManagementActivity : Activity() {
             addView(nameInput, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         })
 
-        val identity = when {
-            account.credentialReady && account.platformUserId != null -> "凭据已保存 · 平台 ID 已识别"
-            account.credentialReady -> "凭据已保存 · 使用本地唯一 ID"
-            account.platformUserId != null -> "平台 ID 已识别 · 等待登录"
-            else -> "尚未登录 · 使用本地唯一 ID"
-        }
         content.addView(sectionCard {
-            addView(text("登录凭据", 14, true))
-            addView(text(identity, 13, false, if (account.credentialReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply {
-                setPadding(0, dp(8), 0, dp(4))
-            })
-            addView(text(
-                if (account.platform == AccountStore.SKLAND) "森空岛 Token 会按此账号独立加密保存。"
-                else "HoYoLAB 与米游社目前仍共用 WebView 登录会话。登录前请确认网页中的账号正确。",
-                12, false, 0xFF9BA7B8.toInt()
-            ).apply { setPadding(0, dp(3), 0, 0) })
-            addView(button("登录 / 更新凭据") {
-                saveAccount(account, showToast = false)
-                val target = if (account.platform == AccountStore.SKLAND) SenkongdaoActivity::class.java else MainActivity::class.java
-                startActivity(Intent(this@AccountManagementActivity, target)
-                    .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
-                    .putExtra(AccountStore.EXTRA_PLATFORM, account.platform))
-            })
+            addView(text("凭据获取状态", 14, true))
+            if (account.platform == AccountStore.HOYOLAB || account.platform == AccountStore.MIYOUSHE_CN) {
+                val cookie = runCatching { HoYoCookieVault(this@AccountManagementActivity, account.id).latest().orEmpty() }.getOrDefault("")
+                val fields = cookie.split(';').mapNotNull { part ->
+                    val key = part.trim().substringBefore('=').trim()
+                    val value = part.trim().substringAfter('=', "").trim()
+                    if (key.isBlank() || value.isBlank()) null else key to value
+                }.toMap()
+                val isCn = account.platform == AccountStore.MIYOUSHE_CN
+                val cookieKeys = if (isCn) setOf("account_id", "ltuid", "stuid", "ltuid_v2") else setOf("ltuid_v2", "account_id_v2", "ltuid", "account_id")
+                val tokenKeys = if (isCn) setOf("stoken", "stoken_v2", "cookie_token", "ltoken") else setOf("ltoken_v2", "cookie_token_v2", "stoken", "cookie_token")
+                val cookieReady = cookieKeys.any { !fields[it].isNullOrBlank() }
+                val tokenReady = tokenKeys.any { !fields[it].isNullOrBlank() }
+                val region = if (isCn) "国服（米游社）" else "国际服（HoYoLAB）"
+                addView(text("账号游戏区：" + region, 13, true, 0xFFB9C9E5.toInt()).apply {
+                    setPadding(0, dp(8), 0, dp(8))
+                })
+                addView(text("Cookie：" + if (cookieReady) "已获取" else "未获取", 14, false,
+                    if (cookieReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(3), 0, dp(3)) })
+                addView(text("Token：" + if (tokenReady) "已获取" else "未获取", 14, false,
+                    if (tokenReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(3), 0, dp(3)) })
+                addView(text("状态仅统计当前账号所属游戏区的本地加密凭据，不会把另一游戏区的登录状态算作成功。", 12, false, 0xFF9BA7B8.toInt()).apply {
+                    setPadding(0, dp(6), 0, 0)
+                })
+                addView(button("打开 " + if (isCn) "米游社" else "HoYoLAB" + " 网页") {
+                    openHoyoLogin(account)
+                })
+                addView(button("登录 / 更新凭证") {
+                    saveAccount(account, showToast = false)
+                    openHoyoLogin(account)
+                })
+            } else {
+                val tokenReady = runCatching { !SklandTokenVault(this@AccountManagementActivity, account.id).latest().isNullOrBlank() }.getOrDefault(false)
+                addView(text("森空岛 Token：" + if (tokenReady) "已获取" else "未获取", 14, false,
+                    if (tokenReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(8), 0, dp(4)) })
+                addView(button("登录 / 更新凭证") {
+                    saveAccount(account, showToast = false)
+                    startActivity(Intent(this@AccountManagementActivity, SenkongdaoActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
+                        .putExtra(AccountStore.EXTRA_PLATFORM, account.platform))
+                })
+            }
         })
 
         content.addView(sectionCard {
@@ -169,6 +189,13 @@ class AccountManagementActivity : Activity() {
         }
         root.addView(deleteButton)
         setContentView(root)
+    }
+
+    private fun openHoyoLogin(account: ManagedAccount) {
+        startActivity(Intent(this, MainActivity::class.java)
+            .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
+            .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
+            .putExtra("return_to_account_detail", true))
     }
 
     private fun saveAccount(account: ManagedAccount, showToast: Boolean) {
