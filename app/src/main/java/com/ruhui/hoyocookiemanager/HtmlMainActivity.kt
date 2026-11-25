@@ -108,12 +108,21 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         if (sync != CloudAccountSyncState.SYNCED && sync != CloudAccountSyncState.EMPTY_CONFIRMED && !HuaweiCloudSession.isLoggedIn()) return
         todayQuerying = true
         todaySummary = "正在读取今天的 FunctionGraph 运行日志…"
+        AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息读取开始",
+            "正在从华为云 FunctionGraph / LTS 下载并分析今天的运行日志。", null)
         pushState()
         queryTodayCheckinStatusForAccounts { statuses, gameStatuses, summary ->
             todayStatuses = statuses
             todayGameStatuses = gameStatuses
             todaySummary = summary
             todayQuerying = false
+            val accountNames = AccountStore(this).all().associate { it.id to it.name }
+            val resultLines = statuses.entries.joinToString("\\n") { (id, status) ->
+                "${accountNames[id] ?: "账号"}：$status"
+            }
+            val completed = !summary.contains("失败")
+            AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息下载${if (completed) "完成" else "失败"}",
+                "日志读取结果：$summary" + if (resultLines.isNotBlank()) "\\n账号状态：\\n$resultLines" else "\\n没有可展示的账号状态。", completed)
             pushState()
         }
     }
