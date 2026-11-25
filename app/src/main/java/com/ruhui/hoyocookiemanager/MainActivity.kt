@@ -37,6 +37,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var yamlValue = ""
     private var browserVisible = false
     private var showingLauncher = true
+    private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
 
     private val cookieUrls = listOf(
@@ -73,6 +74,8 @@ class MainActivity : HuaweiCloudActivity() {
 
     private fun buildLauncher() {
         showingLauncher = true
+        showingBrowser = false
+        if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -99,6 +102,8 @@ class MainActivity : HuaweiCloudActivity() {
 
     private fun buildHome() {
         showingLauncher = false
+        showingBrowser = false
+        if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(18))
@@ -137,7 +142,7 @@ class MainActivity : HuaweiCloudActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (::webView.isInitialized && webView.parent != null) {
+        if (showingBrowser && ::webView.isInitialized) {
             if (webView.canGoBack()) webView.goBack() else buildHome()
         } else if (!showingLauncher) {
             buildLauncher()
@@ -147,6 +152,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun showBrowser() {
+        showingBrowser = true
         if (!::webView.isInitialized) {
             webView = WebView(this).apply {
                 settings.javaScriptEnabled = true
