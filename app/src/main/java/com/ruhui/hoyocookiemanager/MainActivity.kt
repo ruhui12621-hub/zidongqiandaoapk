@@ -7,6 +7,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
