@@ -153,6 +153,30 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 }
                 CookieManager.getInstance().flush()
             }
+
+            override fun onReceivedError(
+                view: WebView,
+                request: android.webkit.WebResourceRequest,
+                error: android.webkit.WebResourceError
+            ) {
+                super.onReceivedError(view, request, error)
+                if (!request.isForMainFrame) return
+                val detail = "网页加载失败（${error.errorCode}）：${error.description}\n地址：${request.url}"
+                AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛网页加载失败", detail, false)
+                pushSklandUi()
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView,
+                request: android.webkit.WebResourceRequest,
+                response: android.webkit.WebResourceResponse
+            ) {
+                super.onReceivedHttpError(view, request, response)
+                if (!request.isForMainFrame || response.statusCode < 400) return
+                val detail = "网页服务器返回 HTTP ${response.statusCode} ${response.reasonPhrase.orEmpty()}\n地址：${request.url}"
+                AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛网页响应异常", detail, false)
+                pushSklandUi()
+            }
         }
     }
 
