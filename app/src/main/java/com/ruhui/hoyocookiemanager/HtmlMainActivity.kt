@@ -176,6 +176,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             .put("todaySummary", todaySummary)
             .put("hoyolabMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
             .put("sklandMessage", AppMessageBus.current(this, AppMessageBus.SKLAND))
+            .put("allMessages", AppMessageBus.currentAll(this))
             .put("sklandError", AppMessageBus.current(this, AppMessageBus.SKLAND).takeIf { it.startsWith("✕") } ?: "")
             .put("cloudMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
     }
