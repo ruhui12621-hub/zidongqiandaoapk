@@ -12,11 +12,8 @@ import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import org.json.JSONObject
 
 class SenkongdaoActivity : HuaweiCloudActivity() {
@@ -90,7 +87,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "正在打开桌面版登录网页…", null)
         loginMode = true
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(12, 15, 22)) }
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(5, 5, 5)) }
         setContentView(root)
         (chromeView.parent as? ViewGroup)?.removeView(chromeView)
         root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(166)))
