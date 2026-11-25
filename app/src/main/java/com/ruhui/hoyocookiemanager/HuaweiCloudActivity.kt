@@ -28,7 +28,6 @@ open class HuaweiCloudActivity : Activity() {
     private lateinit var logsButton: Button
     private lateinit var logsStatus: TextView
     private lateinit var logsOutput: TextView
-    private var functions = listOf<Pair<String, String>>()
     private var authAk = ""
     private var authSk = ""
     private var regionValue = "cn-east-3"
@@ -74,9 +73,7 @@ open class HuaweiCloudActivity : Activity() {
                 if (regionValue != code && HuaweiCloudSession.isLoggedIn()) {
                     HuaweiCloudSession.region = code
                     HuaweiCloudSession.projectId = ""
-                    HuaweiCloudSession.functions = emptyList()
                     projectId = ""
-                    functions = emptyList()
                     cloudStatus.text = "地区已切换为 $code，请重新登录并读取该地区的函数列表。"
                     updateButton.isEnabled = false
                     logsButton.isEnabled = false
@@ -165,7 +162,6 @@ open class HuaweiCloudActivity : Activity() {
             region.setSelection(regionCodes.indexOf(regionValue).takeIf { it >= 0 } ?: 0)
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
-            functions = HuaweiCloudSession.functions
             cloudStatus.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId"
             updateButton.isEnabled = configYaml.isNotBlank()
             logsButton.isEnabled = true
@@ -249,7 +245,6 @@ open class HuaweiCloudActivity : Activity() {
                     if (p.optString("name").equals(r, true)) { pid = p.optString("id"); break }
                 }
                 if (pid.isBlank()) error("认证成功，但没有找到当前 Region 对应的项目。")
-                val found = mutableListOf<Pair<String, String>>()
                 var vaultWarning = ""
                 try {
                     AndroidCredentialVault(this).save(a, s)
@@ -257,12 +252,11 @@ open class HuaweiCloudActivity : Activity() {
                     vaultWarning = "\\n但本次凭据未能写入本地保管箱：" + (vaultError.message ?: vaultError.javaClass.simpleName)
                 }
                 runOnUiThread {
-                    projectId = pid; functions = found
+                    projectId = pid
                     HuaweiCloudSession.ak = authAk
                     HuaweiCloudSession.sk = authSk
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
-                    HuaweiCloudSession.functions = emptyList()
                     cloudStatus.text = "华为云连接成功\nRegion：" + r + "\nProject ID：" + pid +
                         (if (configYaml.isBlank()) "\n等待获取 HoYoLAB Cookie。" else "\n已接收当前 Cookie，可以一键部署两个服务。") + vaultWarning
                     updateButton.isEnabled = configYaml.isNotBlank()
