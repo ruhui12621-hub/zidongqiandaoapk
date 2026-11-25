@@ -18,6 +18,19 @@ object AppMessageBus {
 
     fun activeChannel(): String = activeChannel
 
+    fun beginSession(context: Context, channel: String, title: String, detail: String) {
+        clear(context, channel)
+        post(context, channel, title, detail, null)
+    }
+
+    fun clear(context: Context, channel: String) {
+        val key = normalize(channel)
+        runCatching {
+            context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
+                .edit().remove("latest_$key").apply()
+        }
+    }
+
     fun post(context: Context, channel: String, title: String, detail: String, success: Boolean? = null) {
         val key = normalize(channel)
         val safeTitle = sanitize(title)
@@ -26,8 +39,13 @@ object AppMessageBus {
         val prefix = when (success) { true -> "✓ "; false -> "✕ "; null -> "… " }
         val message = "$prefix[$time] $safeTitle\n$safeDetail"
         runCatching {
-            context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
-                .edit().putString("latest_$key", message).apply()
+            val prefs = context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
+            val combined = if (key == SKLAND) {
+                val previous = prefs.getString("latest_$key", "").orEmpty()
+                (if (previous.isBlank()) message else "$previous\n\n$message")
+                    .split("\n\n").takeLast(32).joinToString("\n\n").takeLast(20000)
+            } else message
+            prefs.edit().putString("latest_$key", combined).apply()
         }
     }
 
