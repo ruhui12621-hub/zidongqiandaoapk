@@ -11,6 +11,17 @@ object HuaweiCloudSession {
     var projectId: String = ""
     var lastConfigYaml: String = ""
 
+    // Current browser-session Cookie, never persisted. Kept separate from cloud YAML.
+    @Volatile var pendingHoyoCookie: String = ""
+    @Volatile var pendingHoyoCookieServer: String = ""
+    @Volatile var pendingHoyoCookieAccountId: String = ""
+
+    fun clearPendingHoyoCookie() {
+        pendingHoyoCookie = ""
+        pendingHoyoCookieServer = ""
+        pendingHoyoCookieAccountId = ""
+    }
+
     fun isLoggedIn(): Boolean =
         ak.isNotBlank() && sk.isNotBlank() &&
             region.isNotBlank() && projectId.isNotBlank()
