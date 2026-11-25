@@ -97,6 +97,13 @@ open class HuaweiCloudActivity : Activity() {
             setOnClickListener { login() }
         }
         content.addView(loginButton)
+        if (service == "hoyolab") {
+            content.addView(Button(this).apply {
+                text = "游戏选择"
+                isAllCaps = false
+                setOnClickListener { onConfigure() }
+            })
+        }
         updateButton = Button(this).apply {
             text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
             isAllCaps = false
