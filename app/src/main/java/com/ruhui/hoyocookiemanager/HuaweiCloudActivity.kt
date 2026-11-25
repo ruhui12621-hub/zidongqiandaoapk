@@ -79,6 +79,8 @@ open class HuaweiCloudActivity : Activity() {
                 getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", code).apply()
                 if (regionValue != code && HuaweiCloudSession.isLoggedIn()) {
                     HuaweiCloudSession.region = code
+                    HuaweiCloudSession.projectId = ""
+                    HuaweiCloudSession.functions = emptyList()
                     projectId = ""
                     functions = emptyList()
                     cloudStatus.text = "地区已切换为 $code，请重新登录并读取该地区的函数列表。"
