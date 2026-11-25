@@ -45,6 +45,9 @@ function renderDetail(a){
  else html+='<span class="hint">云端配置未识别到已启用的游戏</span>';
  html+='</div><p class="hint">游戏选择直接来自云端配置，不在本机保存或修改。</p></div>';
  html+='<div class="card"><div class="card-title">今日签到</div><span class="pill '+statusClass(a.todayStatus)+'">'+esc(a.todayStatus||"状态未知")+'</span></div>';
+ if(a.platform==="skland"&&state.sklandError){
+  html+='<div class="skland-error-wrap"><div class="skland-error-text">'+esc(state.sklandError)+'</div><button class="skland-copy-button" data-action="copy-skland-error">复制消息</button></div>';
+ }
  return html
 }
 function renderCloud(){
@@ -93,6 +96,7 @@ document.addEventListener("click",e=>{
  if(action==="back"){selectedId=null;native("backToHome");render()}
  if(action==="hoyo-login"){const a=account();if(a)native("openHoyoLogin",a.id)}
  if(action==="skland-login"){const a=account();if(a)native("openSklandLogin",a.id)}
+ if(action==="copy-skland-error"){if(state.sklandError)native("copyText",state.sklandError)}
  if(action==="cloud-login"){
   cloudDraft.region=$("#cloud-region").value;cloudDraft.ak=$("#cloud-ak").value;cloudDraft.sk=$("#cloud-sk").value;
   native("cloudLogin",cloudDraft.region,cloudDraft.ak,cloudDraft.sk);toast("正在验证华为云凭据")
