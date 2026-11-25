@@ -96,12 +96,22 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
+ const previousMessageBox=page==="messages"?view.querySelector(".message-box"):null;
+ const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
+ const wasAtMessageBottom=previousMessageBox
+  ? previousMessageBox.scrollHeight-previousMessageBox.clientHeight-previousMessageBox.scrollTop<32
+  : true;
  nav();
  const a=account();
  if(selectedId&&a)view.innerHTML=renderDetail(a);
  else if(page==="cloud")view.innerHTML=renderCloud();
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
+ if(page==="messages"){
+  const currentMessageBox=view.querySelector(".message-box");
+  if(currentMessageBox)currentMessageBox.scrollTop=wasAtMessageBottom
+   ?currentMessageBox.scrollHeight:previousMessageScroll;
+ }
  if(page==="cloud"){
   if(!cloudVaultLoaded){try{const saved=native("getSavedCloudCredentials");if(saved){const pair=JSON.parse(saved);cloudDraft.ak=pair.ak||"";cloudDraft.sk=pair.sk||"";}cloudVaultLoaded=true;}catch(e){}}
   const r=$("#cloud-region");if(r)r.value=cloudDraft.region||state.region||"cn-east-3";
