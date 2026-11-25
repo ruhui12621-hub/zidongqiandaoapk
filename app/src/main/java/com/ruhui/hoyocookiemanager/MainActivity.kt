@@ -122,17 +122,13 @@ class MainActivity : HuaweiCloudActivity() {
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(content)
 
-        content.addView(text("HoYoLAB Cookie Manager", 24, true).apply {
-            setPadding(0, 0, 0, dp(6))
-        })
-        content.addView(text("桌面版 HoYoLAB · Cookie 登录与云函数配置", 13, false, Color.rgb(160, 168, 182)))
         status = text("登录状态：尚未检测", 16, true).apply {
             setPadding(0, dp(22), 0, dp(8))
         }
         content.addView(status)
         content.addView(button("打开 HoYoLAB 登录页面") { showBrowser() })
-        details = text("请使用上方按钮登录 HoYoLAB。登录完成后会自动检测 Cookie；获取成功即可在下方华为云区域更新配置。", 13, false, Color.rgb(160, 168, 182)).apply {
-            setPadding(0, dp(8), 0, dp(18))
+        details = text("登录后自动检测 Cookie。", 13, false, Color.rgb(160, 168, 182)).apply {
+            setPadding(0, dp(4), 0, dp(12))
         }
         content.addView(details)
         addHuaweiCloudPanel(content, "hoyolab", { refreshFromWebView(); yamlValue }) { showConfigSelection() }
