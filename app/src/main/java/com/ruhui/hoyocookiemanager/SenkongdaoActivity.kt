@@ -255,7 +255,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 status.text = "等待登录"
                 return
             }
-            SklandTokenVault(this).save(token)
+            SklandTokenVault(this, intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)).save(token)
             saved = true
             checking = false
             status.text = "已保存"
@@ -279,7 +279,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             host == "hypergryph.com" || host.endsWith(".hypergryph.com")
     }
 
-    private fun hasToken() = !runCatching { SklandTokenVault(this).latest() }.getOrNull().isNullOrBlank()
+    private fun hasToken() = !runCatching { SklandTokenVault(this, intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)).latest() }.getOrNull().isNullOrBlank()
 
     private fun leaveLogin() {
         AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "已返回森空岛服务主页。", null)
