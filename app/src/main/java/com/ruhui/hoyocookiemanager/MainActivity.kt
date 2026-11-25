@@ -68,21 +68,12 @@ class MainActivity : HuaweiCloudActivity() {
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
         if (!returnToAccountDetail) AccountStore.clearMemory()
-        buildLauncher()
-        val cloudCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
-        if (cloudCredentials != null && !returnToAccountDetail) {
-            synchronizeCloudAccounts { success, message ->
-                if (showingLauncher && !isFinishing) buildLauncher()
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-                if (success && showingLauncher && !isFinishing) refreshTodayCheckinStatus(force = true)
-            }
-        } else if (!returnToAccountDetail) {
-            CloudAccountSyncState.set(this, CloudAccountSyncState.UNKNOWN)
+        if (activePlatform != AccountStore.HOYOLAB && activePlatform != AccountStore.MIYOUSHE_CN) {
+            finish()
+            return
         }
-        if (activePlatform == AccountStore.HOYOLAB || activePlatform == AccountStore.MIYOUSHE_CN) {
-            buildHome()
-            showBrowser()
-        }
+        buildHome()
+        showBrowser()
     }
 
     override fun onDestroy() {
