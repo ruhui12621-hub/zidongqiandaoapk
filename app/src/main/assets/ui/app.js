@@ -59,20 +59,24 @@ function renderDetail(a){
   html+='<div class="card"><div class="card-title">更新上传</div>';
   html+='<div class="metric" style="margin-bottom:12px"><span>网页 Cookie 获取状态</span><strong style="color:'+(pageCookieReady?'var(--green)':'var(--amber)')+'">'+(pageCookieReady?'已获取 · '+serverLabel:'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
-  html+='<div class="game-select-title">选择要启用的游戏</div><div class="game-select-list">';
-  options.forEach(([key,label])=>{html+='<label class="game-select-option"><input type="checkbox" data-game="'+esc(key)+'" '+(selected.has(key)?'checked':'')+'><span>'+esc(label)+'</span></label>'});
-  html+='</div>';
+  html+='<button class="secondary game-picker-trigger" data-action="open-game-picker">选择要启用的游戏</button>';
   html+='<button class="primary" data-action="deploy-hoyo-account" '+(!pageCookieReady||!state.cloudConnected?'disabled':'')+'>更新云函数并上传</button>';
   html+='<p class="hint">默认勾选云端当前启用的游戏。上传时会同时更新游戏选择和本次网页 Cookie；其他云端配置保持不变。</p></div>';
  }else{
-  html+='<div class="card"><div class="card-title">凭据获取状态</div>';
-  html+='<div class="metric"><span>森空岛 Token</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
-  html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button></div>';
-  html+='<div class="card"><div class="card-title">签到游戏（云端只读）</div><div class="game-list">';
-  if(a.games&&a.games.length)a.games.forEach(g=>html+='<span class="game-chip enabled">'+esc(g.label)+'</span>');
-  else html+='<span class="hint">云端配置未识别到已启用的游戏</span>';
-  html+='</div><p class="hint">游戏选择直接来自云端配置，不在本机保存或修改。</p></div>';
-  html+='<div class="card"><div class="card-title">今日签到</div><span class="pill '+statusClass(a.todayStatus)+'">'+esc(a.todayStatus||"状态未知")+'</span></div>';
+  const gameStates=a.gameTodayStatuses||{};
+  const games=a.games||[];
+  const rows=games.map(g=>{
+   const key=g.key||g.id||g.label;
+   const result=gameStates[key]||"unknown";
+   const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
+   const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
+   return '<tr><td>'+esc(g.label||key)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>';
+  }).join("");
+  html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="2" class="empty-cell">云端暂未配置签到游戏</td></tr>') +'</tbody></table></div></div>';
+  html+='<div class="card"><div class="card-title">更新上传</div>';
+  html+='<div class="metric" style="margin-bottom:12px"><span>森空岛 Token 获取状态</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
+  html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
+  html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
  }
  if(a.platform==="skland"){
   const sklandMessage=state.sklandMessage||"暂无操作记录。点击上方“打开森空岛登录页面”后，加载状态和错误信息会显示在这里。";
@@ -123,8 +127,17 @@ document.addEventListener("click",e=>{
  if(action==="add"){if(state.canAddAccount)showModal();else toast("请先成功读取云端配置")}
  if(action==="modal-close"&&e.target.classList.contains("modal-backdrop"))$("#modal-root").innerHTML="";
  if(action==="modal-close"&&e.target.closest(".modal"))$("#modal-root").innerHTML="";
+ if(action==="game-modal-close"&&(e.target.classList.contains("game-modal-backdrop")||e.target.closest(".modal-x")))closeGamePicker();
+ if(action==="game-modal-cancel")closeGamePicker();
+ if(action==="game-modal-save"){
+  const a=account();if(a){
+   const chosen=new Set(Array.from(document.querySelectorAll("input[data-modal-game]:checked")).map(x=>x.dataset.modalGame));
+   gameSelections[a.id]=chosen;closeGamePicker();render();toast("游戏选择已保存");
+  }
+ }
  if(action==="back"){selectedId=null;native("backToHome");render()}
  if(action==="hoyo-login"){const a=account();if(a)native("openHoyoLogin",a.id)}
+ if(action==="open-game-picker"){showGamePicker()}
  if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id,JSON.stringify(Array.from(selectedHoyoGames(a))));toast("正在合并云端配置并上传")}
  if(action==="skland-login"){const a=account();if(a)native("openSklandLogin",a.id)}
  if(action==="copy-skland-error"){native("copyText",state.sklandMessage||"暂无操作记录")}
@@ -138,8 +151,17 @@ document.addEventListener("click",e=>{
  if(action==="message-refresh"){refresh();toast("消息已刷新")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
+function showGamePicker(){
+ const a=account();if(!a)return;
+ const server=a.platform==="miyoushe_cn"?"cn":"os";
+ const options=hoyoGameOptions[server];
+ const selected=selectedHoyoGames(a);
+ const items=options.map(([key,label])=>'<label class="game-select-option"><input type="checkbox" data-modal-game="'+esc(key)+'" '+(selected.has(key)?'checked':'')+'><span>'+esc(label)+'</span></label>').join("");
+ $("#modal-root").innerHTML='<div class="modal-backdrop game-modal-backdrop" data-action="game-modal-close"><div class="modal game-picker-modal"><div class="modal-topline"><div><h3>选择要启用的游戏</h3><p>勾选需要参与自动签到的游戏。</p></div><button class="modal-x" data-action="game-modal-close" aria-label="关闭">×</button></div><div class="game-select-list game-modal-list">'+items+'</div><div class="modal-actions"><button class="secondary" data-action="game-modal-cancel">取消</button><button class="primary" data-action="game-modal-save">保存选择</button></div></div></div>';
+}
+function closeGamePicker(){const root=$("#modal-root");if(root)root.innerHTML=""}
 document.addEventListener("change",e=>{
- if(e.target.matches("input[data-game]")){const a=account();if(a){const selected=selectedHoyoGames(a);if(e.target.checked)selected.add(e.target.dataset.game);else selected.delete(e.target.dataset.game)}}
+ if(e.target.matches("input[data-modal-game]"))e.target.dataset.changed="1";
 });
 document.addEventListener("input",e=>{
  if(e.target.id==="cloud-region")cloudDraft.region=e.target.value;
