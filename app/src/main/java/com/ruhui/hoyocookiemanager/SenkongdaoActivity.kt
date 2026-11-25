@@ -245,7 +245,14 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 status.text = "等待登录"
                 return
             }
-            SklandTokenVault(this, intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)).save(token)
+            val selectedAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
+            SklandTokenVault(this, selectedAccountId).save(token)
+            selectedAccountId?.let { id ->
+                val store = AccountStore(this)
+                store.find(id)?.let { account ->
+                    store.update(account.copy(credentialReady = true))
+                }
+            }
             saved = true
             checking = false
             status.text = "已保存"
