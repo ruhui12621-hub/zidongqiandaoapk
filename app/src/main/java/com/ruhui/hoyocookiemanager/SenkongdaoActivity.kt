@@ -42,6 +42,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
+        AppMessageBus.post(this, "森空岛页面", "独立 Activity 已成功创建并显示。", true)
         buildHome()
     }
 
@@ -92,7 +93,15 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             setTextColor(0xFF9BA7B8.toInt())
             setPadding(0, dp(10), 0, dp(8))
         })
-        root.addView(button("打开森空岛") { showLogin() })
+        root.addView(button("打开森空岛") {
+            try {
+                showLogin()
+            } catch (e: Exception) {
+                val detail = "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
+                AppMessageBus.post(this, "森空岛登录窗口启动失败", detail, false)
+                status.text = "登录窗口启动失败，详情已记录到通用消息栏"
+            }
+        })
         val scroll = ScrollView(this)
         val cloud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         addHuaweiCloudPanel(cloud, "skland", { "" })
@@ -102,6 +111,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private fun showLogin() {
+        AppMessageBus.post(this, "森空岛登录窗口", "正在创建全屏桌面版 WebView…", null)
         loginMode = true
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         root = LinearLayout(this).apply {
@@ -147,6 +157,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         }
         browserFrame.addView(probe, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM or Gravity.END))
         main.loadUrl(HOME_URL)
+        AppMessageBus.post(this, "森空岛登录窗口", "全屏桌面版登录页面已启动，正在加载森空岛。", true)
         pollHandler.removeCallbacks(pollTask)
         pollHandler.postDelayed(pollTask, 2500L)
     }
@@ -155,15 +166,26 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         desktop(view, !popup)
         view.webChromeClient = object : WebChromeClient() {
             override fun onCreateWindow(source: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
-                val child = WebView(this@SenkongdaoActivity)
-                configureLogin(child, true)
-                popupView?.let { destroy(it) }
-                popupView = child
-                mainView?.visibility = View.GONE
-                browserFrame.addView(child, FrameLayout.LayoutParams(-1, -1))
-                (resultMsg.obj as WebView.WebViewTransport).webView = child
-                resultMsg.sendToTarget()
-                return true
+                return try {
+                    val child = WebView(this@SenkongdaoActivity)
+                    configureLogin(child, true)
+                    popupView?.let { destroy(it) }
+                    popupView = child
+                    mainView?.visibility = View.GONE
+                    browserFrame.addView(child, FrameLayout.LayoutParams(-1, -1))
+                    (resultMsg.obj as WebView.WebViewTransport).webView = child
+                    resultMsg.sendToTarget()
+                    AppMessageBus.post(this@SenkongdaoActivity, "森空岛验证窗口", "网站弹出的新窗口已在应用内成功创建。", true)
+                    true
+                } catch (e: Exception) {
+                    AppMessageBus.post(
+                        this@SenkongdaoActivity,
+                        "森空岛验证窗口创建失败",
+                        "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}",
+                        false
+                    )
+                    false
+                }
             }
             override fun onCloseWindow(window: WebView) {
                 destroy(window)
@@ -208,10 +230,17 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             saved = true
             checking = false
             status.text = "✓ 已自动解析并加密保存 Token"
+            AppMessageBus.post(this, "森空岛登录成功", "已自动解析登录状态并在本机加密保存 Token；未将凭据写入消息栏。", true)
             status.setTextColor(0xFF75D69C.toInt())
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             checking = false
             status.text = "等待登录完成；系统会自动重试"
+            AppMessageBus.post(
+                this,
+                "森空岛登录检测异常",
+                "${e.javaClass.simpleName}: ${e.message ?: "解析或本地加密保存失败"}",
+                false
+            )
         }
     }
 
@@ -224,6 +253,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private fun hasToken() = !runCatching { SklandTokenVault(this).latest() }.getOrNull().isNullOrBlank()
 
     private fun leaveLogin() {
+        AppMessageBus.post(this, "森空岛登录窗口", "已返回森空岛服务主页。", null)
         pollHandler.removeCallbacks(pollTask)
         destroyAll()
         buildHome()
