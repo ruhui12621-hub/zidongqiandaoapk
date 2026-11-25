@@ -146,6 +146,9 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(15, 17, 23))
         }
+        // 关键：切换到登录界面时必须把新根布局挂载到 Activity；否则 WebView 虽然创建并 loadUrl，屏幕仍显示旧主页。
+        setContentView(root)
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "登录界面布局已挂载，正在创建 WebView。", null)
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
