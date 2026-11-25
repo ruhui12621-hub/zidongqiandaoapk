@@ -132,7 +132,7 @@ class AccountManagementActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(AccountStore.platformLabel(account.platform))
             .setView(scroll)
-            .setNeutralButton("删除账号", null)
+            .setNeutralButton("登录 / 更新凭据", null)
             .setNegativeButton("取消", null)
             .setPositiveButton("保存") { _, _ ->
                 val name = nameInput.text.toString().trim().ifBlank { account.name }
@@ -146,14 +146,15 @@ class AccountManagementActivity : Activity() {
             .show()
             .apply {
                 getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                    AlertDialog.Builder(this@AccountManagementActivity)
-                        .setTitle("删除账号？")
-                        .setMessage("将删除「${account.name}」的本地账号配置。此操作不会删除其他平台账号。")
-                        .setNegativeButton("取消", null)
-                        .setPositiveButton("确认删除") { _, _ ->
-                            store.delete(account.id)
-                            render()
-                        }.show()
+                    val target = if (account.platform == AccountStore.SKLAND) {
+                        SenkongdaoActivity::class.java
+                    } else {
+                        MainActivity::class.java
+                    }
+                    startActivity(android.content.Intent(this@AccountManagementActivity, target)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
+                        .putExtra(AccountStore.EXTRA_PLATFORM, account.platform))
+                    dismiss()
                 }
             }
     }
