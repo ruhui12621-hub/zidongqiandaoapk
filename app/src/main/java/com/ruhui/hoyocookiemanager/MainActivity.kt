@@ -361,7 +361,7 @@ class MainActivity : HuaweiCloudActivity() {
             if (requested != null && requested.platform != platform) {
                 statusText = "账号平台不匹配"
                 detailsText = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
-                updateHuaweiCloudConfig("")
+                HuaweiCloudSession.clearPendingHoyoCookie()
                 pushLoginChrome()
                 return
             }
@@ -373,7 +373,7 @@ class MainActivity : HuaweiCloudActivity() {
             if (identity != null && account.platformUserId != null && account.platformUserId != identity) {
                 statusText = "检测到不同账号"
                 detailsText = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
-                updateHuaweiCloudConfig("")
+                HuaweiCloudSession.clearPendingHoyoCookie()
                 return
             }
             val duplicate = identity?.let { uid ->
@@ -382,7 +382,7 @@ class MainActivity : HuaweiCloudActivity() {
             if (duplicate != null) {
                 statusText = "账号已存在"
                 detailsText = "该平台 ID 已关联到「${duplicate.name}」，请直接使用已有账号，避免重复添加。"
-                updateHuaweiCloudConfig("")
+                HuaweiCloudSession.clearPendingHoyoCookie()
                 return
             }
             val cookieFields = found.split(';').mapNotNull { part ->
@@ -406,7 +406,9 @@ class MainActivity : HuaweiCloudActivity() {
             yamlValue = makeYaml(found, server)
             statusText = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
             detailsText = "已自动识别服务器，更新时只会写入对应服务器配置。"
-            updateHuaweiCloudConfig(yamlValue)
+            HuaweiCloudSession.pendingHoyoCookie = found
+            HuaweiCloudSession.pendingHoyoCookieServer = server
+            HuaweiCloudSession.pendingHoyoCookieAccountId = account.id
             if (showToast) toast("已获取 Cookie，识别为${if (server == "cn") "国服" else "国际服"}")
         } else {
             yamlValue = ""
@@ -417,7 +419,7 @@ class MainActivity : HuaweiCloudActivity() {
             } else {
                 "已读取到 Cookie，但无法可靠判断服务器。请确认登录的是国服或国际服账号后重试。"
             }
-            updateHuaweiCloudConfig("")
+            HuaweiCloudSession.clearPendingHoyoCookie()
             if (showToast) toast("未发现可识别的登录凭据")
         }
         pushLoginChrome()
