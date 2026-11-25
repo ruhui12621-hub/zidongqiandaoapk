@@ -596,7 +596,6 @@ open class HuaweiCloudActivity : Activity() {
                 .put("code_filename", "index.zip")
                 .put("code_type", "zip")
                 .put("func_code", JSONObject().put("file", encoded))
-                .put("enable_lts_log", true)
             val response = signedRequest("POST", base, body.toString())
             if (response.first in 200..299) return true
             val raced = findExact() ?: error("创建函数失败（HTTP ${response.first}）：" + response.second.take(1600))
