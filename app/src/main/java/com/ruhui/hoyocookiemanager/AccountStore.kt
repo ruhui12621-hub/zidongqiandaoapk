@@ -1,8 +1,6 @@
 package com.ruhui.hoyocookiemanager
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.UUID
 
 /**
@@ -17,7 +15,9 @@ data class ManagedAccount(
     val name: String,
     val platformUserId: String?,
     val games: Set<String>,
-    val credentialReady: Boolean = false
+    val credentialReady: Boolean = false,
+    val cookieReady: Boolean = credentialReady,
+    val tokenReady: Boolean = false
 )
 
 class AccountStore(context: Context) {
