@@ -232,7 +232,12 @@ open class HuaweiCloudActivity : Activity() {
         val r = regionCodes.getOrElse(region.selectedItemPosition) { "cn-east-3" }
         val a = ak.text.toString().trim()
         val s = sk.text.toString()
-        if (r.isBlank() || a.isBlank() || s.isBlank()) { cloudStatus.text = "请填写 Region、AK 和 SK。"; return }
+        if (r.isBlank() || a.isBlank() || s.isBlank()) {
+            val detail = "请填写 Region、AK 和 SK。"
+            cloudStatus.text = detail
+            showOperationMessage("华为云登录失败", detail, false)
+            return
+        }
         regionValue = r; authAk = a; authSk = s
         HuaweiCloudSession.region = r
         getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", r).apply()
@@ -267,7 +272,7 @@ open class HuaweiCloudActivity : Activity() {
                     cloudStatus.text = "● 华为云已连接\nRegion：" + r + "\nProject ID：" + pid +
                         (if (configYaml.isBlank()) "\nHoYoLAB：等待 Cookie" else "\nHoYoLAB：Cookie 已就绪") +
                         (if (sklandReady) "\n森空岛：Token 已就绪" else "\n森空岛：等待 Token") + vaultWarning
-                    updateButton.isEnabled = true
+                    updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
                     logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
                 }
@@ -373,7 +378,10 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun deployPackages(service: String) {
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            cloudStatus.text = "华为云尚未连接，请先登录。"; return
+            val detail = "华为云尚未连接，请先登录。"
+            cloudStatus.text = detail
+            showOperationMessage(if (service == "hoyolab") "HoYoLAB 更新失败" else "森空岛更新失败", detail, false)
+            return
         }
         val isHoyolab = service == "hoyolab"
         if (isHoyolab) {
