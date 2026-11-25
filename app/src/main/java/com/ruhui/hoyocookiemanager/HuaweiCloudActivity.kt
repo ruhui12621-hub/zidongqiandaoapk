@@ -22,192 +22,42 @@ import java.util.concurrent.Executors
 
 open class HuaweiCloudActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
-    private lateinit var region: Spinner
-    private lateinit var ak: EditText
-    private lateinit var sk: EditText
-    private lateinit var loginButton: Button
-    private lateinit var updateButton: Button
-    private lateinit var resultMessage: TextView
-    private lateinit var copyResultButton: Button
+    private var accessKeyValue = ""
+    private var secretKeyValue = ""
+    private var connectionLabel = "尚未连接"
+    private var logsStatusValue = "登录华为云后即可读取两个服务的运行日志。"
+    private var logsOutputValue = "暂无日志"
     private var lastResultMessage = ""
-    private lateinit var logsButton: Button
-    private lateinit var logsStatus: TextView
-    private lateinit var logsOutput: TextView
     private var authAk = ""
     private var authSk = ""
     private var regionValue = "cn-east-3"
     private val regionCodes = listOf("cn-east-3", "cn-east-2", "cn-north-4", "cn-north-1", "cn-south-1", "ap-southeast-1", "ap-southeast-3")
-    private val regionLabels = listOf("华东-上海一（默认）", "华东-上海二", "华北-北京四", "华北-北京一", "华南-广州", "中国-香港", "亚太-新加坡")
     private var projectId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
     private var panelService = "hoyolab"
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-    }
+    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState) }
 
-    protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}, loginOnly: Boolean = false) {
-        this.configProvider = configProvider
-        this.panelService = service
+    /** The HTML interface owns every visible control. */
+    protected fun prepareHtmlCloudBackend(host: android.widget.FrameLayout) {
+        configProvider = { HuaweiCloudSession.lastConfigYaml }
         configYaml = HuaweiCloudSession.lastConfigYaml
-        val content = parent
-        content.addView(TextView(this).apply {
-            text = "华为云 FunctionGraph"
-            textSize = 24f
-            setTextColor(0xFFECEFF5.toInt())
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, 0, 0, dp(6))
-        })
-        content.addView(TextView(this).apply {
-            text = "华为云地区"
-            setTextColor(0xFFDCE2EC.toInt())
-            setPadding(0, dp(10), 0, dp(4))
-        })
-        region = Spinner(this)
-        region.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, regionLabels)
-        val savedRegion = getSharedPreferences("app_settings", MODE_PRIVATE).getString("cloud_region", "cn-east-3") ?: "cn-east-3"
-        region.setSelection(regionCodes.indexOf(savedRegion).takeIf { it >= 0 } ?: 0)
-        region.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                val code = regionCodes.getOrElse(position) { "cn-east-3" }
-                getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", code).apply()
-                if (regionValue != code && HuaweiCloudSession.isLoggedIn()) {
-                    HuaweiCloudSession.region = code
-                    HuaweiCloudSession.projectId = ""
-                    projectId = ""
-                    setCloudConnectionState("尚未连接")
-                    if (::updateButton.isInitialized) updateButton.isEnabled = false
-                    if (::logsButton.isInitialized) logsButton.isEnabled = false
-                }
-            }
+        regionValue = getSharedPreferences("app_settings", MODE_PRIVATE).getString("cloud_region", "cn-east-3") ?: "cn-east-3"
+        runCatching { AndroidCredentialVault(this).latest() }.getOrNull()?.let {
+            accessKeyValue = it.first
+            secretKeyValue = it.second
         }
-        content.addView(region, LinearLayout.LayoutParams(-1, -2))
-        val savedCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
-        ak = field(content, "AK", savedCredentials?.first ?: HuaweiCloudSession.ak)
-        sk = field(content, "SK", savedCredentials?.second ?: HuaweiCloudSession.sk, true)
-        content.addView(TextView(this).apply {
-            text = "AK/SK 可在华为云「我的凭证」中创建和查看。"
-            textSize = 13f
-            setTextColor(0xFFFFCC80.toInt())
-            setPadding(0, dp(10), 0, dp(8))
-        })
-        loginButton = Button(this).apply {
-            text = "登录并连接华为云 · [尚未连接]"
-            isAllCaps = false
-            setOnClickListener { login() }
-        }
-        content.addView(loginButton)
-        if (!loginOnly) {
-            if (service == "hoyolab") {
-                content.addView(Button(this).apply {
-                    text = "游戏选择"
-                    isAllCaps = false
-                    setOnClickListener { onConfigure() }
-                })
-            }
-            updateButton = Button(this).apply {
-                text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
-                isAllCaps = false
-                isEnabled = false
-                setOnClickListener { deployPackages(service) }
-            }
-            content.addView(updateButton)
-    
-        }
-        if (!loginOnly) {
-            lastResultMessage = AppMessageBus.current(this, messageChannel())
-                .takeIf { it.isNotBlank() && it != "暂无操作记录" } ?: "暂无操作消息"
-            resultMessage = TextView(this).apply {
-                text = lastResultMessage
-                textSize = 13f
-                setTextColor(0xFFE1E6EF.toInt())
-                setTextIsSelectable(true)
-                setPadding(dp(10), dp(10), dp(10), dp(10))
-                setBackgroundColor(0xFF202631.toInt())
-                minHeight = dp(190)
-                textSize = 13f
-            }
-            val messageScroll = ScrollView(this).apply {
-                isFillViewport = true
-                addView(resultMessage, android.widget.FrameLayout.LayoutParams(-1, -2))
-            }
-            content.addView(messageScroll, LinearLayout.LayoutParams(-1, dp(230)))
-            copyResultButton = Button(this).apply {
-                text = "复制消息内容"
-                isAllCaps = false
-                isEnabled = lastResultMessage != "暂无操作消息"
-                setOnClickListener {
-                    if (lastResultMessage.isNotBlank() && lastResultMessage != "暂无操作消息") {
-                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("操作消息", lastResultMessage))
-                        Toast.makeText(this@HuaweiCloudActivity, "消息内容已复制", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            content.addView(copyResultButton)
-            content.addView(TextView(this).apply {
-                text = "函数运行日志"
-                textSize = 20f
-                setTextColor(0xFFECEFF5.toInt())
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setPadding(0, dp(26), 0, dp(6))
-            })
-            content.addView(TextView(this).apply {
-                text = "读取 HoYoLAB 与森空岛两个服务最近一周的运行输出。"
-                textSize = 13f
-                setTextColor(0xFFA7B0C0.toInt())
-                setPadding(0, 0, 0, dp(8))
-            })
-            content.addView(TextView(this).apply {
-                text = "固定查询最近 7 天，自动分页读取全部日志。"
-                textSize = 13f
-                setTextColor(0xFFA7B0C0.toInt())
-                setPadding(0, 0, 0, dp(8))
-            })
-            logsButton = Button(this).apply {
-                text = "读取运行日志"
-                isAllCaps = false
-                isEnabled = false
-                setOnClickListener { fetchFunctionLogs() }
-            }
-            content.addView(logsButton)
-            logsStatus = TextView(this).apply {
-                text = "登录华为云后即可读取两个服务的运行日志。"
-                textSize = 13f
-                setTextColor(0xFFA7B0C0.toInt())
-                setPadding(0, dp(8), 0, dp(6))
-            }
-            content.addView(logsStatus)
-            logsOutput = TextView(this).apply {
-                textSize = 12f
-                setTextColor(0xFFE1E6EF.toInt())
-                setTextIsSelectable(true)
-                setPadding(dp(10), dp(10), dp(10), dp(10))
-                setBackgroundColor(0xFF202631.toInt())
-                minHeight = dp(90)
-                text = "暂无日志"
-            }
-            val logsScroll = ScrollView(this).apply { addView(logsOutput) }
-            content.addView(logsScroll, LinearLayout.LayoutParams(-1, dp(260)))
-            }
         if (HuaweiCloudSession.isLoggedIn()) {
-            projectId = HuaweiCloudSession.projectId
-            regionValue = HuaweiCloudSession.region
-            region.setSelection(regionCodes.indexOf(regionValue).takeIf { it >= 0 } ?: 0)
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
-            setCloudConnectionState("已连接")
-            if (::updateButton.isInitialized) updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
-            if (::logsButton.isInitialized) logsButton.isEnabled = true
+            regionValue = HuaweiCloudSession.region
+            projectId = HuaweiCloudSession.projectId
+            connectionLabel = "已连接"
         }
     }
 
-    private fun setCloudConnectionState(state: String) {
-        if (::loginButton.isInitialized) loginButton.text = "登录并连接华为云 · [$state]"
-    }
-
+    private fun setCloudConnectionState(state: String) { connectionLabel = state }
 
     /**
      * Read the existing FunctionGraph packages before account editing is enabled.
