@@ -20,3 +20,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
+dependencies {
+    implementation("com.huaweicloud:esdk-obs-android:3.24.3")
+}
