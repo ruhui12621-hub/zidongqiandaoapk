@@ -9,8 +9,6 @@ object HuaweiCloudSession {
     var sk: String = ""
     var region: String = "cn-east-3"
     var projectId: String = ""
-    var functions: List<Pair<String, String>> = emptyList()
-    var selectedFunction: String = "zzzzz"
     var lastConfigYaml: String = ""
 
     fun isLoggedIn(): Boolean =
