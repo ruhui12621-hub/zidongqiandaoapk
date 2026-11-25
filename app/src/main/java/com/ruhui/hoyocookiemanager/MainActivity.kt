@@ -62,7 +62,6 @@ class MainActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
-        migrateLegacyAccounts()
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
@@ -92,7 +91,6 @@ class MainActivity : HuaweiCloudActivity() {
                 popup.destroy()
                 popupWebView = null
             }
-            CookieManager.getInstance().flush()
             if (::webView.isInitialized) {
                 webView.stopLoading()
                 webView.destroy()
@@ -101,51 +99,6 @@ class MainActivity : HuaweiCloudActivity() {
             // 系统回收时，WebView 数据目录仍会保留登录状态。
         }
         super.onDestroy()
-    }
-
-    /**
-     * One-time migration of the previous single-account credentials into the new registry.
-     * Existing encrypted credentials are copied before the legacy Skland vault is removed.
-     */
-    private fun migrateLegacyAccounts() {
-        val store = AccountStore(this)
-        val manager = CookieManager.getInstance()
-
-        fun migrateHoyo(platform: String, urls: List<String>) {
-            val cookie = urls.mapNotNull { manager.getCookie(it) }
-                .filter { it.isNotBlank() }
-                .distinct()
-                .joinToString("; ")
-            if (cookie.isBlank()) return
-            val identity = HoYoAccountIdentity.fromCookie(cookie, platform)
-            if (identity == null && store.all().any { it.platform == platform }) return
-            val account = if (identity != null) store.add(platform, platformUserId = identity) else store.add(platform)
-            runCatching {
-                HoYoCookieVault(this, account.id).save(cookie)
-                store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
-            }
-        }
-
-        migrateHoyo(
-            AccountStore.HOYOLAB,
-            listOf("https://www.hoyolab.com/", "https://act.hoyolab.com/", "https://bbs-api-os.hoyolab.com/")
-        )
-        migrateHoyo(
-            AccountStore.MIYOUSHE_CN,
-            listOf("https://www.miyoushe.com/", "https://bbs.mihoyo.com/", "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/")
-        )
-
-        val legacySkland = runCatching { SklandTokenVault(this).latest() }.getOrNull()
-        if (!legacySkland.isNullOrBlank() && store.all().none {
-                it.platform == AccountStore.SKLAND && it.credentialReady
-            }) {
-            runCatching {
-                val account = store.add(AccountStore.SKLAND)
-                SklandTokenVault(this, account.id).save(legacySkland)
-                store.update(account.copy(credentialReady = true))
-                SklandTokenVault(this).delete()
-            }
-        }
     }
 
     private fun buildLauncher() {
@@ -654,13 +607,22 @@ class MainActivity : HuaweiCloudActivity() {
                 updateHuaweiCloudConfig("")
                 return
             }
-            account = account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true)
+            val cookieFields = found.split(';').mapNotNull { part ->
+                val key = part.trim().substringBefore('=').trim().lowercase()
+                val value = part.trim().substringAfter('=', "").trim()
+                if (key.isBlank() || value.isBlank()) null else key to value
+            }.toMap()
+            val tokenKeys = if (platform == AccountStore.MIYOUSHE_CN)
+                setOf("stoken", "stoken_v2", "cookie_token", "ltoken")
+            else setOf("ltoken_v2", "cookie_token_v2")
+            account = account.copy(
+                platformUserId = identity ?: account.platformUserId,
+                credentialReady = true,
+                cookieReady = true,
+                tokenReady = tokenKeys.any { !cookieFields[it].isNullOrBlank() }
+            )
             store.update(account)
-            runCatching { HoYoCookieVault(this, account.id).save(found) }
-                .onFailure { recordWebDiagnostic("账号 Cookie 加密保存失败：${it.javaClass.simpleName}") }
             activeAccountId = account.id
-            getSharedPreferences("multi_account_registry", MODE_PRIVATE).edit()
-                .putString("active_${platform}", account.id).apply()
 
             val server = detectedGameServer!!
             yamlValue = makeYaml(found, server)
@@ -735,14 +697,9 @@ class MainActivity : HuaweiCloudActivity() {
             if (mid.isNotBlank()) yaml = yaml.replace("  mid: ''", "  mid: " + yamlValue(mid))
         }
 
-        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val platform = if (server == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
         val registry = AccountStore(this)
-        val selectedAccountId = activeAccountId
-            ?: getSharedPreferences("multi_account_registry", Context.MODE_PRIVATE).getString("active_${platform}", null)
-        val selected = selectedAccountId?.let { registry.find(it)?.games }
-            ?: prefs.getStringSet("selected_games", setOf("zzz"))
-            ?: setOf("zzz")
+        val selected = activeAccountId?.let { registry.find(it)?.games } ?: setOf("zzz")
         val gamesStart = yaml.indexOf("games:\n")
         val cloudStart = yaml.indexOf("\ncloud_games:", gamesStart + 1)
         if (gamesStart >= 0 && cloudStart > gamesStart) {
@@ -780,8 +737,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun showConfigSelection() {
-        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val savedGames = prefs.getStringSet("selected_games", setOf("zzz"))?.toMutableSet() ?: mutableSetOf("zzz")
+        val savedGames = activeAccountId?.let { AccountStore(this).find(it)?.games?.toMutableSet() } ?: mutableSetOf("zzz")
         val labels = linkedMapOf(
             "genshin" to "原神",
             "honkai2" to "崩坏2",
@@ -821,13 +777,12 @@ class MainActivity : HuaweiCloudActivity() {
                     toast("至少选择一个游戏")
                     return@setPositiveButton
                 }
-                prefs.edit().putStringSet("selected_games", chosen.toSet()).apply()
                 val server = detectedGameServer
                 if (cookieValue.isNotBlank() && server != null) {
                     yamlValue = makeYaml(cookieValue, server)
                     updateHuaweiCloudConfig(yamlValue)
                 }
-                toast("游戏配置已保存")
+                toast("已更新当前会话的游戏选择；需将生成的配置上传云端后才会长期生效")
             }
             .show()
     }
