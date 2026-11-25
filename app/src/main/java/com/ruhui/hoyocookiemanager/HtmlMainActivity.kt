@@ -18,6 +18,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     private lateinit var ui: WebView
     private var selectedAccountId: String? = null
     private var todayStatuses: Map<String, String> = emptyMap()
+    private var todayGameStatuses: Map<String, Map<String, String>> = emptyMap()
     private var todaySummary = "等待读取今日签到状态"
     private var todayQuerying = false
     private var pageReady = false
@@ -103,8 +104,9 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         todayQuerying = true
         todaySummary = "正在读取今天的 FunctionGraph 运行日志…"
         pushState()
-        queryTodayCheckinStatusForAccounts { statuses, summary ->
+        queryTodayCheckinStatusForAccounts { statuses, gameStatuses, summary ->
             todayStatuses = statuses
+            todayGameStatuses = gameStatuses
             todaySummary = summary
             todayQuerying = false
             pushState()
@@ -141,6 +143,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                     .put("cookieReady", account.cookieReady)
                     .put("tokenReady", account.tokenReady)
                     .put("todayStatus", todayStatuses[account.id] ?: "今日签到状态未知")
+                    .put("gameTodayStatuses", JSONObject().apply { todayGameStatuses[account.id].orEmpty().forEach { (key, value) -> put(key, value) } })
             )
         }
         val sync = CloudAccountSyncState.get(this)
