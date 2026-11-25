@@ -183,31 +183,6 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     private inner class HtmlBridge {
         @JavascriptInterface fun getState(): String = stateJson().toString()
 
-        @JavascriptInterface fun refresh() {
-            runOnUiThread {
-                if (CloudAccountSyncState.get(this@HtmlMainActivity) == CloudAccountSyncState.SYNCED) {
-                    refreshTodayStatuses()
-                    pushState()
-                } else {
-                    synchronizeCloudAccounts { success, message ->
-                        AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.HOYOLAB, "云端账号同步", message, success)
-                        pushState()
-                        if (success) refreshTodayStatuses()
-                    }
-                }
-            }
-        }
-
-        @JavascriptInterface fun syncCloud() {
-            runOnUiThread {
-                synchronizeCloudAccounts { success, message ->
-                    AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.HOYOLAB, "云端账号同步", message, success)
-                    pushState()
-                    if (success) refreshTodayStatuses()
-                }
-            }
-        }
-
         @JavascriptInterface fun addAccount(platform: String) {
             runOnUiThread {
                 if (!CloudAccountSyncState.allowsAccountChanges(this@HtmlMainActivity)) return@runOnUiThread
