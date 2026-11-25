@@ -135,7 +135,7 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(8), 0, dp(18))
         }
         content.addView(details)
-        addHuaweiCloudPanel(content, { yamlValue }) { showConfigSelection() }
+        addHuaweiCloudPanel(content, { refreshFromWebView(); yamlValue }) { showConfigSelection() }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
