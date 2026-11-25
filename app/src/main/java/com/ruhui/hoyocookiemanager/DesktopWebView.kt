@@ -45,7 +45,8 @@ object DesktopWebView {
                     return !/^(user-scalable|maximum-scale|minimum-scale|initial-scale)\\s*=/i.test(x);
                   });
                 parts.push('user-scalable=yes', 'minimum-scale=0.5', 'maximum-scale=5');
-                meta.content = parts.join(', ');
+                var nextContent = parts.join(', ');
+                if (meta.content !== nextContent) meta.content = nextContent;
               }
               allowZoom();
               if (!window.__appZoomObserver && document.documentElement) {
