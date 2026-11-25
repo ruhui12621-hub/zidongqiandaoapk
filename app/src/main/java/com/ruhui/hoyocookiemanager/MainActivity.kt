@@ -385,21 +385,21 @@ class MainActivity : HuaweiCloudActivity() {
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val server = prefs.getString("game_server", "os") ?: "os"
         val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
-        yaml = yaml.replace("  cn:\n    enable: false", "  cn:\n    enable: \${server == "cn"}")
-        yaml = yaml.replace("  os:\n    enable: true", "  os:\n    enable: \${server == "os"}")
+        yaml = yaml.replace("  cn:\n    enable: false", "  cn:\n    enable: " + (server == "cn"))
+        yaml = yaml.replace("  os:\n    enable: true", "  os:\n    enable: " + (server == "os"))
 
         val supported = mapOf(
             "cn" to listOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
             "os" to listOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
         )
         for (regionKey in listOf("cn", "os")) {
-            val regionStart = yaml.indexOf("\n  \${regionKey}:")
+            val regionStart = yaml.indexOf("\n  " + regionKey + ":")
             if (regionStart < 0) continue
             val nextRegion = if (regionKey == "cn") yaml.indexOf("\n  os:", regionStart + 1) else yaml.indexOf("\ncloud_games:", regionStart + 1)
             val sectionEnd = if (nextRegion >= 0) nextRegion else yaml.length
             var section = yaml.substring(regionStart, sectionEnd)
             for (game in supported.getValue(regionKey)) {
-                val gameStart = Regex("(?m)^    \${Regex.escape(game)}:\\s*$").find(section)?.range?.first ?: continue
+                val gameStart = Regex("(?m)^    " + Regex.escape(game) + ":\\s*$").find(section)?.range?.first ?: continue
                 val afterStart = section.indexOf("\n", gameStart).let { if (it < 0) section.length else it + 1 }
                 val nextGame = Regex("(?m)^    [a-z0-9_]+:\\s*$").find(section, afterStart)?.range?.first
                 val gameEnd = nextGame ?: section.length
