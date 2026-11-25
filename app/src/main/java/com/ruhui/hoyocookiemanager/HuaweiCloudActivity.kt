@@ -688,6 +688,163 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    /**
+     * Read today's FunctionGraph/LTS logs and conservatively associate outcomes with
+     * local accounts. With multiple accounts, a log must contain that account's stable
+     * platform ID or explicit account name; otherwise the app does not guess.
+     */
+    protected fun queryTodayCheckinStatusForAccounts(
+        onResult: (Map<String, String>, String) -> Unit
+    ) {
+        val accounts = AccountStore(this).all()
+        val saved = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
+        if (saved == null) {
+            onResult(accounts.associate { it.id to "未连接华为云" }, "未配置华为云 AK/SK")
+            return
+        }
+        worker.execute {
+            val statuses = linkedMapOf<String, String>()
+            var summary = "今日运行日志读取完成"
+            try {
+                authAk = saved.first
+                authSk = saved.second
+                regionValue = getSharedPreferences("app_settings", MODE_PRIVATE)
+                    .getString("cloud_region", "cn-east-3") ?: "cn-east-3"
+                val projects = signedGet("https://iam.$regionValue.myhuaweicloud.com/v3/projects")
+                val rows = projects.optJSONArray("projects") ?: error("IAM 未返回项目列表")
+                projectId = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+                    .firstOrNull { it.optString("name").equals(regionValue, true) }
+                    ?.optString("id").orEmpty()
+                if (projectId.isBlank()) error("未找到 $regionValue 对应的华为云项目")
+                HuaweiCloudSession.ak = authAk
+                HuaweiCloudSession.sk = authSk
+                HuaweiCloudSession.region = regionValue
+                HuaweiCloudSession.projectId = projectId
+
+                fun readTodayLogs(functionName: String): Pair<String, List<String>> {
+                    val listUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions" +
+                        "?func_name=" + enc(functionName) + "&precise_search=true&maxitems=10"
+                    val functions = signedGet(listUrl).optJSONArray("functions")
+                        ?: return "函数不存在或无法查询" to emptyList()
+                    val matches = (0 until functions.length()).mapNotNull { functions.optJSONObject(it) }
+                        .filter { it.optString("func_name") == functionName }
+                    if (matches.size != 1) return "函数不存在或无法唯一识别" to emptyList()
+                    val urn = matches.single().optString("func_urn")
+                    val detail = signedGet(
+                        "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail"
+                    )
+                    val groupId = detail.optString("group_id")
+                    val streamId = detail.optString("stream_id")
+                    if (groupId.isBlank() || streamId.isBlank()) return "未启用日志或日志流不可用" to emptyList()
+
+                    val calendar = Calendar.getInstance()
+                    calendar.set(Calendar.HOUR_OF_DAY, 0)
+                    calendar.set(Calendar.MINUTE, 0)
+                    calendar.set(Calendar.SECOND, 0)
+                    calendar.set(Calendar.MILLISECOND, 0)
+                    val start = calendar.timeInMillis
+                    val end = System.currentTimeMillis()
+                    val queryUrl = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId/groups/${enc(groupId)}/streams/${enc(streamId)}/content/query"
+                    val logs = mutableListOf<String>()
+                    val seen = mutableSetOf<String>()
+                    var scrollId = ""
+                    var lineNum = ""
+                    var page = 0
+                    var complete = false
+                    while (page < 100 && !complete) {
+                        val body = JSONObject().put("start_time", start.toString())
+                            .put("end_time", end.toString()).put("limit", 5000)
+                            .put("is_desc", true).put("search_type", if (page == 0) "init" else "forwards")
+                            .put("is_count", true).put("is_iterative", true)
+                        if (scrollId.isNotBlank()) body.put("scroll_id", scrollId)
+                        else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
+                        val response = signedRequest("POST", queryUrl, body.toString())
+                        if (response.first !in 200..299) {
+                            error("LTS 查询失败（HTTP ${response.first}）：${response.second.take(500)}")
+                        }
+                        val result = JSONObject(response.second)
+                        val pageLogs = result.optJSONArray("logs")
+                        val count = pageLogs?.length() ?: 0
+                        if (pageLogs != null) for (i in 0 until count) {
+                            val item = pageLogs.optJSONObject(i) ?: continue
+                            val content = item.optString("content").takeIf { it.isNotBlank() } ?: continue
+                            val key = item.optString("line_num").ifBlank { content }
+                            if (seen.add(key)) logs.add(content)
+                        }
+                        page++
+                        val nextScroll = result.optString("scrollId")
+                        if (nextScroll.isNotBlank()) scrollId = nextScroll
+                        if (count > 0) lineNum = pageLogs?.optJSONObject(count - 1)?.optString("line_num").orEmpty()
+                        complete = result.optBoolean("isQueryComplete", false) || count == 0 ||
+                            (count < 5000 && nextScroll.isBlank())
+                    }
+                    return "OK" to logs
+                }
+
+                fun isOutcome(line: String): Boolean =
+                    line.contains("签到成功") || line.contains("签到完成") || line.contains("签到失败") ||
+                        line.contains("check-in success", true) || line.contains("checkin success", true) ||
+                        line.contains("check-in failed", true) || line.contains("checkin failed", true)
+
+                fun outcome(line: String): String = when {
+                    line.contains("签到成功") || line.contains("签到完成") ||
+                        line.contains("check-in success", true) || line.contains("checkin success", true) -> "今日签到成功"
+                    line.contains("签到失败") || line.contains("check-in failed", true) ||
+                        line.contains("checkin failed", true) -> "今日签到失败"
+                    else -> "今日状态未知"
+                }
+
+                val services = listOf(
+                    AccountStore.HOYOLAB to HOYOLAB_FUNCTION,
+                    AccountStore.SKLAND to SKLAND_FUNCTION
+                )
+                for ((platform, functionName) in services) {
+                    val platformAccounts = accounts.filter { it.platform == platform }
+                    if (platformAccounts.isEmpty()) continue
+                    val logResult = runCatching { readTodayLogs(functionName) }
+                    if (logResult.isFailure) {
+                        val message = "日志查询失败：${logResult.exceptionOrNull()?.message ?: "未知错误"}"
+                        platformAccounts.forEach { statuses[it.id] = message }
+                        continue
+                    }
+                    val (readState, logs) = logResult.getOrThrow()
+                    if (readState != "OK") {
+                        platformAccounts.forEach { statuses[it.id] = readState }
+                        continue
+                    }
+                    for (account in platformAccounts) {
+                        val matchedLines = if (platformAccounts.size == 1) {
+                            logs
+                        } else {
+                            val identifiers = listOfNotNull(account.platformUserId, account.name)
+                                .map { it.trim() }.filter { it.length >= 3 }
+                            logs.filter { line ->
+                                identifiers.any { id ->
+                                    if (id == account.name) line.contains(id, true)
+                                    else Regex("(?<![A-Za-z0-9])${Regex.escape(id)}(?![A-Za-z0-9])", RegexOption.IGNORE_CASE)
+                                        .containsMatchIn(line)
+                                }
+                            }
+                        }
+                        statuses[account.id] = when {
+                            platformAccounts.size > 1 && matchedLines.isEmpty() ->
+                                "日志未包含此账号标识，无法对应"
+                            matchedLines.isEmpty() -> "今天暂无运行日志"
+                            else -> matchedLines.firstOrNull(::isOutcome)?.let(::outcome)
+                                ?: "已运行，但日志未明确记录签到结果"
+                        }
+                    }
+                }
+                accounts.filter { it.platform == AccountStore.MIYOUSHE_CN }
+                    .forEach { statuses[it.id] = "当前未接入此平台的云端签到函数" }
+            } catch (e: Exception) {
+                summary = "今日签到日志读取失败：" + (e.message ?: e.javaClass.simpleName)
+                accounts.filter { it.id !in statuses }.forEach { statuses[it.id] = "日志查询失败" }
+            }
+            runOnUiThread { onResult(statuses, summary) }
+        }
+    }
+
     private fun deployPackages(service: String) {
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
             setCloudConnectionState("尚未连接")
