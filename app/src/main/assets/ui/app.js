@@ -35,10 +35,10 @@ function renderDetail(a){
   html+='<div class="grid-two"><div class="metric"><span>Cookie</span><strong style="color:'+(a.cookieReady?'var(--green)':'var(--amber)')+'">'+(a.cookieReady?'已获取':'未获取')+'</strong></div>';
   if(!(a.games||[]).some(g=>g.key==="zzz"))html+='<div class="metric"><span>Token</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
   html+='</div><p class="hint">状态按当前账号所属游戏区读取云端配置，不会混用国服与国际服凭据。</p>';
-  html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社网页":"打开 HoYoLAB 网页")+'</button>';
+  html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
  }else{
   html+='<div class="metric"><span>森空岛 Token</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
-  html+='<button class="primary" data-action="skland-login">打开森空岛网页</button>';
+  html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
  }
  html+='</div><div class="card"><div class="card-title">签到游戏（云端只读）</div><div class="game-list">';
  if(a.games&&a.games.length)a.games.forEach(g=>html+='<span class="game-chip enabled">'+esc(g.label)+'</span>');
