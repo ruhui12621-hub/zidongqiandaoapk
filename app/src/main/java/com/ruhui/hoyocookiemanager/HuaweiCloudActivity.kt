@@ -28,6 +28,16 @@ open class HuaweiCloudActivity : Activity() {
     private var authSk = ""
     private var regionValue = "cn-east-3"
     private val regionCodes = listOf("cn-east-3", "cn-east-2", "cn-north-4", "cn-north-1", "cn-south-1", "ap-southeast-1", "ap-southeast-3")
+    private fun regionLabel(code: String): String = when (code) {
+        "cn-east-3" -> "华东-上海一"
+        "cn-east-2" -> "华东-上海二"
+        "cn-north-4" -> "华北-北京四"
+        "cn-north-1" -> "华北-北京一"
+        "cn-south-1" -> "华南-广州"
+        "ap-southeast-1" -> "中国-香港"
+        "ap-southeast-3" -> "亚太-新加坡"
+        else -> code
+    }
     private var projectId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
@@ -481,7 +491,7 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
                     setCloudConnectionState("已连接")
-                    showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
+                    showOperationMessage("华为云连接成功", "区域：${regionLabel(r)}（$r）\nProject ID：$pid" + vaultWarning, true)
                     synchronizeCloudAccounts { success, message ->
                         showOperationMessage("云端账号同步", message, CloudAccountSyncState.allowsAccountChanges(this))
                         onCloudLoginSyncComplete()
