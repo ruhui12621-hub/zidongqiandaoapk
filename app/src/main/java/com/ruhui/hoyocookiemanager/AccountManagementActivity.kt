@@ -121,7 +121,7 @@ class AccountManagementActivity : Activity() {
 
         content.addView(sectionCard {
             addView(text("签到游戏", 15, true))
-            addView(text("勾选此账号需要执行签到的游戏。不同账号的选择互不影响。", 12, false, 0xFF9BA7B8.toInt()).apply {
+            addView(text("当前云端配置中启用的签到游戏（只读）；账号配置不会保存在本机。", 12, false, 0xFF9BA7B8.toInt()).apply {
                 setPadding(0, dp(5), 0, dp(8))
             })
             val allowed = gameLabels.filterKeys { key ->
