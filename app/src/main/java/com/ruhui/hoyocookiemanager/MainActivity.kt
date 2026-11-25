@@ -35,6 +35,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var popupWebView: WebView? = null
     private var cookieValue = ""
     private var yamlValue = ""
+    private var detectedGameServer: String? = null
     private var browserVisible = false
     private var showingLauncher = true
     private var showingBrowser = false
@@ -43,7 +44,11 @@ class MainActivity : HuaweiCloudActivity() {
     private val cookieUrls = listOf(
         "https://www.hoyolab.com/",
         "https://act.hoyolab.com/",
-        "https://bbs-api-os.hoyolab.com/"
+        "https://bbs-api-os.hoyolab.com/",
+        "https://www.miyoushe.com/",
+        "https://bbs.mihoyo.com/",
+        "https://user.mihoyo.com/",
+        "https://bbs-api.mihoyo.com/"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -347,33 +352,47 @@ class MainActivity : HuaweiCloudActivity() {
         val found = collected.joinToString("; ")
         cookieValue = found
         val names = found.split(';')
-            .mapNotNull { part ->
-                part.trim().substringBefore('=').takeIf { it.isNotBlank() }
-            }.toSet()
-        val hasLoginToken = names.any {
-            it == "ltoken_v2" || it == "ltoken" ||
-                it == "cookie_token_v2" || it == "cookie_token"
+            .mapNotNull { it.trim().substringBefore('=').takeIf { name -> name.isNotBlank() } }
+            .toSet()
+        val cnMarkers = setOf("stoken", "stoken_v2", "stuid", "cookie_token", "ltoken")
+        val osMarkers = setOf("ltoken_v2", "cookie_token_v2", "account_id_v2", "ltuid_v2")
+        val hasCnToken = names.any { it in cnMarkers }
+        val hasOsToken = names.any { it in osMarkers }
+        val cnDomainHasToken = listOf(
+            "https://www.miyoushe.com/", "https://bbs.mihoyo.com/",
+            "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/"
+        ).any { url ->
+            manager.getCookie(url).orEmpty().split(';').any { part ->
+                part.trim().substringBefore('=') in cnMarkers
+            }
+        }
+        detectedGameServer = when {
+            hasCnToken && !hasOsToken -> "cn"
+            hasOsToken && !hasCnToken -> "os"
+            hasCnToken && hasOsToken -> if (cnDomainHasToken) "cn" else "os"
+            else -> null
         }
 
-        if (hasLoginToken) {
-            yamlValue = makeYaml(found)
-            status.text = "Cookie 状态：已获取"
-            details.text = "HoYoLAB 登录凭据有效。下方华为云区域已可使用此 Cookie 更新配置。"
+        if (detectedGameServer != null) {
+            val server = detectedGameServer!!
+            yamlValue = makeYaml(found, server)
+            status.text = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
+            details.text = "已自动识别服务器，更新时只会写入对应服务器配置。"
             updateHuaweiCloudConfig(yamlValue)
-            if (showToast) toast("已获取 Cookie")
+            if (showToast) toast("已获取 Cookie，识别为${if (server == "cn") "国服" else "国际服"}")
         } else {
             yamlValue = ""
+            detectedGameServer = null
             status.text = "Cookie 状态：未获取"
             details.text = if (found.isBlank()) {
-                "请点击上方 HoYoLAB 登录入口完成登录；登录后将自动检测 Cookie。"
+                "请登录 HoYoLAB 或米游社，登录后自动检测 Cookie 和服务器。"
             } else {
-                "已读取到部分 Cookie，但缺少有效登录凭据。请完成 HoYoLAB 登录后重试。"
+                "已读取到 Cookie，但无法可靠判断服务器。请确认登录的是国服或国际服账号后重试。"
             }
             updateHuaweiCloudConfig("")
-            if (showToast) toast("未发现登录 Cookie，请确认登录成功")
+            if (showToast) toast("未发现可识别的登录凭据")
         }
     }
-
     private fun webViewEngineInfo(): String {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return "Android ${Build.VERSION.RELEASE}；系统 API 低于 26，无法通过公开接口读取 WebView 提供程序版本"
@@ -406,7 +425,7 @@ class MainActivity : HuaweiCloudActivity() {
             else webDiagnostics.takeLast(12).forEach { append("\\n• "); append(it) }
         }
 
-    private fun makeYaml(cookie: String): String {
+    private fun makeYaml(cookie: String, server: String): String {
         var yaml = assets.open("config-template.yaml").bufferedReader().use { it.readText() }
         val escaped = cookie.replace("\\", "\\\\")
             .replace("\"", "\\\"")
@@ -414,7 +433,6 @@ class MainActivity : HuaweiCloudActivity() {
         yaml = yaml.replace("__HOYOLAB_COOKIE__", escaped)
 
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val server = prefs.getString("game_server", "os") ?: "os"
         val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
         val gamesStart = yaml.indexOf("games:\n")
         val cloudStart = yaml.indexOf("\ncloud_games:", gamesStart + 1)
@@ -453,8 +471,12 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun showConfigSelection() {
+        val server = detectedGameServer
+        if (server == null) {
+            toast("请先登录并获取 Cookie，程序会自动识别服务器")
+            return
+        }
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val savedServer = prefs.getString("game_server", "os") ?: "os"
         val savedGames = prefs.getStringSet("selected_games", setOf("zzz"))?.toMutableSet() ?: mutableSetOf("zzz")
         val labels = linkedMapOf(
             "genshin" to "原神",
@@ -468,77 +490,52 @@ class MainActivity : HuaweiCloudActivity() {
             "cn" to listOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
             "os" to listOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
         )
+        val checks = linkedMapOf<String, CheckBox>()
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(4))
         }
         panel.addView(TextView(this).apply {
-            text = "服务器"
-            textSize = 16f
-            setTextColor(Color.WHITE)
+            text = "已识别服务器：" + if (server == "cn") "国服" else "国际服"
+            textSize = 14f
+            setTextColor(Color.rgb(170, 190, 220))
         })
-        val radios = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
-        val cnRadio = RadioButton(this).apply {
-            text = "国服"; setTextColor(Color.WHITE); id = android.view.View.generateViewId()
-        }
-        val osRadio = RadioButton(this).apply {
-            text = "国际服"; setTextColor(Color.WHITE); id = android.view.View.generateViewId()
-        }
-        radios.addView(cnRadio)
-        radios.addView(osRadio)
-        radios.check(if (savedServer == "cn") cnRadio.id else osRadio.id)
-        panel.addView(radios)
         panel.addView(TextView(this).apply {
             text = "游戏（可多选）"
             textSize = 16f
             setTextColor(Color.WHITE)
             setPadding(0, dp(14), 0, dp(6))
         })
-        val checks = linkedMapOf<String, CheckBox>()
-        val draftGames = savedGames.toMutableSet()
-        fun renderGames() {
-            checks.forEach { (key, check) ->
-                if (check.isChecked) draftGames.add(key) else draftGames.remove(key)
+        supported.getValue(server).forEach { key ->
+            val check = CheckBox(this).apply {
+                text = labels[key] ?: key
+                setTextColor(Color.rgb(230, 234, 242))
+                isChecked = savedGames.contains(key)
+                setPadding(0, dp(3), 0, dp(3))
             }
-            val server = if (radios.checkedRadioButtonId == cnRadio.id) "cn" else "os"
-            if (panel.childCount > 3) panel.removeViews(3, panel.childCount - 3)
-            checks.clear()
-            supported.getValue(server).forEach { key ->
-                val check = CheckBox(this).apply {
-                    text = labels[key] ?: key
-                    setTextColor(Color.rgb(230, 234, 242))
-                    isChecked = draftGames.contains(key)
-                    setPadding(0, dp(3), 0, dp(3))
-                }
-                checks[key] = check
-                panel.addView(check)
-            }
+            checks[key] = check
+            panel.addView(check)
         }
-        renderGames()
-        radios.setOnCheckedChangeListener { _, _ -> renderGames() }
         val scroll = ScrollView(this).apply { addView(panel) }
         AlertDialog.Builder(this)
-            .setTitle("服务器/游戏选择")
+            .setTitle("游戏选择")
             .setView(scroll)
             .setNegativeButton("取消", null)
             .setPositiveButton("保存配置") { _, _ ->
-                val server = if (radios.checkedRadioButtonId == cnRadio.id) "cn" else "os"
                 val chosen = checks.filterValues { it.isChecked }.keys
                 if (chosen.isEmpty()) {
                     toast("至少选择一个游戏")
                     return@setPositiveButton
                 }
-                prefs.edit().putString("game_server", server)
-                    .putStringSet("selected_games", chosen.toSet()).apply()
+                prefs.edit().putStringSet("selected_games", chosen.toSet()).apply()
                 if (cookieValue.isNotBlank()) {
-                    yamlValue = makeYaml(cookieValue)
+                    yamlValue = makeYaml(cookieValue, server)
                     updateHuaweiCloudConfig(yamlValue)
                 }
-                toast("配置选择已保存")
+                toast("游戏配置已保存")
             }
             .show()
     }
-
     private fun copy(value: String, label: String) {
         if (value.isBlank()) {
             toast("请先登录并获取 Cookie")
