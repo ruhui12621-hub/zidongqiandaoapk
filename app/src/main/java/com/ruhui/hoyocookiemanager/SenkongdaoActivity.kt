@@ -30,7 +30,7 @@ class SenkongdaoActivity : Activity() {
         header.addView(Button(this).apply {
             text = "‹ 主页"
             isAllCaps = false
-            setOnClickListener { finish() }
+            setOnClickListener { returnToMain() }
         })
         header.addView(TextView(this).apply {
             text = "森空岛"
@@ -59,7 +59,12 @@ class SenkongdaoActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else finish()
+        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else returnToMain()
+    }
+
+    private fun returnToMain() {
+        startActivity(android.content.Intent(this, MainActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
     }
 
     override fun onDestroy() {
