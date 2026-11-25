@@ -62,22 +62,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private fun desktop(view: WebView, multi: Boolean) {
-        view.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            loadsImagesAutomatically = true
-            javaScriptCanOpenWindowsAutomatically = true
-            setSupportMultipleWindows(multi)
-            userAgentString = DESKTOP_UA
-            useWideViewPort = true
-            loadWithOverviewMode = true
-            setSupportZoom(true)
-            builtInZoomControls = true
-            displayZoomControls = false
+        DesktopWebView.configure(
+            view,
+            multiWindow = multi,
             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-        }
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
+        )
     }
 
     private fun buildHome() {
@@ -141,7 +130,9 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private fun showLogin() {
         AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "正在创建全屏桌面版 WebView…", null)
         loginMode = true
-        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        // Keep the Activity's content edge-to-edge within the available window, but
+        // allow adjustResize to make room for the soft keyboard during login.
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(15, 17, 23))
@@ -170,11 +161,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         root.addView(bar)
         browserFrame = FrameLayout(this)
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-        val main = WebView(this)
+        val main = DesktopWebView.create(this, multiWindow = true)
         mainView = main
         configureLogin(main, false)
         browserFrame.addView(main, FrameLayout.LayoutParams(-1, -1))
-        val probe = WebView(this)
+        val probe = DesktopWebView.create(this, multiWindow = false)
         probeView = probe
         desktop(probe, false)
         probe.webChromeClient = WebChromeClient()
@@ -198,7 +189,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         view.webChromeClient = object : WebChromeClient() {
             override fun onCreateWindow(source: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
                 return try {
-                    val child = WebView(this@SenkongdaoActivity)
+                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false)
                     configureLogin(child, true)
                     popupView?.let { destroy(it) }
                     popupView = child
@@ -333,6 +324,5 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     companion object {
         private const val HOME_URL = "https://www.skland.com/"
         private const val TOKEN_URL = "https://web-api.skland.com/account/info/hg"
-        private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
 }
