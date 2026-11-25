@@ -263,7 +263,7 @@ open class HuaweiCloudActivity : Activity() {
                     } catch (e: Exception) {
                         Toast.makeText(this, "解锁失败：" + (e.message ?: "密码错误或保管箱损坏"), Toast.LENGTH_LONG).show()
                     } finally {
-                        chars.fill('\\u0000')
+                        chars.fill('\u0000')
                         password.text?.clear()
                     }
                 }
@@ -326,7 +326,7 @@ open class HuaweiCloudActivity : Activity() {
                         } catch (e: Exception) {
                             Toast.makeText(this, "保存失败：" + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
                         } finally {
-                            chars.fill('\\u0000')
+                            chars.fill('\u0000')
                             password.text?.clear()
                             confirm.text?.clear()
                         }
