@@ -1079,11 +1079,11 @@ open class HuaweiCloudActivity : Activity() {
             val index = matches.getValue(game).single()
             val old = lines[index]
             val ending = if (old.endsWith("\r")) "\r" else ""
-            val indent = old.takeWhile { it == ' ' }.length
-            val comment = old.removeSuffix("\r").substringAfter("checkin:", "").trim()
-                .takeIf { it.startsWith("#") }.orEmpty()
-            val suffix = if (comment.isNotEmpty()) " $comment" else ""
-            lines[index] = " ".repeat(indent) + "checkin: " + (game in selected).toString() + suffix + ending
+            val content = old.removeSuffix("\r")
+            val match = Regex("^(\\s*checkin:\\s*)(true|false)(.*)$", RegexOption.IGNORE_CASE)
+                .matchEntire(content) ?: error("游戏 $game 的 checkin 字段格式无法识别，已停止上传。")
+            lines[index] = match.groupValues[1] + (game in selected).toString() +
+                match.groupValues[3] + ending
         }
         return lines.joinToString("\n")
     }
