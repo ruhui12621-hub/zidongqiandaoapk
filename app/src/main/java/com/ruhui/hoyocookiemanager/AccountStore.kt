@@ -70,6 +70,9 @@ class AccountStore(context: Context) {
     @Synchronized
     fun find(id: String): ManagedAccount? = all().firstOrNull { it.id == id }
 
+    private fun normalizeUserId(value: String?): String? =
+        value?.trim()?.takeIf { it.isNotEmpty() && it.length <= 128 }
+
     companion object {
         private var legacyCleanupDone = false
 
@@ -94,12 +97,7 @@ class AccountStore(context: Context) {
             synchronized(cache) { cache.clear() }
             legacyCleanupDone = true
         }
-    }
 
-    private fun normalizeUserId(value: String?): String? =
-        value?.trim()?.takeIf { it.isNotEmpty() && it.length <= 128 }
-
-    companion object {
         const val HOYOLAB = "hoyolab"
         const val MIYOUSHE_CN = "miyoushe_cn"
         const val SKLAND = "skland"
