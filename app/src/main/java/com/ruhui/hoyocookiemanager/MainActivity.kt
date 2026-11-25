@@ -113,7 +113,7 @@ class MainActivity : HuaweiCloudActivity() {
         launcherMessageView = text(AppMessageBus.current(this), 13, false, Color.rgb(225, 230, 239)).apply {
             setPadding(dp(12), dp(12), dp(12), dp(12))
             setBackgroundColor(Color.rgb(32, 38, 49))
-            isTextSelectable = true
+            setTextIsSelectable(true)
         }
         root.addView(launcherMessageView, LinearLayout.LayoutParams(-1, -2))
         root.addView(button("复制消息") {
