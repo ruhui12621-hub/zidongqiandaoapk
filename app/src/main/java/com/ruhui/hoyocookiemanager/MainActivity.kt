@@ -115,7 +115,7 @@ class MainActivity : HuaweiCloudActivity() {
             }
         }
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
-        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(154)))
+        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(112)))
         setContentView(root)
         pushLoginChrome()
     }
@@ -249,7 +249,7 @@ class MainActivity : HuaweiCloudActivity() {
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
         (webView.parent as? ViewGroup)?.removeView(webView)
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(154)))
+        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(112)))
         popupWebView?.let { popup ->
             (popup.parent as? ViewGroup)?.removeView(popup)
             popup.destroy()
