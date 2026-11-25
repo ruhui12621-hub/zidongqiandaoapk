@@ -434,7 +434,7 @@ open class HuaweiCloudActivity : Activity() {
                     val body = JSONObject().put("start_time", start.toString())
                         .put("end_time", end.toString()).put("limit", 1000)
                         .put("is_desc", true).put("search_type", "init")
-                        .put("is_count", true).put("is_iterative", false)
+                        .put("is_count", true).put("is_iterative", true)
                     val response = signedRequest("POST", queryUrl, body.toString())
                     if (response.first !in 200..299) error("LTS HTTP ${response.first}: ${response.second.take(300)}")
                     val logs = JSONObject(response.second).optJSONArray("logs") ?: return "今天暂无运行记录"
@@ -443,17 +443,19 @@ open class HuaweiCloudActivity : Activity() {
                     val contents = (0 until logs.length()).mapNotNull { i ->
                         logs.optJSONObject(i)?.optString("content")?.takeIf { it.isNotBlank() }
                     }
-                    val text = contents.joinToString("\n")
-                    val success = text.contains("签到成功") ||
-                        text.contains("签到完成") ||
-                        text.contains("check-in success", true) ||
-                        text.contains("checkin success", true)
-                    val failure = text.contains("签到失败") ||
-                        text.contains("check-in failed", true) ||
-                        text.contains("checkin failed", true)
+                    // LTS is queried newest-first; use the newest explicit business result only.
+                    val latestOutcome = contents.firstOrNull { line ->
+                        line.contains("签到成功") || line.contains("签到完成") ||
+                            line.contains("签到失败") || line.contains("check-in success", true) ||
+                            line.contains("checkin success", true) || line.contains("check-in failed", true) ||
+                            line.contains("checkin failed", true)
+                    }.orEmpty()
                     return when {
-                        success && !failure -> "签到成功"
-                        failure -> "签到失败（请查看函数运行消息）"
+                        latestOutcome.contains("签到成功") || latestOutcome.contains("签到完成") ||
+                            latestOutcome.contains("check-in success", true) ||
+                            latestOutcome.contains("checkin success", true) -> "签到成功"
+                        latestOutcome.contains("签到失败") || latestOutcome.contains("check-in failed", true) ||
+                            latestOutcome.contains("checkin failed", true) -> "签到失败（请查看函数运行消息）"
                         else -> "今天已运行，但日志未包含可确认的签到结果"
                     }
                 }
