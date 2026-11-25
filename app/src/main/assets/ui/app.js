@@ -11,7 +11,7 @@ const statusClass=s=>/成功|已连接|已获取|同步/.test(s)?"ok":/失败|�
 function toast(msg){const root=$("#toast-root");root.innerHTML='<div class="toast">'+esc(msg)+'</div>';const t=root.firstElementChild;requestAnimationFrame(()=>t.classList.add("show"));setTimeout(()=>t.classList.remove("show"),2200)}
 function native(name,...args){try{if(window.Android&&typeof Android[name]==="function")return Android[name](...args)}catch(e){toast("操作失败："+e.message)}}
 function refresh(){try{const raw=native("getState");if(raw)applyState(JSON.parse(raw))}catch(e){console.warn(e)}}
-function applyState(next){if(!next)return;state=next;if(!cloudDraft.region||cloudDraft.region==="cn-east-3")cloudDraft.region=state.region||"cn-east-3";render()}
+function applyState(next){if(!next)return;state=next;if(!cloudDraft.region||cloudDraft.region==="cn-east-3")cloudDraft.region=state.region||"cn-east-3";if(document.activeElement&&document.activeElement.matches("input,select,textarea"))return;render()}
 window.onNativeState=raw=>{try{applyState(typeof raw==="string"?JSON.parse(raw):raw)}catch(e){console.error(e)}};
 function pageTitle(title,sub){return '<div class="page-heading"><div><div class="eyebrow">HOYO CHECK-IN</div><h1>'+title+'</h1><p>'+sub+'</p></div></div>'}
 function nav(){document.querySelectorAll(".nav-item").forEach(x=>x.classList.toggle("active",x.dataset.page===page))}
@@ -102,6 +102,7 @@ document.addEventListener("click",e=>{
  if(action==="logs"){native("fetchLogs");toast("正在读取最近一周日志")}
  if(action==="message-refresh"){refresh();toast("消息已刷新")}
 });
+document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
 document.addEventListener("input",e=>{
  if(e.target.id==="cloud-region")cloudDraft.region=e.target.value;
  if(e.target.id==="cloud-ak")cloudDraft.ak=e.target.value;
