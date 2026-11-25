@@ -595,6 +595,7 @@ class MainActivity : HuaweiCloudActivity() {
                 status.text = "账号平台不匹配"
                 details.text = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
                 updateHuaweiCloudConfig("")
+                pushLoginChrome()
                 return
             }
             val identity = HoYoAccountIdentity.fromCookie(found, platform)
