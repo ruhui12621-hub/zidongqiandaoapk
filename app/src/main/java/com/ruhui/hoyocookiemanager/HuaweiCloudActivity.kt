@@ -95,6 +95,11 @@ open class HuaweiCloudActivity : Activity() {
         content.addView(Button(this).apply {
             text = "登录并读取函数列表"; isAllCaps = false; setOnClickListener { login() }
         })
+        content.addView(Button(this).apply {
+            text = if (AndroidCredentialVault(this@HuaweiCloudActivity).exists()) "密码保管箱 · 解锁 / 管理" else "创建本地密码保管箱"
+            isAllCaps = false
+            setOnClickListener { openCredentialVault() }
+        })
         content.addView(TextView(this).apply {
             text = "目标云函数（默认 zzzzz）"
             setTextColor(0xFFE1E6EF.toInt())
@@ -221,6 +226,130 @@ open class HuaweiCloudActivity : Activity() {
             if (secret) it.inputType = 129
             parent.addView(it, LinearLayout.LayoutParams(-1, -2))
         }
+    }
+
+
+    private fun openCredentialVault() {
+        val vault = AndroidCredentialVault(this)
+        if (vault.exists()) {
+            val password = EditText(this).apply {
+                hint = "输入保管箱密码"
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                setSingleLine(true)
+            }
+            val panel = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(22), dp(8), dp(22), 0)
+                addView(TextView(this@HuaweiCloudActivity).apply {
+                    text = "输入独立保管箱密码，解锁后将 AK/SK 填入登录框。凭据不会发送到任何服务器。"
+                    setTextColor(0xFFA7B0C0.toInt())
+                })
+                addView(password)
+            }
+            AlertDialog.Builder(this)
+                .setTitle("解锁密码保管箱")
+                .setView(panel)
+                .setNegativeButton("取消", null)
+                .setNeutralButton("删除保管箱") { _, _ -> confirmDeleteVault(vault) }
+                .setPositiveButton("解锁并填入") { _, _ ->
+                    val chars = password.text.toString().toCharArray()
+                    try {
+                        val credentials = vault.unlock(chars)
+                        ak.setText(credentials.first)
+                        sk.setText(credentials.second)
+                        authAk = credentials.first
+                        authSk = credentials.second
+                        Toast.makeText(this, "已解锁并填入 AK/SK；请点击登录读取函数列表。", Toast.LENGTH_LONG).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "解锁失败：" + (e.message ?: "密码错误或保管箱损坏"), Toast.LENGTH_LONG).show()
+                    } finally {
+                        chars.fill('\\u0000')
+                        password.text?.clear()
+                    }
+                }
+                .show()
+        } else {
+            showCreateVaultDialog(vault)
+        }
+    }
+
+    private fun showCreateVaultDialog(vault: AndroidCredentialVault) {
+        val password = EditText(this).apply {
+            hint = "设置保管箱密码（至少 10 个字符）"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        val confirm = EditText(this).apply {
+            hint = "再次输入密码"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(8), dp(22), 0)
+            addView(TextView(this@HuaweiCloudActivity).apply {
+                text = "创建后，AK/SK 将使用独立密码和 Android Keystore 双重封装加密，保存在本机应用私有目录。请牢记密码；忘记密码无法找回。"
+                setTextColor(0xFFA7B0C0.toInt())
+            })
+            addView(password)
+            addView(confirm)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("创建本地密码保管箱")
+            .setView(panel)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("加密保存当前 AK/SK", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val first = password.text.toString()
+                        val second = confirm.text.toString()
+                        if (first.length < 10) {
+                            password.error = "至少需要 10 个字符"
+                            return@setOnClickListener
+                        }
+                        if (first != second) {
+                            confirm.error = "两次输入的密码不一致"
+                            return@setOnClickListener
+                        }
+                        val currentAk = ak.text.toString().trim()
+                        val currentSk = sk.text.toString()
+                        if (currentAk.isBlank() || currentSk.isBlank()) {
+                            Toast.makeText(this, "请先填写 AK 和 SK，再创建保管箱。", Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
+                        val chars = first.toCharArray()
+                        try {
+                            vault.save(chars, currentAk, currentSk)
+                            Toast.makeText(this, "密码保管箱已加密保存到本机。", Toast.LENGTH_LONG).show()
+                            dialog.dismiss()
+                        } catch (e: Exception) {
+                            Toast.makeText(this, "保存失败：" + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+                        } finally {
+                            chars.fill('\\u0000')
+                            password.text?.clear()
+                            confirm.text?.clear()
+                        }
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun confirmDeleteVault(vault: AndroidCredentialVault) {
+        AlertDialog.Builder(this)
+            .setTitle("删除本地密码保管箱？")
+            .setMessage("将删除加密凭据文件并销毁 Android Keystore 对应密钥。此操作不可撤销，不会删除当前已登录的内存会话。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除") { _, _ ->
+                try {
+                    vault.delete()
+                    Toast.makeText(this, "本地密码保管箱已删除。", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "删除失败：" + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+                }
+            }
+            .show()
     }
 
     private fun login() {
