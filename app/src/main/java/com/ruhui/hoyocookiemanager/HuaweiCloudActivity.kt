@@ -381,22 +381,27 @@ open class HuaweiCloudActivity : Activity() {
                     if (cookie.isNotBlank() && cookie != "null" && cookie != "~" &&
                         cookie != "__HOYOLAB_COOKIE__") {
                         val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
-                        val existing = if (identity != null) store.all().firstOrNull {
-                            it.platform == AccountStore.HOYOLAB && it.platformUserId == identity
-                        } else store.all().firstOrNull { account ->
-                            account.platform == AccountStore.HOYOLAB &&
-                                runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
+                        val existing = store.all().firstOrNull {
+                            it.platform == AccountStore.HOYOLAB &&
+                                (identity == null || it.platformUserId == identity)
                         }
                         val account = existing ?: store.add(
                             AccountStore.HOYOLAB,
                             platformUserId = identity,
                             games = enabledOsGames
                         )
-                        HoYoCookieVault(this, account.id).save(cookie)
+                        val cookieFields = cookie.split(';').mapNotNull { part ->
+                            val key = part.trim().substringBefore('=').trim().lowercase()
+                            val value = part.trim().substringAfter('=', "").trim()
+                            if (key.isBlank() || value.isBlank()) null else key to value
+                        }.toMap()
+                        val tokenReady = setOf("ltoken_v2", "cookie_token_v2").any { !cookieFields[it].isNullOrBlank() }
                         store.update(account.copy(
                             platformUserId = identity ?: account.platformUserId,
                             games = enabledOsGames,
-                            credentialReady = true
+                            credentialReady = true,
+                            cookieReady = true,
+                            tokenReady = tokenReady
                         ))
                         imported++
                     }
