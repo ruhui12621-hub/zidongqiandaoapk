@@ -464,15 +464,15 @@ open class HuaweiCloudActivity : Activity() {
                 obj.has("status") && obj.opt("status") is Number -> obj.optInt("status", 200)
                 else -> 200
             }
-            if (statusCode >= 400) error("$label失败（状态码 $statusCode）：" + obj.toString().take(1200))
+            if (statusCode >= 400) error("${label}失败（状态码 $statusCode）：" + obj.toString().take(1200))
             val statusText = obj.optString("status").trim()
             if (statusText.equals("FAILED", true) || statusText.equals("ERROR", true) ||
                 statusText.equals("FAILURE", true)) {
-                error("$label失败（状态：$statusText）：" + obj.toString().take(1200))
+                error("${label}失败（状态：$statusText）：" + obj.toString().take(1200))
             }
             val errorText = listOf("error", "errorMessage", "error_message", "function_error")
                 .map { obj.optString(it).trim() }.firstOrNull { it.isNotBlank() && it != "null" }
-            if (errorText != null) error("$label失败：$errorText")
+            if (errorText != null) error("${label}失败：$errorText")
         }
 
         checkStatus(result, "FunctionGraph 测试调用")
