@@ -58,10 +58,6 @@ open class HuaweiCloudActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(TextView(this).apply {
-            text = if (service == "hoyolab") "仅更新 HoYoLAB 云函数，不会触碰森空岛服务。" else "仅更新森空岛云函数，不会触碰 HoYoLAB 服务。"
-            textSize = 14f; setTextColor(0xFFA7B0C0.toInt()); setPadding(0, dp(8), 0, dp(16))
-        })
-        content.addView(TextView(this).apply {
             text = "华为云地区"
             setTextColor(0xFFDCE2EC.toInt())
             setPadding(0, dp(10), 0, dp(4))
@@ -89,6 +85,12 @@ open class HuaweiCloudActivity : Activity() {
         val savedCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
         ak = field(content, "AK", savedCredentials?.first ?: HuaweiCloudSession.ak)
         sk = field(content, "SK", savedCredentials?.second ?: HuaweiCloudSession.sk, true)
+        content.addView(TextView(this).apply {
+            text = "提示：AK/SK 不是常规账号密码。请登录华为云官网，在“我的凭证”中创建并获取访问密钥（AK/SK），再填入下方。"
+            textSize = 13f
+            setTextColor(0xFFFFCC80.toInt())
+            setPadding(0, dp(10), 0, dp(8))
+        })
         content.addView(Button(this).apply {
             text = "登录并连接华为云"; isAllCaps = false; setOnClickListener { login() }
         })
