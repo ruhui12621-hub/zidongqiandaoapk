@@ -483,7 +483,7 @@ open class HuaweiCloudActivity : Activity() {
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
                     synchronizeCloudAccounts { success, message ->
                         showOperationMessage("云端账号同步", message, CloudAccountSyncState.allowsAccountChanges(this))
-                        if (success) onCloudLoginSyncComplete()
+                        onCloudLoginSyncComplete()
                     }
                 }
             } catch (e: Exception) {
