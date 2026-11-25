@@ -1,6 +1,7 @@
 package com.ruhui.hoyocookiemanager
 
 import android.content.Context
+import org.json.JSONArray
 import java.util.UUID
 
 /**
@@ -68,6 +69,32 @@ class AccountStore(context: Context) {
 
     @Synchronized
     fun find(id: String): ManagedAccount? = all().firstOrNull { it.id == id }
+
+    companion object {
+        private var legacyCleanupDone = false
+
+        @Synchronized
+        fun clearLegacyLocalData(context: Context) {
+            if (legacyCleanupDone) return
+            val prefs = context.getSharedPreferences("multi_account_registry", Context.MODE_PRIVATE)
+            val raw = prefs.getString(KEY_ACCOUNTS, "[]").orEmpty()
+            runCatching {
+                val array = JSONArray(raw)
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
+                    if (item.optString("platform") == HOYOLAB || item.optString("platform") == MIYOUSHE_CN) {
+                        runCatching { HoYoCookieVault(context, id).delete() }
+                    }
+                }
+            }
+            check(prefs.edit().clear().commit()) { "无法清理旧的本地账号配置" }
+            context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                .edit().remove("selected_games").commit()
+            synchronized(cache) { cache.clear() }
+            legacyCleanupDone = true
+        }
+    }
 
     private fun normalizeUserId(value: String?): String? =
         value?.trim()?.takeIf { it.isNotEmpty() && it.length <= 128 }
