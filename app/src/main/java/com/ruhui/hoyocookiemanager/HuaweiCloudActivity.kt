@@ -446,7 +446,7 @@ open class HuaweiCloudActivity : Activity() {
                 .put("runtime", "Python3.10")
                 .put("handler", handler)
                 .put("memory_size", 256)
-                .put("timeout", 300)
+                .put("timeout", 900)
                 .put("code_filename", "index.zip")
                 .put("code_type", "zip")
                 .put("func_code", JSONObject().put("file", encoded))
