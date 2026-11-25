@@ -200,6 +200,7 @@
       var clearBtn = document.getElementById('clearBtn');
       var statusEl = document.getElementById('status');
       var currentToken = '';
+      var lastSavedToken = '';
 
       function setStatus(msg, type) {
         statusEl.textContent = msg || '';
@@ -246,9 +247,18 @@
         currentToken = res.token;
 
         if (res.token) {
+          if (window.AndroidBridge && typeof window.AndroidBridge.saveToken === 'function' &&
+              res.token !== lastSavedToken) {
+            try {
+              window.AndroidBridge.saveToken(res.token);
+              lastSavedToken = res.token;
+            } catch (e) {
+              setStatus('Token 已解析，但未能交给应用保管。', 'err');
+            }
+          }
           preview.textContent = maskToken(res.token);
           copyBtn.disabled = false;
-          setStatus('已解析到 Token，可以点击复制。', 'ok');
+          setStatus('已解析 Token；应用会加密保存，部署时自动写入森空岛云函数。', 'ok');
         } else {
           preview.textContent = input.value.trim() ? '未识别到有效 Token' : '等待粘贴…';
           copyBtn.disabled = true;
