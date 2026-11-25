@@ -78,7 +78,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private inner class SklandChromeBridge {
-        @android.webkit.JavascriptInterface fun openLogin() { runOnUiThread { showLogin() } }
         @android.webkit.JavascriptInterface fun back() { runOnUiThread { leaveLogin() } }
         @android.webkit.JavascriptInterface fun refresh() { runOnUiThread { if (loginMode) scheduleCheck(); pushSklandUi() } }
     }
@@ -197,7 +196,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             checking = false
             statusText = "已保存"
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录成功", "已自动解析登录状态并在本机加密保存 Token；未将凭据写入消息栏。", true)
-            status.setTextColor(0xFF75D69C.toInt())
             pushSklandUi()
         } catch (e: Exception) {
             checking = false
