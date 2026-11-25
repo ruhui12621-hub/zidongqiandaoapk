@@ -80,49 +80,31 @@ class AccountManagementActivity : Activity() {
 
         content.addView(sectionCard {
             addView(text("账号备注名称", 14, true))
-            nameInput = EditText(this@AccountManagementActivity).apply {
-                setText(account.name)
-                setSingleLine(true)
-                hint = "例如：主账号 / 小号"
-                setTextColor(0xFFECEFF5.toInt())
-                setHintTextColor(0xFF778397.toInt())
-                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF657187.toInt())
-                textSize = 16f
-                setPadding(dp(4), dp(8), dp(4), dp(8))
-            }
-            addView(nameInput, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            addView(text(account.name, 16, false, 0xFFECEFF5.toInt()).apply {
+                setPadding(0, dp(8), 0, dp(4))
+            })
         })
 
         content.addView(sectionCard {
             addView(text("凭据获取状态", 14, true))
             if (account.platform == AccountStore.HOYOLAB || account.platform == AccountStore.MIYOUSHE_CN) {
-                val cookie = runCatching { HoYoCookieVault(this@AccountManagementActivity, account.id).latest().orEmpty() }.getOrDefault("")
-                val fields = cookie.split(';').mapNotNull { part ->
-                    val key = part.trim().substringBefore('=').trim()
-                    val value = part.trim().substringAfter('=', "").trim()
-                    if (key.isBlank() || value.isBlank()) null else key to value
-                }.toMap()
                 val isCn = account.platform == AccountStore.MIYOUSHE_CN
-                val cookieKeys = if (isCn) setOf("account_id", "ltuid", "stuid") else setOf("ltuid_v2", "account_id_v2")
-                val tokenKeys = if (isCn) setOf("stoken", "stoken_v2", "cookie_token", "ltoken") else setOf("ltoken_v2", "cookie_token_v2")
-                val cookieReady = cookieKeys.any { !fields[it].isNullOrBlank() }
-                val tokenReady = tokenKeys.any { !fields[it].isNullOrBlank() }
+                val cookieReady = account.credentialReady
+                val tokenReady = account.credentialReady
                 val region = if (isCn) "国服（米游社）" else "国际服（HoYoLAB）"
                 addView(text("账号游戏区：" + region, 13, true, 0xFFB9C9E5.toInt()).apply {
                     setPadding(0, dp(8), 0, dp(8))
                 })
                 addView(text("Cookie：" + if (cookieReady) "已获取" else "未获取", 14, false,
                     if (cookieReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(3), 0, dp(3)) })
-                addView(text("Token：" + if (tokenReady) "已获取" else "未获取", 14, false,
-                    if (tokenReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(3), 0, dp(3)) })
-                addView(text("状态仅统计当前账号所属游戏区的本地加密凭据，不会把另一游戏区的登录状态算作成功。", 12, false, 0xFF9BA7B8.toInt()).apply {
+                if (!account.games.contains("zzz")) {
+                    addView(text("Token：" + if (tokenReady) "已获取" else "未获取", 14, false,
+                        if (tokenReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(3), 0, dp(3)) })
+                }
+                addView(text("状态来自最近一次成功读取的云端配置，不会把另一游戏区的登录状态算作成功。", 12, false, 0xFF9BA7B8.toInt()).apply {
                     setPadding(0, dp(6), 0, 0)
                 })
                 addView(button("打开 " + (if (isCn) "米游社" else "HoYoLAB") + " 网页") {
-                    openHoyoLogin(account)
-                })
-                addView(button("登录 / 更新凭证") {
-                    saveAccount(account, showToast = false)
                     openHoyoLogin(account)
                 })
             } else {
@@ -158,6 +140,7 @@ class AccountManagementActivity : Activity() {
                     setTextColor(0xFFECEFF5.toInt())
                     buttonTintList = android.content.res.ColorStateList.valueOf(0xFF8EA4C7.toInt())
                     isChecked = account.games.contains(key)
+                    isEnabled = false
                     setPadding(0, dp(5), 0, dp(5))
                 }
                 checks[key] = check
@@ -166,7 +149,6 @@ class AccountManagementActivity : Activity() {
             if (allowed.isEmpty()) addView(text("此平台暂无可配置游戏。", 13, false, 0xFF9BA7B8.toInt()))
         })
 
-        root.addView(button("保存账号设置") { saveAccount(account, showToast = true) })
         val deleteButton = button("云端删除同步尚未启用", danger = true) {
             AlertDialog.Builder(this)
                 .setTitle("删除账号？")
@@ -196,14 +178,6 @@ class AccountManagementActivity : Activity() {
             .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
             .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
             .putExtra("return_to_account_detail", true))
-    }
-
-    private fun saveAccount(account: ManagedAccount, showToast: Boolean) {
-        val name = nameInput?.text?.toString()?.trim().orEmpty().ifBlank { account.name }
-        val games = checks.filterValues { it.isChecked }.keys
-        runCatching { store.update(account.copy(name = name, games = games)) }
-            .onSuccess { if (showToast) Toast.makeText(this, "账号设置已保存", Toast.LENGTH_SHORT).show() }
-            .onFailure { Toast.makeText(this, it.message ?: "保存失败", Toast.LENGTH_LONG).show() }
     }
 
     private fun sectionCard(content: LinearLayout.() -> Unit) = LinearLayout(this).apply {
