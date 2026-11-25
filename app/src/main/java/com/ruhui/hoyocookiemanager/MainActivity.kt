@@ -225,7 +225,9 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(4), 0, dp(12))
         }
         content.addView(details)
-        addHuaweiCloudPanel(content, "hoyolab", { refreshFromWebView(); yamlValue }) { showConfigSelection() }
+        content.addView(text("登录成功后自动识别当前平台账号，并将 Cookie 加密保存在该账号名下。", 13, false, Color.rgb(160, 168, 182)).apply {
+            setPadding(0, dp(8), 0, dp(12))
+        })
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
