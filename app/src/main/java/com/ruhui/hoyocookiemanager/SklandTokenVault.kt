@@ -1,23 +1,31 @@
 package com.ruhui.hoyocookiemanager
 
+import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONObject
 import java.io.File
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * Stores the latest Skland Hypergryph token encrypted with an Android Keystore AES-GCM key.
- * The token is shared across the app's isolated activities without ever being written in plaintext.
- */
-class SklandTokenVault(context: android.content.Context) {
-    private val file = File(context.noBackupFilesDir, "skland_token.enc")
-    private val alias = "skland_token_vault_key"
+/** Stores each account's Skland token encrypted with an Android Keystore AES-GCM key. */
+class SklandTokenVault(context: Context, accountId: String? = null) {
+    private val keyId = accountId?.let {
+        MessageDigest.getInstance("SHA-256")
+            .digest(it.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }.take(24)
+    }
+    // A null accountId intentionally preserves the legacy single-account storage location for migration.
+    private val file = File(
+        context.noBackupFilesDir,
+        keyId?.let { "skland_token_$it.enc" } ?: "skland_token.enc"
+    )
+    private val alias = keyId?.let { "skland_token_key_$it" } ?: "skland_token_vault_key"
 
     @Synchronized
     fun save(value: String) {
@@ -47,6 +55,13 @@ class SklandTokenVault(context: android.content.Context) {
         } finally {
             clear.fill(0)
         }
+    }
+
+    @Synchronized
+    fun delete() {
+        if (file.exists() && !file.delete()) error("无法删除森空岛 Token 保管文件。")
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(alias)) store.deleteEntry(alias)
     }
 
     @Synchronized

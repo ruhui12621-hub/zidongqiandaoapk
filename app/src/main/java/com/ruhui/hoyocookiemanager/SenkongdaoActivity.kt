@@ -108,23 +108,30 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 status.text = "登录窗口启动失败，详情已记录到森空岛操作消息"
             }
         })
-        val scroll = ScrollView(this)
-        val cloud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        try {
-            addHuaweiCloudPanel(cloud, "skland", { "" })
-            AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面", "主页与华为云面板均已初始化。", true)
-        } catch (e: Exception) {
-            val detail = "华为云面板初始化失败：${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
-            AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面初始化失败", detail, false)
-            cloud.addView(TextView(this).apply {
-                text = detail
-                textSize = 13f
-                setTextColor(0xFFFF8A80.toInt())
-                setPadding(0, dp(12), 0, dp(12))
-            })
+        root.addView(TextView(this).apply {
+            text = "森空岛操作消息"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(16), 0, dp(6))
+        })
+        val message = TextView(this).apply {
+            text = AppMessageBus.current(this@SenkongdaoActivity, AppMessageBus.SKLAND)
+            textSize = 12f
+            setTextColor(0xFFBEC7D5.toInt())
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(0xFF202631.toInt())
         }
-        scroll.addView(cloud)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(message)
+        root.addView(button("刷新消息") {
+            message.text = AppMessageBus.current(this@SenkongdaoActivity, AppMessageBus.SKLAND)
+        })
+        root.addView(TextView(this).apply {
+            text = "登录后自动检测 Token，并按当前账号 ID 独立加密保存。"
+            textSize = 13f
+            setTextColor(0xFF9BA7B8.toInt())
+            setPadding(0, dp(10), 0, dp(8))
+        })
+
     }
 
     private fun showLogin() {
@@ -255,7 +262,14 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 status.text = "等待登录"
                 return
             }
-            SklandTokenVault(this).save(token)
+            val selectedAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
+            SklandTokenVault(this, selectedAccountId).save(token)
+            selectedAccountId?.let { id ->
+                val store = AccountStore(this)
+                store.find(id)?.let { account ->
+                    store.update(account.copy(credentialReady = true))
+                }
+            }
             saved = true
             checking = false
             status.text = "已保存"
@@ -279,7 +293,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             host == "hypergryph.com" || host.endsWith(".hypergryph.com")
     }
 
-    private fun hasToken() = !runCatching { SklandTokenVault(this).latest() }.getOrNull().isNullOrBlank()
+    private fun hasToken() = !runCatching { SklandTokenVault(this, intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)).latest() }.getOrNull().isNullOrBlank()
 
     private fun leaveLogin() {
         AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口", "已返回森空岛服务主页。", null)

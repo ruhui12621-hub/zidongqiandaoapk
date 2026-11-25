@@ -1,4 +1,5 @@
 name: Build Android APK
+# PR builds validate the cloud-first account restore path.
 on:
   workflow_dispatch:
   push:

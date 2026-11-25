@@ -36,6 +36,8 @@ class MainActivity : HuaweiCloudActivity() {
     private var cookieValue = ""
     private var yamlValue = ""
     private var detectedGameServer: String? = null
+    private var activeAccountId: String? = null
+    private var activePlatform: String? = null
     private var browserVisible = false
     private var showingLauncher = true
     private var showingBrowser = false
@@ -54,7 +56,23 @@ class MainActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
+        migrateLegacyAccounts()
+        activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
+        activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         buildLauncher()
+        val cloudCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
+        if (cloudCredentials != null) {
+            synchronizeCloudAccounts { _, message ->
+                if (showingLauncher && !isFinishing) buildLauncher()
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            }
+        } else {
+            CloudAccountSyncState.set(this, CloudAccountSyncState.UNKNOWN)
+        }
+        if (activePlatform == AccountStore.HOYOLAB || activePlatform == AccountStore.MIYOUSHE_CN) {
+            buildHome()
+            showBrowser()
+        }
     }
 
     override fun onDestroy() {
@@ -77,67 +95,205 @@ class MainActivity : HuaweiCloudActivity() {
         super.onDestroy()
     }
 
+    /**
+     * One-time migration of the previous single-account credentials into the new registry.
+     * Existing encrypted credentials are copied before the legacy Skland vault is removed.
+     */
+    private fun migrateLegacyAccounts() {
+        val store = AccountStore(this)
+        val manager = CookieManager.getInstance()
+
+        fun migrateHoyo(platform: String, urls: List<String>) {
+            val cookie = urls.mapNotNull { manager.getCookie(it) }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString("; ")
+            if (cookie.isBlank()) return
+            val identity = HoYoAccountIdentity.fromCookie(cookie, platform)
+            if (identity == null && store.all().any { it.platform == platform }) return
+            val account = if (identity != null) store.add(platform, platformUserId = identity) else store.add(platform)
+            runCatching {
+                HoYoCookieVault(this, account.id).save(cookie)
+                store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
+            }
+        }
+
+        migrateHoyo(
+            AccountStore.HOYOLAB,
+            listOf("https://www.hoyolab.com/", "https://act.hoyolab.com/", "https://bbs-api-os.hoyolab.com/")
+        )
+        migrateHoyo(
+            AccountStore.MIYOUSHE_CN,
+            listOf("https://www.miyoushe.com/", "https://bbs.mihoyo.com/", "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/")
+        )
+
+        val legacySkland = runCatching { SklandTokenVault(this).latest() }.getOrNull()
+        if (!legacySkland.isNullOrBlank() && store.all().none {
+                it.platform == AccountStore.SKLAND && it.credentialReady
+            }) {
+            runCatching {
+                val account = store.add(AccountStore.SKLAND)
+                SklandTokenVault(this, account.id).save(legacySkland)
+                store.update(account.copy(credentialReady = true))
+                SklandTokenVault(this).delete()
+            }
+        }
+    }
+
     private fun buildLauncher() {
         showingLauncher = true
         showingBrowser = false
         if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(24), dp(28), dp(24), dp(28))
+            setPadding(dp(18), dp(20), dp(18), dp(18))
             setBackgroundColor(Color.rgb(15, 17, 23))
         }
-        root.addView(text("账号工具箱", 28, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(8))
+        root.addView(text("自动签到管理", 25, true).apply {
+            setPadding(0, 0, 0, dp(5))
         })
-        root.addView(text("请选择要使用的服务", 14, false, Color.rgb(155, 164, 178)).apply {
-            gravity = Gravity.CENTER
+        root.addView(text("云服务与账号", 13, false, Color.rgb(155, 164, 178)).apply {
             setPadding(0, 0, 0, dp(18))
         })
-        val todayStatus = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            setBackgroundColor(Color.rgb(32, 38, 49))
-        }
-        todayStatus.addView(text("今日签到状态", 17, true))
-        val hoyoToday = text("HoYoLAB：正在查询…", 14, false, Color.rgb(190, 199, 213))
-        val sklandToday = text("森空岛：正在查询…", 14, false, Color.rgb(190, 199, 213))
-        todayStatus.addView(hoyoToday.apply { setPadding(0, dp(9), 0, dp(4)) })
-        todayStatus.addView(sklandToday.apply { setPadding(0, dp(4), 0, dp(4)) })
-        val todayHint = text("仅查询今天的运行结果；不会显示或保存 Cookie、Token。", 11, false, Color.rgb(145, 155, 172))
-        todayStatus.addView(todayHint.apply { setPadding(0, dp(5), 0, 0) })
-        root.addView(todayStatus, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
-        root.addView(button("HoYoLAB") {
-            buildHome()
-            refreshFromWebView()
-        }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(14) })
-        queryTodayCheckinStatus { hoyo, skland, _ ->
-            hoyoToday.text = "HoYoLAB：$hoyo"
-            sklandToday.text = "森空岛：$skland"
-            fun colorFor(value: String): Int = when {
-                value == "签到成功" -> Color.rgb(117, 214, 156)
-                value.startsWith("签到失败") || value.startsWith("查询失败") -> Color.rgb(255, 138, 128)
-                else -> Color.rgb(190, 199, 213)
+
+        fun row(parent: LinearLayout, title: String, subtitle: String, statusText: String, action: () -> Unit) {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(14), dp(12), dp(14))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(32, 38, 49))
+                    cornerRadius = dp(13).toFloat()
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { action() }
             }
-            hoyoToday.setTextColor(colorFor(hoyo))
-            sklandToday.setTextColor(colorFor(skland))
-            todayHint.text = "查询完成 · ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}"
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(text(title, 16, true))
+            info.addView(text(subtitle, 12, false, Color.rgb(155, 164, 178)).apply {
+                setPadding(0, dp(5), 0, 0)
+            })
+            item.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+            item.addView(text(statusText, 11, false, Color.rgb(155, 164, 178)))
+            item.addView(text("›", 24, false, Color.rgb(155, 164, 178)).apply {
+                setPadding(dp(8), 0, 0, 0)
+            })
+            parent.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(10)
+            })
         }
-        root.addView(button("森空岛") {
-            try {
-                startActivity(android.content.Intent(this, SenkongdaoActivity::class.java))
-            } catch (e: Exception) {
-                val detail = "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
-                AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面启动失败", detail, false)
-                toast("森空岛页面启动失败，请进入森空岛查看消息")
+
+        val cloudSaved = runCatching { AndroidCredentialVault(this).latest() != null }.getOrDefault(false)
+        val cloudStatus = when {
+            HuaweiCloudSession.isLoggedIn() -> "已连接"
+            cloudSaved -> "凭据已保存"
+            else -> "未登录"
+        }
+        row(root, "华为云登录", "管理 AK / SK、Region 和云端连接", cloudStatus) {
+            startActivity(android.content.Intent(this, HuaweiCloudSettingsActivity::class.java))
+        }
+
+        val cloudSyncState = CloudAccountSyncState.get(this)
+        val cloudSyncLabel = when (cloudSyncState) {
+            CloudAccountSyncState.SYNCING -> "正在读取华为云配置，账号操作暂时锁定"
+            CloudAccountSyncState.SYNCED -> "云端配置已读取；账号新增/删除需云端写入支持"
+            CloudAccountSyncState.EMPTY_CONFIRMED -> "云端已确认没有历史函数配置，可进行首次初始化"
+            CloudAccountSyncState.FAILED -> "云端读取失败，账号操作已锁定"
+            else -> "请先连接华为云并读取现有配置"
+        }
+        root.addView(text(cloudSyncLabel, 12, false, Color.rgb(255, 204, 128)).apply {
+            setPadding(0, dp(2), 0, dp(8))
+        })
+        root.addView(text("账号列表", 17, true).apply {
+            setPadding(0, dp(8), 0, dp(10))
+        })
+        val accountScroll = ScrollView(this)
+        val accountContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        accountScroll.addView(accountContainer)
+        root.addView(accountScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        val accounts = AccountStore(this).all()
+        if (accounts.isEmpty()) {
+            accountContainer.addView(text("还没有添加账号。点击下方加号，选择 HoYoLAB、森空岛或米游社国服。", 13, false, Color.rgb(145, 155, 172)).apply {
+                setPadding(dp(4), dp(4), dp(4), dp(12))
+            })
+        } else {
+            accounts.forEach { account ->
+                val gameNames = account.games.mapNotNull {
+                    when (it) {
+                        "genshin" -> "原神"
+                        "honkai2" -> "崩坏2"
+                        "honkai3rd" -> "崩坏3"
+                        "tears_of_themis" -> "未定事件簿"
+                        "honkai_sr" -> "星穹铁道"
+                        "zzz" -> "绝区零"
+                        "arknights" -> "明日方舟"
+                        else -> null
+                    }
+                }
+                val platformLabel = AccountStore.platformLabel(account.platform)
+                val identityHint = when {
+                account.credentialReady && account.platformUserId != null -> "凭据已保存 · ID 已识别"
+                account.credentialReady -> "凭据已保存 · 本地 ID"
+                account.platformUserId != null -> "ID 已识别 · 待登录"
+                else -> "等待登录"
             }
-        }, LinearLayout.LayoutParams(-1, dp(58)))
+                row(
+                    accountContainer,
+                    account.name,
+                    "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
+                    identityHint
+                ) {
+                    if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                        Toast.makeText(this, "请先完成云端配置同步，避免使用过期的本地账号。", Toast.LENGTH_LONG).show()
+                        return@row
+                    }
+                    startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id))
+                }
+            }
+        }
+
+        val canChangeAccounts = CloudAccountSyncState.get(this) == CloudAccountSyncState.EMPTY_CONFIRMED
+        val add = button(if (canChangeAccounts) "+ 添加账号" else "云端账号新增尚未开放") {
+            if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                Toast.makeText(this, "必须先成功读取华为云配置，才能添加账号。", Toast.LENGTH_LONG).show()
+                return@button
+            }
+            val labels = arrayOf("HoYoLAB（国际服）", "森空岛", "米游社（国服）")
+            val platforms = arrayOf(AccountStore.HOYOLAB, AccountStore.SKLAND, AccountStore.MIYOUSHE_CN)
+            AlertDialog.Builder(this)
+                .setTitle("选择账号平台")
+                .setItems(labels) { _, which ->
+                    val created = AccountStore(this).add(platforms[which])
+                    startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, created.id))
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        }.apply {
+            textSize = 16f
+            minHeight = dp(52)
+            isEnabled = canChangeAccounts
+            alpha = if (canChangeAccounts) 1f else 0.55f
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
+        }
+        root.addView(add, LinearLayout.LayoutParams(-1, dp(52)).apply {
+            topMargin = dp(4)
+        })
+        root.addView(text("账号凭据独立于游戏选择；相同游戏可配置在不同平台账号中。", 11, false, Color.rgb(130, 141, 158)).apply {
+            setPadding(0, dp(12), 0, 0)
+        })
         setContentView(root)
     }
 
     override fun onResume() {
         super.onResume()
+        // AccountManagementActivity returns to this Activity; rebuild the launcher from
+        // the latest local registry so newly added/edited/deleted accounts appear at once.
+        if (showingLauncher && !isFinishing) {
+            buildLauncher()
+        }
     }
 
     private fun buildHome() {
@@ -167,12 +323,23 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(22), 0, dp(8))
         }
         content.addView(status)
-        content.addView(button("打开 HoYoLAB 登录页面") { showBrowser() })
+        content.addView(button(if (activePlatform == AccountStore.MIYOUSHE_CN) "打开米游社登录页面" else "打开 HoYoLAB 登录页面") { showBrowser() })
         details = text("登录后自动检测 Cookie。", 13, false, Color.rgb(160, 168, 182)).apply {
             setPadding(0, dp(4), 0, dp(12))
         }
         content.addView(details)
-        addHuaweiCloudPanel(content, "hoyolab", { refreshFromWebView(); yamlValue }) { showConfigSelection() }
+        content.addView(text("HoYoLAB 操作消息", 16, true).apply { setPadding(0, dp(14), 0, dp(6)) })
+        val hoyoMessage = text(AppMessageBus.current(this, AppMessageBus.HOYOLAB), 12, false, Color.rgb(190, 199, 213)).apply {
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(Color.rgb(32, 38, 49))
+        }
+        content.addView(hoyoMessage)
+        content.addView(button("刷新消息") {
+            hoyoMessage.text = AppMessageBus.current(this, AppMessageBus.HOYOLAB)
+        })
+        content.addView(text("登录成功后自动识别当前平台账号，并将 Cookie 加密保存在该账号名下。", 13, false, Color.rgb(160, 168, 182)).apply {
+            setPadding(0, dp(8), 0, dp(12))
+        })
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
@@ -286,7 +453,7 @@ class MainActivity : HuaweiCloudActivity() {
             }
         }
         bar.addView(back)
-        bar.addView(text("HoYoLAB 登录", 18, true),
+        bar.addView(text(if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录", 18, true),
             LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
         root.addView(bar)
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -298,7 +465,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         webView.visibility = android.view.View.VISIBLE
         if (!browserVisible || webView.url.isNullOrBlank()) {
-            webView.loadUrl("https://www.hoyolab.com/")
+            webView.loadUrl(if (activePlatform == AccountStore.MIYOUSHE_CN) "https://www.miyoushe.com/" else "https://www.hoyolab.com/")
         }
         browserVisible = true
     }
@@ -399,6 +566,42 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
         if (detectedGameServer != null) {
+            val platform = if (detectedGameServer == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
+            val requested = activeAccountId?.let { AccountStore(this).find(it) }
+            if (requested != null && requested.platform != platform) {
+                status.text = "账号平台不匹配"
+                details.text = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
+                updateHuaweiCloudConfig("")
+                return
+            }
+            val identity = HoYoAccountIdentity.fromCookie(found, platform)
+            val store = AccountStore(this)
+            var account = requested
+                ?: identity?.let { uid -> store.all().firstOrNull { it.platform == platform && it.platformUserId == uid } }
+                ?: store.add(platform, platformUserId = identity)
+            if (identity != null && account.platformUserId != null && account.platformUserId != identity) {
+                status.text = "检测到不同账号"
+                details.text = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
+                updateHuaweiCloudConfig("")
+                return
+            }
+            val duplicate = identity?.let { uid ->
+                store.all().firstOrNull { it.id != account.id && it.platform == platform && it.platformUserId == uid }
+            }
+            if (duplicate != null) {
+                status.text = "账号已存在"
+                details.text = "该平台 ID 已关联到「${duplicate.name}」，请直接使用已有账号，避免重复添加。"
+                updateHuaweiCloudConfig("")
+                return
+            }
+            account = account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true)
+            store.update(account)
+            runCatching { HoYoCookieVault(this, account.id).save(found) }
+                .onFailure { recordWebDiagnostic("账号 Cookie 加密保存失败：${it.javaClass.simpleName}") }
+            activeAccountId = account.id
+            getSharedPreferences("multi_account_registry", MODE_PRIVATE).edit()
+                .putString("active_${platform}", account.id).apply()
+
             val server = detectedGameServer!!
             yamlValue = makeYaml(found, server)
             status.text = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
@@ -473,7 +676,13 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
+        val platform = if (server == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
+        val registry = AccountStore(this)
+        val selectedAccountId = activeAccountId
+            ?: getSharedPreferences("multi_account_registry", Context.MODE_PRIVATE).getString("active_${platform}", null)
+        val selected = selectedAccountId?.let { registry.find(it)?.games }
+            ?: prefs.getStringSet("selected_games", setOf("zzz"))
+            ?: setOf("zzz")
         val gamesStart = yaml.indexOf("games:\n")
         val cloudStart = yaml.indexOf("\ncloud_games:", gamesStart + 1)
         if (gamesStart >= 0 && cloudStart > gamesStart) {

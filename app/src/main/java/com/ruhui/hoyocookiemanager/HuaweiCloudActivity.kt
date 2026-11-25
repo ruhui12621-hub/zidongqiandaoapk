@@ -45,7 +45,7 @@ open class HuaweiCloudActivity : Activity() {
         super.onCreate(savedInstanceState)
     }
 
-    protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}) {
+    protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}, loginOnly: Boolean = false) {
         this.configProvider = configProvider
         this.panelService = service
         configYaml = HuaweiCloudSession.lastConfigYaml
@@ -76,8 +76,8 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.projectId = ""
                     projectId = ""
                     setCloudConnectionState("尚未连接")
-                    updateButton.isEnabled = false
-                    logsButton.isEnabled = false
+                    if (::updateButton.isInitialized) updateButton.isEnabled = false
+                    if (::logsButton.isInitialized) logsButton.isEnabled = false
                 }
             }
         }
@@ -97,20 +97,23 @@ open class HuaweiCloudActivity : Activity() {
             setOnClickListener { login() }
         }
         content.addView(loginButton)
-        if (service == "hoyolab") {
-            content.addView(Button(this).apply {
-                text = "游戏选择"
+        if (!loginOnly) {
+            if (service == "hoyolab") {
+                content.addView(Button(this).apply {
+                    text = "游戏选择"
+                    isAllCaps = false
+                    setOnClickListener { onConfigure() }
+                })
+            }
+            updateButton = Button(this).apply {
+                text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
                 isAllCaps = false
-                setOnClickListener { onConfigure() }
-            })
+                isEnabled = false
+                setOnClickListener { deployPackages(service) }
+            }
+            content.addView(updateButton)
+    
         }
-        updateButton = Button(this).apply {
-            text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
-            isAllCaps = false
-            isEnabled = false
-            setOnClickListener { deployPackages(service) }
-        }
-        content.addView(updateButton)
         lastResultMessage = AppMessageBus.current(this, messageChannel())
             .takeIf { it.isNotBlank() && it != "暂无操作记录" } ?: "暂无操作消息"
         resultMessage = TextView(this).apply {
@@ -192,13 +195,199 @@ open class HuaweiCloudActivity : Activity() {
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
             setCloudConnectionState("已连接")
-            updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
+            if (::updateButton.isInitialized) updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
             logsButton.isEnabled = true
         }
     }
 
     private fun setCloudConnectionState(state: String) {
         if (::loginButton.isInitialized) loginButton.text = "登录并连接华为云 · [$state]"
+    }
+
+
+    /**
+     * Read the existing FunctionGraph packages before account editing is enabled.
+     * Only a successful function-list response with zero matching functions is an
+     * explicitly empty cloud state. All other failures fail closed.
+     */
+    protected fun synchronizeCloudAccounts(onComplete: ((Boolean, String) -> Unit)? = null) {
+        CloudAccountSyncState.set(this, CloudAccountSyncState.SYNCING)
+        val saved = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
+        if (saved == null && !HuaweiCloudSession.isLoggedIn()) {
+            CloudAccountSyncState.set(this, CloudAccountSyncState.UNKNOWN)
+            onComplete?.let { runOnUiThread { it(false, "请先连接华为云，读取云端账号配置。") } }
+            return
+        }
+        worker.execute {
+            try {
+                if (saved != null) {
+                    authAk = saved.first
+                    authSk = saved.second
+                } else {
+                    authAk = HuaweiCloudSession.ak
+                    authSk = HuaweiCloudSession.sk
+                }
+                regionValue = getSharedPreferences("app_settings", MODE_PRIVATE)
+                    .getString("cloud_region", HuaweiCloudSession.region) ?: "cn-east-3"
+                val projects = signedGet("https://iam.$regionValue.myhuaweicloud.com/v3/projects")
+                val rows = projects.optJSONArray("projects") ?: error("IAM 未返回项目列表")
+                projectId = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+                    .firstOrNull { it.optString("name").equals(regionValue, true) }
+                    ?.optString("id").orEmpty()
+                if (projectId.isBlank()) error("未找到 $regionValue 对应的华为云项目")
+                HuaweiCloudSession.ak = authAk
+                HuaweiCloudSession.sk = authSk
+                HuaweiCloudSession.region = regionValue
+                HuaweiCloudSession.projectId = projectId
+
+                fun findFunction(name: String): JSONObject? {
+                    val url = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions" +
+                        "?func_name=" + enc(name) + "&precise_search=true&maxitems=10"
+                    val list = signedGet(url).optJSONArray("functions")
+                        ?: error("FunctionGraph 未返回函数列表，不能判断云端是否为空")
+                    val matches = (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+                        .filter { it.optString("func_name") == name }
+                    if (matches.size > 1) error("云端存在多个同名函数：$name，已停止同步")
+                    return matches.singleOrNull()
+                }
+
+                fun downloadZip(function: JSONObject, label: String): ByteArray {
+                    val urn = function.optString("func_urn")
+                    if (urn.isBlank()) error("$label 函数缺少 URN")
+                    val code = signedGet(
+                        "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/" + enc(urn) + "/code"
+                    )
+                    if (!code.optString("code_type").equals("zip", true))
+                        error("$label 函数不是 ZIP 代码类型，无法安全读取")
+                    val funcCode = code.optJSONObject("func_code")
+                    val encoded = funcCode?.optString("file").orEmpty().trim()
+                    val link = funcCode?.optString("link").orEmpty().trim()
+                    val bytes = if (encoded.isNotBlank()) {
+                        Base64.decode(encoded, Base64.DEFAULT)
+                    } else {
+                        // FunctionGraph may return an empty file and a temporary OBS download URL in link.
+                        if (link.isBlank()) error("$label 函数代码既没有内联 file，也没有下载 link；不能判断配置为空")
+                        val downloadUrl = runCatching { URL(link) }.getOrElse { error("$label 函数返回了无效的代码下载地址") }
+                        if (downloadUrl.protocol != "https") error("$label 函数代码下载地址不是 HTTPS，已拒绝下载")
+                        val connection = (downloadUrl.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "GET"
+                            connectTimeout = 20000
+                            readTimeout = 60000
+                            instanceFollowRedirects = true
+                            setRequestProperty("Accept", "application/zip, application/octet-stream, */*")
+                        }
+                        try {
+                            val status = connection.responseCode
+                            if (status !in 200..299) {
+                                val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
+                                error("$label 函数代码下载失败（HTTP " + status + "）：" + detail.take(500))
+                            }
+                            if (connection.contentLengthLong > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
+                            connection.inputStream.use { input ->
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(16384)
+                                var total = 0L
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    if (total > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toByteArray()
+                            }
+                        } finally { connection.disconnect() }
+                    }
+                    if (!isZip(bytes)) error("$label 函数返回的代码包不是有效 ZIP")
+                    return bytes
+                }
+
+                fun readZipText(bytes: ByteArray, target: String, label: String): String {
+                    var found: String? = null
+                    ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                        while (true) {
+                            val entry = zip.nextEntry ?: break
+                            val path = entry.name.replace('\\', '/')
+                            if (!entry.isDirectory && (path == target || path.endsWith("/$target"))) {
+                                if (found != null) error("$label 配置文件出现多个匹配项")
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(8192)
+                                var total = 0
+                                while (true) {
+                                    val n = zip.read(buffer)
+                                    if (n < 0) break
+                                    total += n
+                                    if (total > 5 * 1024 * 1024) error("$label 配置文件超过 5 MB")
+                                    output.write(buffer, 0, n)
+                                }
+                                found = output.toString("UTF-8")
+                            }
+                            zip.closeEntry()
+                        }
+                    }
+                    return found ?: error("$label 函数包中找不到 $target；未将其视为无历史配置")
+                }
+
+                val store = AccountStore(this)
+                var imported = 0
+                val hoyoFunction = findFunction(HOYOLAB_FUNCTION)
+                val sklandFunction = findFunction(SKLAND_FUNCTION)
+
+                if (hoyoFunction != null) {
+                    val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
+                    val rawCookie = Regex("(?m)^\\s*cookie\\s*:\\s*(.*?)\\s*$")
+                        .find(yaml)?.groupValues?.get(1).orEmpty()
+                    val cookie = rawCookie.trim().removeSurrounding("\"").removeSurrounding("'")
+                    if (cookie.isNotBlank()) {
+                        val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
+                        val existing = if (identity != null) store.all().firstOrNull {
+                            it.platform == AccountStore.HOYOLAB && it.platformUserId == identity
+                        } else store.all().firstOrNull { account ->
+                            account.platform == AccountStore.HOYOLAB &&
+                                runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
+                        }
+                        val account = existing ?: store.add(AccountStore.HOYOLAB, platformUserId = identity)
+                        HoYoCookieVault(this, account.id).save(cookie)
+                        store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
+                        imported++
+                    }
+                }
+
+                if (sklandFunction != null) {
+                    val tokenText = readZipText(
+                        downloadZip(sklandFunction, "森空岛"),
+                        "code/INPUT_HYPERGRYPH_TOKEN.txt",
+                        "森空岛"
+                    )
+                    val tokens = tokenText.lineSequence().map { it.trim() }
+                        .filter { it.isNotBlank() && !it.startsWith("#") }.distinct().toList()
+                    tokens.forEach { token ->
+                        val stableId = MessageDigest.getInstance("SHA-256")
+                            .digest(token.toByteArray(Charsets.UTF_8))
+                            .joinToString("") { "%02x".format(it) }
+                        val account = store.add(AccountStore.SKLAND, platformUserId = stableId)
+                        SklandTokenVault(this, account.id).save(token)
+                        store.update(account.copy(credentialReady = true))
+                        imported++
+                    }
+                }
+
+                val noFunctions = hoyoFunction == null && sklandFunction == null
+                val state = if (noFunctions) CloudAccountSyncState.EMPTY_CONFIRMED else CloudAccountSyncState.SYNCED
+                CloudAccountSyncState.set(this, state)
+                val message = if (noFunctions) {
+                    "华为云已明确确认两个签到函数均不存在历史配置，可以进行首次初始化。"
+                } else {
+                    "云端配置读取完成，已导入或核对 $imported 项凭据。"
+                }
+                runOnUiThread { onComplete?.invoke(true, message) }
+            } catch (e: Exception) {
+                CloudAccountSyncState.set(this, CloudAccountSyncState.FAILED)
+                val message = "云端账号同步失败，已锁定账号变更以保护数据：" +
+                    (e.message ?: e.javaClass.simpleName)
+                runOnUiThread { onComplete?.invoke(false, message) }
+            }
+        }
     }
 
     protected fun updateHuaweiCloudConfig(value: String) {
@@ -244,7 +433,7 @@ open class HuaweiCloudActivity : Activity() {
         HuaweiCloudSession.region = r
         getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", r).apply()
         setCloudConnectionState("连接中")
-        updateButton.isEnabled = false
+        if (::updateButton.isInitialized) updateButton.isEnabled = false
         showOperationMessage("华为云登录", "正在验证 AK/SK 并查询项目…", null)
         worker.execute {
             try {
@@ -271,9 +460,12 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
                     setCloudConnectionState("已连接")
-                    updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
-                    logsButton.isEnabled = true
+                    if (::updateButton.isInitialized) updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
+                    if (::logsButton.isInitialized) logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
+                    synchronizeCloudAccounts { _, message ->
+                        showOperationMessage("云端账号同步", message, CloudAccountSyncState.allowsAccountChanges(this))
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
