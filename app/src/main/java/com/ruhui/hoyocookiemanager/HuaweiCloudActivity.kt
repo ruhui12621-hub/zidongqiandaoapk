@@ -448,20 +448,55 @@ open class HuaweiCloudActivity : Activity() {
     private fun invokeFunctionOnce(functionUrn: String): String {
         val url = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions/" + enc(functionUrn) + "/invocations"
         val response = signedRequest("POST", url, "{}")
-        if (response.first !in 200..299) error("函数测试运行请求失败（HTTP ${response.first}）：" + response.second.take(1200))
-        val result = try { JSONObject(response.second) } catch (_: Exception) { JSONObject() }
-        val status = result.optInt("status", 200)
-        if (status >= 400) error("函数测试运行返回失败状态（$status）：" + response.second.take(1200))
-        val resultText = result.optString("result")
+        if (response.first !in 200..299) error("函数测试运行请求失败（HTTP ${response.first}）：" + response.second.take(1600))
+        if (response.second.isBlank()) error("函数测试运行没有返回执行结果；为避免误创建定时触发器，已停止后续操作。")
+
+        val result = try {
+            JSONObject(response.second)
+        } catch (e: Exception) {
+            error("函数测试运行返回无法识别的结果，未确认执行成功：" + response.second.take(1200))
+        }
+
+        fun checkStatus(obj: JSONObject, label: String) {
+            val statusCode = when {
+                obj.has("statusCode") -> obj.optInt("statusCode", 200)
+                obj.has("status_code") -> obj.optInt("status_code", 200)
+                obj.has("status") && obj.opt("status") is Number -> obj.optInt("status", 200)
+                else -> 200
+            }
+            if (statusCode >= 400) error("$label失败（状态码 $statusCode）：" + obj.toString().take(1200))
+            val statusText = obj.optString("status").trim()
+            if (statusText.equals("FAILED", true) || statusText.equals("ERROR", true) ||
+                statusText.equals("FAILURE", true)) {
+                error("$label失败（状态：$statusText）：" + obj.toString().take(1200))
+            }
+            val errorText = listOf("error", "errorMessage", "error_message", "function_error")
+                .map { obj.optString(it).trim() }.firstOrNull { it.isNotBlank() && it != "null" }
+            if (errorText != null) error("$label失败：$errorText")
+        }
+
+        checkStatus(result, "FunctionGraph 测试调用")
+        val resultText = result.optString("result").trim()
+        if (resultText.isBlank() && !result.has("statusCode") && !result.has("status_code")) {
+            error("华为云已接受测试请求，但没有返回函数执行结果；为避免误创建定时触发器，已停止后续操作。")
+        }
         if (resultText.isNotBlank()) {
-            try {
-                val inner = JSONObject(resultText)
-                val innerStatus = inner.optInt("statusCode", 200)
-                if (innerStatus >= 400) error("函数测试运行返回业务错误（$innerStatus）：" + resultText.take(1000))
-            } catch (e: org.json.JSONException) { /* 普通文本返回值不代表调用失败。 */ }
+            val inner = runCatching { JSONObject(resultText) }.getOrNull()
+            if (inner != null) {
+                checkStatus(inner, "森空岛函数实际执行")
+                val bodyText = inner.optString("body").trim()
+                if (bodyText.startsWith("{")) {
+                    val bodyObject = runCatching { JSONObject(bodyText) }.getOrNull()
+                    if (bodyObject != null) checkStatus(bodyObject, "森空岛函数业务结果")
+                }
+            } else if (resultText.contains("Traceback", true) ||
+                resultText.contains("Exception", true) ||
+                resultText.contains("FileNotFoundError", true)) {
+                error("森空岛函数实际执行异常：" + resultText.take(1200))
+            }
         }
         val requestId = result.optString("request_id")
-        return if (requestId.isNotBlank()) "已执行一次（请求 ID：$requestId）" else "已执行一次（HTTP ${response.first}）"
+        return if (requestId.isNotBlank()) "已执行一次且返回成功（请求 ID：$requestId）" else "已执行一次且返回成功（HTTP ${response.first}）"
     }
 
     private fun listFunctionTriggers(functionUrn: String): org.json.JSONArray {
