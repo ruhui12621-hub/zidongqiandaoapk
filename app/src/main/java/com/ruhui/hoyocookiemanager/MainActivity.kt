@@ -32,6 +32,7 @@ class MainActivity : HuaweiCloudActivity() {
     private lateinit var status: TextView
     private lateinit var details: TextView
     private lateinit var webView: WebView
+    private lateinit var loginChrome: WebView
     private var popupWebView: WebView? = null
     private var cookieValue = ""
     private var yamlValue = ""
@@ -97,6 +98,11 @@ class MainActivity : HuaweiCloudActivity() {
                 webView.stopLoading()
                 webView.clearCache(true)
                 webView.destroy()
+            }
+            if (::loginChrome.isInitialized) {
+                loginChrome.stopLoading()
+                loginChrome.removeJavascriptInterface("LoginUi")
+                loginChrome.destroy()
             }
             CookieManager.getInstance().removeAllCookies { CookieManager.getInstance().flush() }
             WebStorage.getInstance().deleteAllData()
@@ -314,48 +320,59 @@ class MainActivity : HuaweiCloudActivity() {
         AppMessageBus.setActiveChannel(AppMessageBus.HOYOLAB)
         showingLauncher = false
         showingBrowser = false
-        if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(18))
-            setBackgroundColor(Color.rgb(15, 17, 23))
+            setBackgroundColor(Color.rgb(12, 15, 22))
         }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        status = TextView(this).apply { text = "登录状态：尚未检测" }
+        details = TextView(this).apply { text = "登录后自动检测 Cookie。" }
+        if (!::loginChrome.isInitialized) {
+            loginChrome = WebView(this).apply {
+                setBackgroundColor(Color.rgb(12, 15, 22))
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = true
+                settings.allowContentAccess = false
+                addJavascriptInterface(LoginChromeBridge(), "LoginUi")
+                webChromeClient = WebChromeClient()
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                        !request.url.toString().startsWith("file:///android_asset/ui/")
+                    override fun onPageFinished(view: WebView, url: String) { pushLoginChrome() }
+                }
+                loadUrl("file:///android_asset/ui/login.html")
+            }
         }
-        header.addView(button("‹ 主页") { buildLauncher() }, LinearLayout.LayoutParams(-2, -2))
-        header.addView(text("HoYoLAB", 19, true), LinearLayout.LayoutParams(0, -2, 1f).apply {
-            leftMargin = dp(12)
-        })
-        root.addView(header)
-        val scroll = ScrollView(this)
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(content)
-
-        status = text("登录状态：尚未检测", 16, true).apply {
-            setPadding(0, dp(22), 0, dp(8))
-        }
-        content.addView(status)
-        content.addView(button(if (activePlatform == AccountStore.MIYOUSHE_CN) "打开米游社登录页面" else "打开 HoYoLAB 登录页面") { showBrowser() })
-        details = text("登录后自动检测 Cookie。", 13, false, Color.rgb(160, 168, 182)).apply {
-            setPadding(0, dp(4), 0, dp(12))
-        }
-        content.addView(details)
-        content.addView(text("HoYoLAB 操作消息", 16, true).apply { setPadding(0, dp(14), 0, dp(6)) })
-        val hoyoMessage = text(AppMessageBus.current(this, AppMessageBus.HOYOLAB), 12, false, Color.rgb(190, 199, 213)).apply {
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setBackgroundColor(Color.rgb(32, 38, 49))
-        }
-        content.addView(hoyoMessage)
-        content.addView(button("刷新消息") {
-            hoyoMessage.text = AppMessageBus.current(this, AppMessageBus.HOYOLAB)
-        })
-        content.addView(text("登录后读取当前会话 Cookie，仅用于生成并更新云端配置；不会在本机保存 Cookie。", 13, false, Color.rgb(160, 168, 182)).apply {
-            setPadding(0, dp(8), 0, dp(12))
-        })
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
+        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(154)))
         setContentView(root)
+        pushLoginChrome()
+    }
+
+    private fun pushLoginChrome() {
+        if (!::loginChrome.isInitialized) return
+        val payload = org.json.JSONObject()
+            .put("title", if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录")
+            .put("status", if (::status.isInitialized) status.text.toString() else "登录状态：尚未检测")
+            .put("detail", if (::details.isInitialized) details.text.toString() else "")
+            .put("message", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
+        loginChrome.post {
+            loginChrome.evaluateJavascript(
+                "window.updateLoginState && window.updateLoginState(" + org.json.JSONObject.quote(payload.toString()) + ")",
+                null
+            )
+        }
+    }
+
+    private inner class LoginChromeBridge {
+        @android.webkit.JavascriptInterface fun back() {
+            runOnUiThread {
+                refreshFromWebView()
+                if (returnToAccountDetail) finish() else buildHome()
+            }
+        }
+        @android.webkit.JavascriptInterface fun clear() { runOnUiThread { clearSession() } }
+        @android.webkit.JavascriptInterface fun refresh() { runOnUiThread { refreshFromWebView(true); pushLoginChrome() } }
     }
 
     @Deprecated("Deprecated in Java")
@@ -450,6 +467,7 @@ class MainActivity : HuaweiCloudActivity() {
                     override fun onPageFinished(view: WebView, url: String) {
                         super.onPageFinished(view, url)
                         status.text = "页面已加载，正在检查 Cookie…"
+                        pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         DesktopWebView.enablePageZoom(view)
                         view.postDelayed({ refreshFromWebView() }, 900)
@@ -459,21 +477,8 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
         root.removeAllViews()
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val back = Button(this).apply {
-            text = "返回"
-            setOnClickListener {
-                refreshFromWebView()
-                if (returnToAccountDetail) finish() else buildHome()
-            }
-        }
-        bar.addView(back)
-        bar.addView(text(if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录", 18, true),
-            LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
-        root.addView(bar)
+        (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
+        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(154)))
         (webView.parent as? ViewGroup)?.removeView(webView)
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
         popupWebView?.let { popup ->
@@ -647,6 +652,7 @@ class MainActivity : HuaweiCloudActivity() {
             updateHuaweiCloudConfig("")
             if (showToast) toast("未发现可识别的登录凭据")
         }
+        pushLoginChrome()
     }
     private fun webViewEngineInfo(): String {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
