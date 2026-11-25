@@ -37,6 +37,7 @@ object CrashLogger {
                     "${top.className}.${top.methodName}:${top.lineNumber}"
                 AppMessageBus.post(
                     context,
+                    AppMessageBus.activeChannel(),
                     "应用发生未捕获异常",
                     "异常类型：${throwable.javaClass.simpleName}；线程：${thread.name}；位置：$location。完整堆栈已保存到本地崩溃记录。",
                     false
