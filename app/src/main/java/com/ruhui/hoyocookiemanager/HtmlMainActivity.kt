@@ -26,9 +26,9 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
         AccountStore.clearMemory()
-        shell = FrameLayout(this).apply { setBackgroundColor(Color.rgb(12, 15, 22)) }
+        shell = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }
         ui = WebView(this).apply {
-            setBackgroundColor(Color.rgb(12, 15, 22))
+            setBackgroundColor(Color.rgb(5, 5, 5))
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
