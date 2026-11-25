@@ -108,23 +108,13 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 status.text = "登录窗口启动失败，详情已记录到森空岛操作消息"
             }
         })
-        val scroll = ScrollView(this)
-        val cloud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        try {
-            addHuaweiCloudPanel(cloud, "skland", { "" })
-            AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面", "主页与华为云面板均已初始化。", true)
-        } catch (e: Exception) {
-            val detail = "华为云面板初始化失败：${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
-            AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面初始化失败", detail, false)
-            cloud.addView(TextView(this).apply {
-                text = detail
-                textSize = 13f
-                setTextColor(0xFFFF8A80.toInt())
-                setPadding(0, dp(12), 0, dp(12))
-            })
-        }
-        scroll.addView(cloud)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(TextView(this).apply {
+            text = "登录后自动检测 Token，并按当前账号 ID 独立加密保存。"
+            textSize = 13f
+            setTextColor(0xFF9BA7B8.toInt())
+            setPadding(0, dp(10), 0, dp(8))
+        })
+
     }
 
     private fun showLogin() {
