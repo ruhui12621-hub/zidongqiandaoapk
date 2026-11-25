@@ -93,12 +93,37 @@ class MainActivity : HuaweiCloudActivity() {
         })
         root.addView(text("请选择要使用的服务", 14, false, Color.rgb(155, 164, 178)).apply {
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(34))
+            setPadding(0, 0, 0, dp(18))
         })
+        val todayStatus = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            setBackgroundColor(Color.rgb(32, 38, 49))
+        }
+        todayStatus.addView(text("今日签到状态", 17, true))
+        val hoyoToday = text("HoYoLAB：正在查询…", 14, false, Color.rgb(190, 199, 213))
+        val sklandToday = text("森空岛：正在查询…", 14, false, Color.rgb(190, 199, 213))
+        todayStatus.addView(hoyoToday.apply { setPadding(0, dp(9), 0, dp(4)) })
+        todayStatus.addView(sklandToday.apply { setPadding(0, dp(4), 0, dp(4)) })
+        val todayHint = text("仅查询今天的运行结果；不会显示或保存 Cookie、Token。", 11, false, Color.rgb(145, 155, 172))
+        todayStatus.addView(todayHint.apply { setPadding(0, dp(5), 0, 0) })
+        root.addView(todayStatus, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
         root.addView(button("HoYoLAB") {
             buildHome()
             refreshFromWebView()
         }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(14) })
+        queryTodayCheckinStatus { hoyo, skland, _ ->
+            hoyoToday.text = "HoYoLAB：$hoyo"
+            sklandToday.text = "森空岛：$skland"
+            fun colorFor(value: String): Int = when {
+                value == "签到成功" -> Color.rgb(117, 214, 156)
+                value.startsWith("签到失败") || value.startsWith("查询失败") -> Color.rgb(255, 138, 128)
+                else -> Color.rgb(190, 199, 213)
+            }
+            hoyoToday.setTextColor(colorFor(hoyo))
+            sklandToday.setTextColor(colorFor(skland))
+            todayHint.text = "查询完成 · ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}"
+        }
         root.addView(button("森空岛") {
             try {
                 startActivity(android.content.Intent(this, SenkongdaoActivity::class.java))
