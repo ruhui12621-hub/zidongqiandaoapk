@@ -25,7 +25,9 @@ open class HuaweiCloudActivity : Activity() {
     private lateinit var sk: EditText
     private lateinit var cloudStatus: TextView
     private lateinit var updateButton: Button
-    private lateinit var sklandUpdateButton: Button
+    private lateinit var resultMessage: TextView
+    private lateinit var copyResultButton: Button
+    private var lastResultMessage = ""
     private lateinit var logsButton: Button
     private lateinit var logsStatus: TextView
     private lateinit var logsOutput: TextView
@@ -43,7 +45,7 @@ open class HuaweiCloudActivity : Activity() {
         super.onCreate(savedInstanceState)
     }
 
-    protected fun addHuaweiCloudPanel(parent: LinearLayout, configProvider: () -> String, onConfigure: () -> Unit) {
+    protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}) {
         this.configProvider = configProvider
         configYaml = HuaweiCloudSession.lastConfigYaml
         val content = parent
@@ -55,7 +57,7 @@ open class HuaweiCloudActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(TextView(this).apply {
-            text = "HoYoLAB Cookie 与森空岛 Token 分别写入各自的部署包；两个云函数可以独立更新。"
+            text = if (service == "hoyolab") "仅更新 HoYoLAB 云函数，不会触碰森空岛服务。" else "仅更新森空岛云函数，不会触碰 HoYoLAB 服务。"
             textSize = 14f; setTextColor(0xFFA7B0C0.toInt()); setPadding(0, dp(8), 0, dp(16))
         })
         content.addView(TextView(this).apply {
@@ -98,27 +100,49 @@ open class HuaweiCloudActivity : Activity() {
             setBackgroundColor(0xFF202631.toInt())
         }
         content.addView(cloudStatus)
-        cookieStatus = TextView(this).apply {
-            text = if (configYaml.isBlank()) "HoYoLAB Cookie：等待获取"
-            else "HoYoLAB Cookie：已获取，可以部署"
-            setTextColor(0xFFA7B0C0.toInt())
-            setPadding(0, dp(12), 0, dp(8))
+        if (service == "hoyolab") {
+            content.addView(Button(this).apply {
+                text = "配置选择"; isAllCaps = false
+                setOnClickListener { onConfigure() }
+            })
         }
-        content.addView(cookieStatus)
-        content.addView(Button(this).apply {
-            text = "配置选择"; isAllCaps = false
-            setOnClickListener { onConfigure() }
-        })
         updateButton = Button(this).apply {
-            text = "更新 HoYoLAB 云函数"; isAllCaps = false; isEnabled = false
-            setOnClickListener { deployPackages("hoyolab") }
+            text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener { deployPackages(service) }
         }
         content.addView(updateButton)
-        sklandUpdateButton = Button(this).apply {
-            text = "更新森空岛云函数"; isAllCaps = false; isEnabled = false
-            setOnClickListener { deployPackages("skland") }
+        content.addView(TextView(this).apply {
+            text = "操作消息"
+            textSize = 19f
+            setTextColor(0xFFECEFF5.toInt())
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, dp(22), 0, dp(6))
+        })
+        resultMessage = TextView(this).apply {
+            text = "暂无操作记录"
+            textSize = 13f
+            setTextColor(0xFFE1E6EF.toInt())
+            setTextIsSelectable(true)
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(0xFF202631.toInt())
+            minHeight = dp(72)
         }
-        content.addView(sklandUpdateButton)
+        content.addView(resultMessage)
+        copyResultButton = Button(this).apply {
+            text = "复制消息内容"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener {
+                if (lastResultMessage.isNotBlank()) {
+                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("操作消息", lastResultMessage))
+                    Toast.makeText(this@HuaweiCloudActivity, "消息内容已复制", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        content.addView(copyResultButton)
         content.addView(TextView(this).apply {
             text = "函数运行日志"
             textSize = 20f
@@ -170,8 +194,7 @@ open class HuaweiCloudActivity : Activity() {
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
             cloudStatus.text = "● 华为云已连接\nRegion：$regionValue\nProject ID：$projectId"
-            updateButton.isEnabled = configYaml.isNotBlank()
-            sklandUpdateButton.isEnabled = true
+            updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
             logsButton.isEnabled = true
         }
     }
@@ -179,18 +202,8 @@ open class HuaweiCloudActivity : Activity() {
     protected fun updateHuaweiCloudConfig(value: String) {
         configYaml = value
         HuaweiCloudSession.lastConfigYaml = value
-        if (::cookieStatus.isInitialized) {
-            cookieStatus.text = if (value.isNotBlank()) {
-                "HoYoLAB Cookie：已获取，可以部署 / 更新"
-            } else {
-                "HoYoLAB Cookie：尚未获取，请先完成 HoYoLAB 登录"
-            }
-        }
         if (::updateButton.isInitialized) {
             updateButton.isEnabled = value.isNotBlank() && HuaweiCloudSession.isLoggedIn()
-        }
-        if (::sklandUpdateButton.isInitialized) {
-            sklandUpdateButton.isEnabled = HuaweiCloudSession.isLoggedIn()
         }
     }
 
@@ -225,6 +238,7 @@ open class HuaweiCloudActivity : Activity() {
         getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", r).apply()
         cloudStatus.text = "正在验证 AK/SK 并连接华为云…"
         updateButton.isEnabled = false
+        showOperationMessage("华为云登录", "正在验证 AK/SK 并查询项目…", null)
         worker.execute {
             try {
                 val projects = signedGet("https://iam." + r + ".myhuaweicloud.com/v3/projects")
@@ -253,12 +267,16 @@ open class HuaweiCloudActivity : Activity() {
                     cloudStatus.text = "● 华为云已连接\nRegion：" + r + "\nProject ID：" + pid +
                         (if (configYaml.isBlank()) "\nHoYoLAB：等待 Cookie" else "\nHoYoLAB：Cookie 已就绪") +
                         (if (sklandReady) "\n森空岛：Token 已就绪" else "\n森空岛：等待 Token") + vaultWarning
-                    updateButton.isEnabled = configYaml.isNotBlank()
-                    sklandUpdateButton.isEnabled = true
+                    updateButton.isEnabled = true
                     logsButton.isEnabled = true
+                    showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
                 }
             } catch (e: Exception) {
-                runOnUiThread { cloudStatus.text = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread {
+                    val detail = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName)
+                    cloudStatus.text = detail
+                    showOperationMessage("华为云登录失败", detail, false)
+                }
             }
         }
     }
@@ -340,12 +358,14 @@ open class HuaweiCloudActivity : Activity() {
                     logsStatus.text = "已完成两个服务的最近 7 天日志查询。"
                     logsOutput.text = rendered.toString()
                     logsButton.isEnabled = true
+                    showOperationMessage("运行日志读取完成", rendered.toString(), true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     logsStatus.text = "读取日志失败：" + (e.message ?: e.javaClass.simpleName)
                     logsOutput.text = "请检查 FunctionGraph 日志配置与 LTS 查询权限。"
                     logsButton.isEnabled = true
+                    showOperationMessage("运行日志读取失败", e.message ?: e.javaClass.simpleName, false)
                 }
             }
         }
@@ -360,12 +380,15 @@ open class HuaweiCloudActivity : Activity() {
             configYaml = configProvider?.invoke().orEmpty()
             HuaweiCloudSession.lastConfigYaml = configYaml
             if (configYaml.isBlank() || !configYaml.contains("cookie:")) {
-                cloudStatus.text = "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。"; return
+                val detail = "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。"
+                cloudStatus.text = detail
+                showOperationMessage("HoYoLAB 更新失败", detail, false)
+                return
             }
         }
-        val targetButton = if (isHoyolab) updateButton else sklandUpdateButton
-        targetButton.isEnabled = false
+        updateButton.isEnabled = false
         cloudStatus.text = if (isHoyolab) "正在单独更新 HoYoLAB 函数…" else "正在单独更新森空岛函数…"
+        showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在准备部署包并提交到华为云…", null)
         worker.execute {
             try {
                 val created = if (isHoyolab) {
@@ -390,17 +413,32 @@ open class HuaweiCloudActivity : Activity() {
                     val label = if (isHoyolab) "HoYoLAB" else "森空岛"
                     val action = if (created) "创建" else "更新"
                     cloudStatus.text = label + " 函数" + action + "成功。\n本次仅提交了 " + label + " 函数，没有触碰另一个服务。"
-                    targetButton.isEnabled = true
+                    updateButton.isEnabled = true
+                    showOperationMessage("$label 函数$action成功", "本次仅提交了 $label 函数，没有触碰另一个服务。", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     cloudStatus.text = (if (isHoyolab) "HoYoLAB" else "森空岛") +
                         " 更新失败：" + (e.message ?: e.javaClass.simpleName) +
                         "\n另一个服务不会受到影响。"
-                    targetButton.isEnabled = true
+                    updateButton.isEnabled = true
+                    showOperationMessage(if (isHoyolab) "HoYoLAB 更新失败" else "森空岛更新失败", e.message ?: e.javaClass.simpleName, false)
                 }
             }
         }
+    }
+
+    private fun showOperationMessage(title: String, detail: String, success: Boolean?) {
+        lastResultMessage = title + "\n" + detail
+        if (::resultMessage.isInitialized) {
+            resultMessage.text = (when (success) { true -> "✓ "; false -> "✕ "; else -> "… " }) + lastResultMessage
+            resultMessage.setTextColor(when (success) {
+                true -> 0xFF75D69C.toInt()
+                false -> 0xFFFF8A80.toInt()
+                else -> 0xFFE1E6EF.toInt()
+            })
+        }
+        if (::copyResultButton.isInitialized) copyResultButton.isEnabled = true
     }
 
     private fun readPackagedZip(path: String): ByteArray {
