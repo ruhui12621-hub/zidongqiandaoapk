@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -49,7 +50,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     override fun onDestroy() {
-        // 离开应用时尽力清理；下次启动也会使用全新的 WebView 数据目录。
+        // 只销毁 WebView 实例，不清理 Cookie、缓存或站点存储；登录状态由独立数据目录持久保存。
         try {
             popupWebView?.let { popup ->
                 (popup.parent as? ViewGroup)?.removeView(popup)
@@ -62,7 +63,7 @@ class MainActivity : HuaweiCloudActivity() {
                 webView.destroy()
             }
         } catch (_: Exception) {
-            // 系统强制回收时，下一次启动仍会切换到独立数据目录。
+            // 系统回收时，WebView 数据目录仍会保留登录状态。
         }
         super.onDestroy()
     }
