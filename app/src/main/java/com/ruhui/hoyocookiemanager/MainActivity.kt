@@ -83,56 +83,102 @@ class MainActivity : HuaweiCloudActivity() {
         if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(24), dp(28), dp(24), dp(28))
+            setPadding(dp(18), dp(20), dp(18), dp(18))
             setBackgroundColor(Color.rgb(15, 17, 23))
         }
-        root.addView(text("账号工具箱", 28, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(8))
+        root.addView(text("自动签到管理", 25, true).apply {
+            setPadding(0, 0, 0, dp(5))
         })
-        root.addView(text("请选择要使用的服务", 14, false, Color.rgb(155, 164, 178)).apply {
-            gravity = Gravity.CENTER
+        root.addView(text("云服务与账号", 13, false, Color.rgb(155, 164, 178)).apply {
             setPadding(0, 0, 0, dp(18))
         })
-        val todayStatus = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            setBackgroundColor(Color.rgb(32, 38, 49))
-        }
-        todayStatus.addView(text("今日签到状态", 17, true))
-        val hoyoToday = text("HoYoLAB：正在查询…", 14, false, Color.rgb(190, 199, 213))
-        val sklandToday = text("森空岛：正在查询…", 14, false, Color.rgb(190, 199, 213))
-        todayStatus.addView(hoyoToday.apply { setPadding(0, dp(9), 0, dp(4)) })
-        todayStatus.addView(sklandToday.apply { setPadding(0, dp(4), 0, dp(4)) })
-        val todayHint = text("仅查询今天的运行结果；不会显示或保存 Cookie、Token。", 11, false, Color.rgb(145, 155, 172))
-        todayStatus.addView(todayHint.apply { setPadding(0, dp(5), 0, 0) })
-        root.addView(todayStatus, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
-        root.addView(button("HoYoLAB") {
-            buildHome()
-            refreshFromWebView()
-        }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(14) })
-        queryTodayCheckinStatus { hoyo, skland, _ ->
-            hoyoToday.text = "HoYoLAB：$hoyo"
-            sklandToday.text = "森空岛：$skland"
-            fun colorFor(value: String): Int = when {
-                value == "签到成功" -> Color.rgb(117, 214, 156)
-                value.startsWith("签到失败") || value.startsWith("查询失败") -> Color.rgb(255, 138, 128)
-                else -> Color.rgb(190, 199, 213)
+
+        fun row(title: String, subtitle: String, statusText: String, action: () -> Unit) {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(14), dp(12), dp(14))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(32, 38, 49))
+                    cornerRadius = dp(13).toFloat()
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { action() }
             }
-            hoyoToday.setTextColor(colorFor(hoyo))
-            sklandToday.setTextColor(colorFor(skland))
-            todayHint.text = "查询完成 · ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}"
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(text(title, 16, true))
+            info.addView(text(subtitle, 12, false, Color.rgb(155, 164, 178)).apply {
+                setPadding(0, dp(5), 0, 0)
+            })
+            item.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+            item.addView(text(statusText, 11, false, Color.rgb(155, 164, 178)))
+            item.addView(text("›", 24, false, Color.rgb(155, 164, 178)).apply {
+                setPadding(dp(8), 0, 0, 0)
+            })
+            root.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(10)
+            })
         }
-        root.addView(button("森空岛") {
-            try {
-                startActivity(android.content.Intent(this, SenkongdaoActivity::class.java))
-            } catch (e: Exception) {
-                val detail = "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
-                AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面启动失败", detail, false)
-                toast("森空岛页面启动失败，请进入森空岛查看消息")
+
+        val cloudSaved = runCatching { AndroidCredentialVault(this).latest() != null }.getOrDefault(false)
+        val cloudStatus = when {
+            HuaweiCloudSession.isLoggedIn() -> "已连接"
+            cloudSaved -> "凭据已保存"
+            else -> "未登录"
+        }
+        row("华为云登录", "管理 AK / SK、Region 和云端连接", cloudStatus) {
+            startActivity(android.content.Intent(this, HuaweiCloudSettingsActivity::class.java))
+        }
+
+        root.addView(text("账号列表", 17, true).apply {
+            setPadding(0, dp(12), 0, dp(10))
+        })
+        val accounts = AccountStore(this).all()
+        if (accounts.isEmpty()) {
+            root.addView(text("还没有添加账号。点击下方加号，选择 HoYoLAB、森空岛或米游社国服。", 13, false, Color.rgb(145, 155, 172)).apply {
+                setPadding(dp(4), dp(4), dp(4), dp(12))
+            })
+        } else {
+            accounts.forEach { account ->
+                val gameNames = account.games.mapNotNull {
+                    when (it) {
+                        "genshin" -> "原神"
+                        "honkai2" -> "崩坏2"
+                        "honkai3rd" -> "崩坏3"
+                        "tears_of_themis" -> "未定事件簿"
+                        "honkai_sr" -> "星穹铁道"
+                        "zzz" -> "绝区零"
+                        "arknights" -> "明日方舟"
+                        else -> null
+                    }
+                }
+                val platformLabel = AccountStore.platformLabel(account.platform)
+                val identityHint = if (account.platformUserId != null) "已识别账号 ID" else "等待登录识别"
+                row(
+                    account.name,
+                    "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
+                    identityHint
+                ) {
+                    startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id))
+                }
             }
-        }, LinearLayout.LayoutParams(-1, dp(58)))
+        }
+
+        val add = button("+") {
+            startActivity(android.content.Intent(this, AccountManagementActivity::class.java))
+        }.apply {
+            textSize = 25f
+            minHeight = dp(54)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
+        }
+        root.addView(add, LinearLayout.LayoutParams(-1, dp(54)).apply {
+            topMargin = dp(4)
+        })
+        root.addView(text("账号凭据独立于游戏选择；相同游戏可配置在不同平台账号中。", 11, false, Color.rgb(130, 141, 158)).apply {
+            setPadding(0, dp(12), 0, 0)
+        })
         setContentView(root)
     }
 
