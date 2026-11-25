@@ -7,6 +7,14 @@
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
+            android:name=".HuaweiCloudSettingsActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+        <activity
+            android:name=".AccountManagementActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+        <activity
             android:name=".SenkongdaoActivity"
             android:windowSoftInputMode="adjustResize"
             android:exported="false" />
