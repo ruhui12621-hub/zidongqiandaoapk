@@ -41,7 +41,7 @@ object AppMessageBus {
     private fun sanitize(value: String): String {
         var safe = value
         safe = Regex("(?i)(cookie|token|authorization|set-cookie|\\bAK\\b|\\bSK\\b)\\s*[:=]\\s*[^\\s,;]+")
-            .replace(safe) { match -> match.value.substringBefore(Regex("[:=]")) + ": [已隐藏]" }
+            .replace(safe) { match -> match.value.substringBefore("=").substringBefore(":") + ": [已隐藏]" }
         safe = Regex("(?i)Bearer\\s+[A-Za-z0-9._~+/-]+=*").replace(safe, "Bearer [已隐藏]")
         return safe.take(4000)
     }
