@@ -21,7 +21,7 @@ function nav(){document.querySelectorAll(".nav-item").forEach(x=>x.classList.tog
 function renderHome(){
  const sync=state.syncLabel||"等待连接华为云";
  let html=pageTitle("账号总览","每个账号独立显示今日签到结果。");
- html+='<div class="card status-card"><div class="status-icon">☁</div><div class="status-copy"><strong>云端配置</strong><span>'+esc(sync)+'</span></div><span class="pill '+(state.syncState==="synced"?"ok":state.syncState==="failed"?"bad":"warn")+'">'+(state.cloudConnected?"已连接":state.cloudCredentialsSaved?"凭据已保存":"未连接")+'</span></div>';
+ html+='<button class="card status-card status-card-link" data-page="cloud" aria-label="登录华为云"><div class="status-icon">☁</div><div class="status-copy"><strong>登录华为云</strong><span>'+esc(sync)+'</span></div><span class="pill '+(state.syncState==="synced"?"ok":state.syncState==="failed"?"bad":"warn")+'">'+(state.cloudConnected?"已连接":state.cloudCredentialsSaved?"凭据已保存":"未登录")+'</span><span class="chevron">›</span></button>';
  html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2></div>';
  if(!state.accounts||!state.accounts.length){html+='<div class="card empty"><div class="empty-icon">◎</div><strong>云端暂未读取到账号</strong><p>连接华为云后将自动读取现有函数配置。账号信息不会保存到本机。</p></div>'}
  else state.accounts.forEach(a=>{
@@ -89,7 +89,7 @@ function renderCloud(){
  html+='<div class="card"><div class="card-title">云端凭据</div><div class="field-row"><label>Region</label><select id="cloud-region"><option value="cn-east-3">华东-上海一</option><option value="cn-east-2">华东-上海二</option><option value="cn-north-4">华北-北京四</option><option value="cn-north-1">华北-北京一</option><option value="cn-south-1">华南-广州</option><option value="ap-southeast-1">中国-香港</option><option value="ap-southeast-3">亚太-新加坡</option></select></div>';
  html+='<div class="field-row"><label>AK</label><input id="cloud-ak" autocomplete="off" autocapitalize="off" placeholder="输入华为云 Access Key"></div>';
  html+='<div class="field-row"><label>SK</label><input id="cloud-sk" type="password" autocomplete="off" placeholder="输入华为云 Secret Key"></div>';
- html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><div class="cloud-login-row"><button class="primary" data-action="cloud-login">登录并连接华为云</button><div class="cloud-connection-inline"><span class="connection-dot '+(state.cloudConnected?'connected':'')+'"></span><span>连接状态：'+esc(state.cloudConnectionLabel||(state.cloudConnected?"已连接":"未连接"))+'</span></div></div></div>';
+ html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><div class="cloud-login-row"><button class="primary" data-action="cloud-login">登录华为云</button><div class="cloud-connection-inline"><span class="connection-dot '+(state.cloudConnected?'connected':'')+'"></span><span>'+(state.cloudConnected?"已连接":state.cloudConnectionLabel||"未连接")+'</span></div></div></div>';
  return html
 }
 function renderMessages(){
