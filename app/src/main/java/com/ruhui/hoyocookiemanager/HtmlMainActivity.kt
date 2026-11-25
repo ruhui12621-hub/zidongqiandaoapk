@@ -165,6 +165,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             .put("hoyolabMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
             .put("sklandMessage", AppMessageBus.current(this, AppMessageBus.SKLAND))
             .put("cloudMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
+            .put("logsText", htmlLogsText())
+            .put("logsStatus", htmlLogsStatus())
     }
 
     private inner class HtmlBridge {
