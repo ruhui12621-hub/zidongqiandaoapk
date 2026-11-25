@@ -28,6 +28,9 @@ class AccountManagementActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         render()
+        intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)?.let { id ->
+            store.find(id)?.let { edit(it) }
+        }
     }
 
     private fun render() {
