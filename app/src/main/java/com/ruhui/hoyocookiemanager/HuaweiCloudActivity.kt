@@ -312,6 +312,7 @@ open class HuaweiCloudActivity : Activity() {
 
                 if (hoyoFunction != null) {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
+                    HuaweiCloudSession.lastConfigYaml = yaml
 
                     // 国服凭据位于 account.cookie，允许为空；国际服凭据必须单独读取 games.os.cookie。
                     // 不能用全局 cookie 正则，否则会先命中国服空值并误判整个同步失败。
@@ -551,7 +552,7 @@ open class HuaweiCloudActivity : Activity() {
     @android.webkit.JavascriptInterface
     protected fun htmlDeploy(service: String, yaml: String) {
         runOnUiThread {
-            if (service == "hoyolab") updateHuaweiCloudConfig(yaml)
+            if (service == "hoyolab" && yaml.isNotBlank()) updateHuaweiCloudConfig(yaml)
             deployPackages(if (service == "skland") "skland" else "hoyolab")
         }
     }
