@@ -1,6 +1,7 @@
 package com.ruhui.hoyocookiemanager
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -19,6 +20,9 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -100,7 +104,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         content.addView(details)
 
-        addHuaweiCloudPanel(content) { yamlValue }
+        addHuaweiCloudPanel(content, { yamlValue }) { showConfigSelection() }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
@@ -372,11 +376,126 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
     private fun makeYaml(cookie: String): String {
-        val template = assets.open("config-template.yaml").bufferedReader().use { it.readText() }
+        var yaml = assets.open("config-template.yaml").bufferedReader().use { it.readText() }
         val escaped = cookie.replace("\\", "\\\\")
             .replace("\"", "\\\"")
             .replace("\n", "")
-        return template.replace("__HOYOLAB_COOKIE__", escaped)
+        yaml = yaml.replace("__HOYOLAB_COOKIE__", escaped)
+
+        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val server = prefs.getString("game_server", "os") ?: "os"
+        val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
+        yaml = yaml.replace("  cn:\n    enable: false", "  cn:\n    enable: \${server == "cn"}")
+        yaml = yaml.replace("  os:\n    enable: true", "  os:\n    enable: \${server == "os"}")
+
+        val supported = mapOf(
+            "cn" to listOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
+            "os" to listOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
+        )
+        for (regionKey in listOf("cn", "os")) {
+            val regionStart = yaml.indexOf("\n  \${regionKey}:")
+            if (regionStart < 0) continue
+            val nextRegion = if (regionKey == "cn") yaml.indexOf("\n  os:", regionStart + 1) else yaml.indexOf("\ncloud_games:", regionStart + 1)
+            val sectionEnd = if (nextRegion >= 0) nextRegion else yaml.length
+            var section = yaml.substring(regionStart, sectionEnd)
+            for (game in supported.getValue(regionKey)) {
+                val gameStart = Regex("(?m)^    \${Regex.escape(game)}:\\s*$").find(section)?.range?.first ?: continue
+                val afterStart = section.indexOf("\n", gameStart).let { if (it < 0) section.length else it + 1 }
+                val nextGame = Regex("(?m)^    [a-z0-9_]+:\\s*$").find(section, afterStart)?.range?.first
+                val gameEnd = nextGame ?: section.length
+                val block = section.substring(gameStart, gameEnd)
+                val enabled = regionKey == server && selected.contains(game)
+                val changed = Regex("(?m)(^      checkin: )(true|false)").replaceFirst(block) { match ->
+                    match.groupValues[1] + enabled.toString()
+                }
+                section = section.substring(0, gameStart) + changed + section.substring(gameEnd)
+            }
+            yaml = yaml.substring(0, regionStart) + section + yaml.substring(sectionEnd)
+        }
+        return yaml
+    }
+
+    private fun showConfigSelection() {
+        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val savedServer = prefs.getString("game_server", "os") ?: "os"
+        val savedGames = prefs.getStringSet("selected_games", setOf("zzz"))?.toMutableSet() ?: mutableSetOf("zzz")
+        val labels = linkedMapOf(
+            "genshin" to "原神",
+            "honkai2" to "崩坏2",
+            "honkai3rd" to "崩坏3",
+            "tears_of_themis" to "未定事件簿",
+            "honkai_sr" to "崩坏：星穹铁道",
+            "zzz" to "绝区零"
+        )
+        val supported = mapOf(
+            "cn" to listOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
+            "os" to listOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
+        )
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+        }
+        panel.addView(TextView(this).apply {
+            text = "服务器"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+        })
+        val radios = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        val cnRadio = RadioButton(this).apply {
+            text = "国服"; setTextColor(Color.WHITE); id = android.view.View.generateViewId()
+        }
+        val osRadio = RadioButton(this).apply {
+            text = "国际服"; setTextColor(Color.WHITE); id = android.view.View.generateViewId()
+        }
+        radios.addView(cnRadio)
+        radios.addView(osRadio)
+        radios.check(if (savedServer == "cn") cnRadio.id else osRadio.id)
+        panel.addView(radios)
+        panel.addView(TextView(this).apply {
+            text = "游戏（可多选）"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(14), 0, dp(6))
+        })
+        val checks = linkedMapOf<String, CheckBox>()
+        fun renderGames() {
+            val server = if (radios.checkedRadioButtonId == cnRadio.id) "cn" else "os"
+            if (panel.childCount > 3) panel.removeViews(3, panel.childCount - 3)
+            checks.clear()
+            supported.getValue(server).forEach { key ->
+                val check = CheckBox(this).apply {
+                    text = labels[key] ?: key
+                    setTextColor(Color.rgb(230, 234, 242))
+                    isChecked = savedGames.contains(key)
+                    setPadding(0, dp(3), 0, dp(3))
+                }
+                checks[key] = check
+                panel.addView(check)
+            }
+        }
+        renderGames()
+        radios.setOnCheckedChangeListener { _, _ -> renderGames() }
+        val scroll = ScrollView(this).apply { addView(panel) }
+        AlertDialog.Builder(this)
+            .setTitle("配置选择")
+            .setView(scroll)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("保存配置") { _, _ ->
+                val server = if (radios.checkedRadioButtonId == cnRadio.id) "cn" else "os"
+                val chosen = checks.filterValues { it.isChecked }.keys
+                if (chosen.isEmpty()) {
+                    toast("至少选择一个游戏")
+                    return@setPositiveButton
+                }
+                prefs.edit().putString("game_server", server)
+                    .putStringSet("selected_games", chosen.toSet()).apply()
+                if (cookieValue.isNotBlank()) {
+                    yamlValue = makeYaml(cookieValue)
+                    updateHuaweiCloudConfig(yamlValue)
+                }
+                toast("配置选择已保存")
+            }
+            .show()
     }
 
     private fun copy(value: String, label: String) {
