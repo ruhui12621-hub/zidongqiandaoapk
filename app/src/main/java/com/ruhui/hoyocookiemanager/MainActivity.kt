@@ -368,7 +368,7 @@ class MainActivity : HuaweiCloudActivity() {
             val platform = if (detectedGameServer == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
             val requested = activeAccountId?.let { AccountStore(this).find(it) }
             if (requested != null && requested.platform != platform) {
-                status.text = "账号平台不匹配"
+                statusText = "账号平台不匹配"
                 detailsText = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
                 updateHuaweiCloudConfig("")
                 pushLoginChrome()
@@ -380,8 +380,8 @@ class MainActivity : HuaweiCloudActivity() {
                 ?: identity?.let { uid -> store.all().firstOrNull { it.platform == platform && it.platformUserId == uid } }
                 ?: store.add(platform, platformUserId = identity)
             if (identity != null && account.platformUserId != null && account.platformUserId != identity) {
-                status.text = "检测到不同账号"
-                details.text = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
+                statusText = "检测到不同账号"
+                detailsText = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
                 updateHuaweiCloudConfig("")
                 return
             }
@@ -389,8 +389,8 @@ class MainActivity : HuaweiCloudActivity() {
                 store.all().firstOrNull { it.id != account.id && it.platform == platform && it.platformUserId == uid }
             }
             if (duplicate != null) {
-                status.text = "账号已存在"
-                details.text = "该平台 ID 已关联到「${duplicate.name}」，请直接使用已有账号，避免重复添加。"
+                statusText = "账号已存在"
+                detailsText = "该平台 ID 已关联到「${duplicate.name}」，请直接使用已有账号，避免重复添加。"
                 updateHuaweiCloudConfig("")
                 return
             }
@@ -413,15 +413,15 @@ class MainActivity : HuaweiCloudActivity() {
 
             val server = detectedGameServer!!
             yamlValue = makeYaml(found, server)
-            status.text = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
-            details.text = "已自动识别服务器，更新时只会写入对应服务器配置。"
+            statusText = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
+            detailsText = "已自动识别服务器，更新时只会写入对应服务器配置。"
             updateHuaweiCloudConfig(yamlValue)
             if (showToast) toast("已获取 Cookie，识别为${if (server == "cn") "国服" else "国际服"}")
         } else {
             yamlValue = ""
             detectedGameServer = null
-            status.text = "Cookie 状态：未获取"
-            details.text = if (found.isBlank()) {
+            statusText = "Cookie 状态：未获取"
+            detailsText = if (found.isBlank()) {
                 "请登录 HoYoLAB 或米游社，登录后自动检测 Cookie 和服务器。"
             } else {
                 "已读取到 Cookie，但无法可靠判断服务器。请确认登录的是国服或国际服账号后重试。"
@@ -450,7 +450,7 @@ class MainActivity : HuaweiCloudActivity() {
         webDiagnostics.add("$time  $message")
         while (webDiagnostics.size > 40) webDiagnostics.removeAt(0)
         if (::details.isInitialized && !browserVisible) {
-            details.text = diagnosticsSummary()
+            detailsText = diagnosticsSummary()
         }
     }
 
@@ -554,8 +554,8 @@ class MainActivity : HuaweiCloudActivity() {
             WebStorage.getInstance().deleteAllData()
             browserVisible = false
             buildHome()
-            status.text = "登录状态：已清除本地 WebView Cookie"
-            details.text = "登录会话已清除。"
+            statusText = "登录状态：已清除本地 WebView Cookie"
+            detailsText = "登录会话已清除。"
             pushLoginChrome()
             toast("已清除登录会话")
         }
