@@ -117,12 +117,18 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             todaySummary = summary
             todayQuerying = false
             val accountNames = AccountStore(this).all().associate { it.id to it.name }
-            val resultLines = statuses.entries.joinToString("\\n") { (id, status) ->
+            val resultLines = statuses.entries.joinToString("\n") { (id, status) ->
                 "${accountNames[id] ?: "账号"}：$status"
             }
-            val completed = !summary.contains("失败")
+            val downloadFailed = summary.contains("失败") || summary.contains("未配置华为云") ||
+                statuses.values.any { value ->
+                    value.contains("日志查询失败") || value.contains("函数不存在") ||
+                        value.contains("无法唯一识别") || value.contains("未启用日志") ||
+                        value.contains("未连接华为云")
+                }
+            val completed = !downloadFailed
             AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息下载${if (completed) "完成" else "失败"}",
-                "日志读取结果：$summary" + if (resultLines.isNotBlank()) "\\n账号状态：\\n$resultLines" else "\\n没有可展示的账号状态。", completed)
+                "日志读取结果：$summary" + if (resultLines.isNotBlank()) "\n账号状态：\n$resultLines" else "\n没有可展示的账号状态。", completed)
             pushState()
         }
     }
