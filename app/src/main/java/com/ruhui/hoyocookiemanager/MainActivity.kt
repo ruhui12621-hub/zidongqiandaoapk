@@ -1,14 +1,11 @@
 package com.ruhui.hoyocookiemanager
 
-import android.app.Activity
-import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Build
-import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebStorage
@@ -18,13 +15,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : HuaweiCloudActivity() {
