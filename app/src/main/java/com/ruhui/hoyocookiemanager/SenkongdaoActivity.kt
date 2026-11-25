@@ -92,7 +92,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             setTextColor(0xFF9BA7B8.toInt())
             setPadding(0, dp(10), 0, dp(8))
         })
-        root.addView(button("打开森空岛（全屏桌面模式）") { showLogin() })
+        root.addView(button("打开森空岛") { showLogin() })
         val scroll = ScrollView(this)
         val cloud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         addHuaweiCloudPanel(cloud, "skland", { "" })
