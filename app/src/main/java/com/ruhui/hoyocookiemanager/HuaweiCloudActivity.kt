@@ -313,7 +313,7 @@ open class HuaweiCloudActivity : Activity() {
                     // 仅匹配 cookie 所在行，避免 \\s 跨行匹配；空值不能静默当作同步成功。
                     val rawCookie = Regex("(?m)^[\\t ]*cookie[\\t ]*:[\\t ]*(.*?)[\\t ]*$")
                         .find(yaml)?.groupValues?.get(1).orEmpty()
-                    val cookie = rawCookie.trim().removeSurrounding("\\"").removeSurrounding("'")
+                    val cookie = rawCookie.trim().removeSurrounding("\"").removeSurrounding("'")
                     if (cookie.isBlank()) {
                         error("HoYoLAB 函数存在，但 config/config.yaml 中的 cookie 为空或未匹配到；未将其视为已成功同步。")
                     }
