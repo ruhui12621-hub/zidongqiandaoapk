@@ -821,6 +821,7 @@ class MainActivity : HuaweiCloudActivity() {
             buildHome()
             status.text = "登录状态：已清除本地 WebView Cookie"
             details.text = "登录会话已清除。"
+            pushLoginChrome()
             toast("已清除登录会话")
         }
     }
