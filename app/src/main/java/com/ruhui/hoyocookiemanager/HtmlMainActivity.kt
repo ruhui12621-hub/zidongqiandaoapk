@@ -283,11 +283,6 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun deploy(service: String) {
-            htmlDeploy(service, "")
-            pushState()
-        }
-
         @JavascriptInterface fun deployHoyoAccount(id: String, selectedGamesJson: String) {
             htmlDeployHoyoAccount(id, selectedGamesJson)
             pushState()
