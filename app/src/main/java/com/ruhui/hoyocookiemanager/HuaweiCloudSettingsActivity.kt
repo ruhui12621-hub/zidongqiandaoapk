@@ -33,7 +33,7 @@ class HuaweiCloudSettingsActivity : HuaweiCloudActivity() {
             setPadding(0, dp(12), 0, 0)
         }
         scroll.addView(content)
-        addHuaweiCloudPanel(content, "hoyolab", { HuaweiCloudSession.lastConfigYaml })
+        addHuaweiCloudPanel(content, "hoyolab", { HuaweiCloudSession.lastConfigYaml }, loginOnly = true)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
