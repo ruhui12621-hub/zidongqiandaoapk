@@ -447,7 +447,7 @@ open class HuaweiCloudActivity : Activity() {
 
     protected fun showOperationMessage(title: String, detail: String, success: Boolean?) {
         AppMessageBus.post(this, messageChannel(), title, detail, success)
-        lastResultMessage = AppMessageBus.current(this)
+        lastResultMessage = AppMessageBus.current(this, messageChannel())
         if (::resultMessage.isInitialized) {
             resultMessage.text = (when (success) { true -> "✓ "; false -> "✕ "; else -> "… " }) + lastResultMessage
             resultMessage.setTextColor(when (success) {
