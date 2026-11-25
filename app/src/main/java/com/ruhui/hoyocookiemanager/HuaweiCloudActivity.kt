@@ -39,7 +39,7 @@ open class HuaweiCloudActivity : Activity() {
     private var projectId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
-    private lateinit var cookieStatus: TextView
+    private var panelService = "hoyolab"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +47,7 @@ open class HuaweiCloudActivity : Activity() {
 
     protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}) {
         this.configProvider = configProvider
+        this.panelService = service
         configYaml = HuaweiCloudSession.lastConfigYaml
         val content = parent
         content.addView(TextView(this).apply {
