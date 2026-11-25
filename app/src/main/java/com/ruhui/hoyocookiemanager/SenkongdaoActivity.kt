@@ -42,8 +42,22 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
-        AppMessageBus.post(this, "森空岛页面", "独立 Activity 已成功创建并显示。", true)
-        buildHome()
+        AppMessageBus.post(this, "森空岛页面", "Activity 已创建，正在初始化可见界面…", null)
+        try {
+            buildHome()
+            AppMessageBus.post(this, "森空岛页面", "森空岛主页布局已初始化，正在显示界面。", true)
+        } catch (e: Exception) {
+            val detail = "主页初始化失败：${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
+            AppMessageBus.post(this, "森空岛页面初始化失败", detail, false)
+            android.widget.Toast.makeText(this, "森空岛页面初始化失败，详情已写入消息栏", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!loginMode) {
+            AppMessageBus.post(this, "森空岛页面", "森空岛主页已进入前台。", true)
+        }
     }
 
     private fun desktop(view: WebView, multi: Boolean) {
@@ -73,6 +87,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             setPadding(dp(16), dp(10), dp(16), dp(16))
             setBackgroundColor(Color.rgb(15, 17, 23))
         }
+        // 先挂载最小可见根布局，避免后续华为云面板初始化异常时整个 Activity 看起来毫无反应。
+        setContentView(root)
         root.addView(TextView(this).apply {
             text = "森空岛"
             textSize = 21f
@@ -104,10 +120,21 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         })
         val scroll = ScrollView(this)
         val cloud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        addHuaweiCloudPanel(cloud, "skland", { "" })
+        try {
+            addHuaweiCloudPanel(cloud, "skland", { "" })
+            AppMessageBus.post(this, "森空岛页面", "主页与华为云面板均已初始化。", true)
+        } catch (e: Exception) {
+            val detail = "华为云面板初始化失败：${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
+            AppMessageBus.post(this, "森空岛页面初始化失败", detail, false)
+            cloud.addView(TextView(this).apply {
+                text = detail
+                textSize = 13f
+                setTextColor(0xFFFF8A80.toInt())
+                setPadding(0, dp(12), 0, dp(12))
+            })
+        }
         scroll.addView(cloud)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
     }
 
     private fun showLogin() {
