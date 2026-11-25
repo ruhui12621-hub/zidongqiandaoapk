@@ -38,6 +38,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var detectedGameServer: String? = null
     private var activeAccountId: String? = null
     private var activePlatform: String? = null
+    private var returnToAccountDetail = false
     private var browserVisible = false
     private var showingLauncher = true
     private var showingBrowser = false
@@ -64,6 +65,7 @@ class MainActivity : HuaweiCloudActivity() {
         migrateLegacyAccounts()
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
+        returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
         buildLauncher()
         val cloudCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
         if (cloudCredentials != null) {
@@ -401,7 +403,11 @@ class MainActivity : HuaweiCloudActivity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (showingBrowser && ::webView.isInitialized) {
-            if (webView.canGoBack()) webView.goBack() else buildHome()
+            if (webView.canGoBack()) webView.goBack()
+            else if (returnToAccountDetail) finish()
+            else buildHome()
+        } else if (returnToAccountDetail) {
+            finish()
         } else if (!showingLauncher) {
             buildLauncher()
         } else {
@@ -502,8 +508,8 @@ class MainActivity : HuaweiCloudActivity() {
         val back = Button(this).apply {
             text = "返回"
             setOnClickListener {
-                buildHome()
                 refreshFromWebView()
+                if (returnToAccountDetail) finish() else buildHome()
             }
         }
         bar.addView(back)
