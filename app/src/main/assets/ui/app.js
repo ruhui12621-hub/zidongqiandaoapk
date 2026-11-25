@@ -3,7 +3,7 @@
 const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
-let page="home",selectedId=null,messageTab="hoyolab",cloudDraft={region:"cn-east-3",ak:"",sk:""};
+let page="home",selectedId=null,messageTab="hoyolab",cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const account=()=>state.accounts.find(x=>x.id===selectedId);
 const platformInitial=p=>p==="skland"?"森":p==="miyoushe_cn"?"米":"H";
@@ -70,6 +70,7 @@ function render(){
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
  if(page==="cloud"){
+  if(!cloudVaultLoaded){try{const saved=native("getSavedCloudCredentials");if(saved){const pair=JSON.parse(saved);cloudDraft.ak=pair.ak||"";cloudDraft.sk=pair.sk||"";}cloudVaultLoaded=true;}catch(e){}}
   const r=$("#cloud-region");if(r)r.value=cloudDraft.region||state.region||"cn-east-3";
   const ak=$("#cloud-ak");if(ak)ak.value=cloudDraft.ak;
   const sk=$("#cloud-sk");if(sk)sk.value=cloudDraft.sk;
