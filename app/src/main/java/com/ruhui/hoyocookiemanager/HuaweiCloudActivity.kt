@@ -124,14 +124,8 @@ open class HuaweiCloudActivity : Activity() {
             setOnClickListener { deployPackages(service) }
         }
         content.addView(updateButton)
-        content.addView(TextView(this).apply {
-            text = "操作消息"
-            textSize = 19f
-            setTextColor(0xFFECEFF5.toInt())
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, dp(22), 0, dp(6))
-        })
         lastResultMessage = AppMessageBus.current(this, messageChannel())
+            .takeIf { it.isNotBlank() && it != "暂无操作记录" } ?: "暂无操作消息"
         resultMessage = TextView(this).apply {
             text = lastResultMessage
             textSize = 13f
@@ -150,9 +144,9 @@ open class HuaweiCloudActivity : Activity() {
         copyResultButton = Button(this).apply {
             text = "复制消息内容"
             isAllCaps = false
-            isEnabled = lastResultMessage != "暂无操作记录"
+            isEnabled = lastResultMessage != "暂无操作消息"
             setOnClickListener {
-                if (lastResultMessage.isNotBlank() && lastResultMessage != "暂无操作记录") {
+                if (lastResultMessage.isNotBlank() && lastResultMessage != "暂无操作消息") {
                     val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("操作消息", lastResultMessage))
                     Toast.makeText(this@HuaweiCloudActivity, "消息内容已复制", Toast.LENGTH_SHORT).show()
@@ -455,7 +449,7 @@ open class HuaweiCloudActivity : Activity() {
         AppMessageBus.post(this, messageChannel(), title, detail, success)
         lastResultMessage = AppMessageBus.current(this, messageChannel())
         if (::resultMessage.isInitialized) {
-            resultMessage.text = (when (success) { true -> "✓ "; false -> "✕ "; else -> "… " }) + lastResultMessage
+            resultMessage.text = lastResultMessage
             resultMessage.setTextColor(when (success) {
                 true -> 0xFF75D69C.toInt()
                 false -> 0xFFFF8A80.toInt()
