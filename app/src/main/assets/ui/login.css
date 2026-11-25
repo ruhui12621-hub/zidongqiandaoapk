@@ -18,8 +18,7 @@ header b,.brand b{font-size:13px;color:#f4e7ca;letter-spacing:.2px}
 .cookie-line strong.bad{color:var(--red)}
 .status p,.message{display:none!important}
 .bottom-actions,.actions{display:flex;align-items:center;gap:7px;margin-top:auto;padding:0}
-.bottom-actions button,.actions button{flex:0 0 auto;min-width:0;height:44px;padding:0 14px;border:1px solid #57452b;border-radius:9px;background:#171511;color:#e1d1af;font-size:13px;font-weight:650}
-.bottom-actions .back,.actions .secondary{flex:1;min-width:0;height:44px;font-size:14px;border-color:#8f7040;background:linear-gradient(135deg,#dfc17e,#b18b50);color:#1b140a}
-.bottom-actions .refresh,.actions .primary{width:44px;height:44px;padding:0;border-color:#57452b;background:#171511;color:#e1d1af;font-size:21px;line-height:1}
+.bottom-actions button,.actions button{flex:0 0 auto;min-width:0;height:44px;padding:0 14px;border:1px solid #8f7040;border-radius:9px;background:linear-gradient(135deg,#dfc17e,#b18b50);color:#1b140a;font-size:14px;font-weight:650}
+.bottom-actions .back,.actions .secondary{flex:1;min-width:0;height:44px;font-size:14px}
 .bottom-actions .clear{width:36px;height:36px;padding:0;border-color:#342b1e;background:transparent;color:#a99b82;font-size:10px;font-weight:500}
 .hidden{display:none!important}
