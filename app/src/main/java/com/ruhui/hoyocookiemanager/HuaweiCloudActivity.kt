@@ -9,6 +9,8 @@ import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLDecoder
+import com.obs.services.ObsClient
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -269,34 +271,7 @@ open class HuaweiCloudActivity : Activity() {
                         if (link.isBlank()) error("$label 函数代码既没有内联 file，也没有下载 link；不能判断配置为空")
                         val downloadUrl = runCatching { URL(link) }.getOrElse { error("$label 函数返回了无效的代码下载地址") }
                         if (downloadUrl.protocol != "https") error("$label 函数代码下载地址不是 HTTPS，已拒绝下载")
-                        val connection = (downloadUrl.openConnection() as HttpURLConnection).apply {
-                            requestMethod = "GET"
-                            connectTimeout = 20000
-                            readTimeout = 60000
-                            instanceFollowRedirects = true
-                            setRequestProperty("Accept", "application/zip, application/octet-stream, */*")
-                        }
-                        try {
-                            val status = connection.responseCode
-                            if (status !in 200..299) {
-                                val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
-                                error("$label 函数代码下载失败（HTTP " + status + "）：" + detail.take(500))
-                            }
-                            if (connection.contentLengthLong > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
-                            connection.inputStream.use { input ->
-                                val output = ByteArrayOutputStream()
-                                val buffer = ByteArray(16384)
-                                var total = 0L
-                                while (true) {
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    total += count
-                                    if (total > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
-                                    output.write(buffer, 0, count)
-                                }
-                                output.toByteArray()
-                            }
-                        } finally { connection.disconnect() }
+                        downloadObsObject(downloadUrl, authAk, authSk, label)
                     }
                     if (!isZip(bytes)) error("$label 函数返回的代码包不是有效 ZIP")
                     return bytes
@@ -395,6 +370,52 @@ open class HuaweiCloudActivity : Activity() {
         HuaweiCloudSession.lastConfigYaml = value
         if (::updateButton.isInitialized) {
             updateButton.isEnabled = value.isNotBlank() && HuaweiCloudSession.isLoggedIn()
+        }
+    }
+
+    /**
+     * FunctionGraph returns an OBS object URL for ZIP code packages. The URL is not
+     * necessarily public; download it with the logged-in AK/SK through Huawei's OBS SDK.
+     */
+    private fun downloadObsObject(downloadUrl: URL, ak: String, sk: String, label: String): ByteArray {
+        if (ak.isBlank() || sk.isBlank()) error("$label OBS 下载缺少华为云 AK/SK")
+        val match = Regex("^([a-z0-9-]+)\\.(obs\\..+)$", RegexOption.IGNORE_CASE)
+            .matchEntire(downloadUrl.host)
+            ?: error("$label 无法识别 OBS 下载地址：${downloadUrl.host}")
+        val bucket = match.groupValues[1]
+        val endpoint = "https://" + match.groupValues[2]
+        val encodedPath = downloadUrl.path.removePrefix("/")
+        if (encodedPath.isBlank()) error("$label OBS 对象路径为空")
+        val key = try {
+            URLDecoder.decode(encodedPath.replace("+", "%2B"), "UTF-8")
+        } catch (e: Exception) {
+            error("$label OBS 对象路径编码无效：${e.message}")
+        }
+        val client = ObsClient(ak, sk, endpoint)
+        try {
+            val objectResult = client.getObject(bucket, key)
+                ?: error("$label OBS 未返回对象")
+            val input = objectResult.objectContent ?: error("$label OBS 对象内容为空")
+            input.use { stream ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(16384)
+                var total = 0L
+                while (true) {
+                    val count = stream.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
+                    output.write(buffer, 0, count)
+                }
+                val bytes = output.toByteArray()
+                if (!isZip(bytes)) error("$label OBS 下载内容不是有效 ZIP")
+                return bytes
+            }
+        } catch (e: Exception) {
+            val detail = e.message?.take(400).orEmpty()
+            throw IllegalStateException("$label OBS 鉴权下载失败：$detail", e)
+        } finally {
+            runCatching { client.close() }
         }
     }
 
