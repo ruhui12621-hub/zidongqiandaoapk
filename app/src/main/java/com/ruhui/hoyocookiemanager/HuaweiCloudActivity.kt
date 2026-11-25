@@ -387,8 +387,8 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    protected fun htmlDeployHoyoAccount(accountId: String) {
-        runOnUiThread { deployHoyolabAccount(accountId) }
+    protected fun htmlDeployHoyoAccount(accountId: String, selectedGamesJson: String) {
+        runOnUiThread { deployHoyolabAccount(accountId, selectedGamesJson) }
     }
 
     @android.webkit.JavascriptInterface
@@ -903,7 +903,7 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun deployHoyolabAccount(accountId: String) {
+    private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
         val title = "HoYoLAB 更新"
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
             showOperationMessage("$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
@@ -936,7 +936,12 @@ open class HuaweiCloudActivity : Activity() {
                 val cloudYaml = HuaweiCloudSession.lastConfigYaml
                 val baseYaml = if (cloudYaml.isNotBlank()) cloudYaml
                     else readZipEntryText(packaged, "config/config.yaml")
-                val mergedYaml = replaceCloudCookie(baseYaml, pendingCookie, pendingServer)
+                val mergedCookieYaml = replaceCloudCookie(baseYaml, pendingCookie, pendingServer)
+                val selectedGames = try {
+                    val array = org.json.JSONArray(selectedGamesJson)
+                    (0 until array.length()).map { array.getString(it) }.toSet()
+                } catch (e: Exception) { error("游戏选择数据无效，已停止上传。") }
+                val mergedYaml = replaceCloudGames(mergedCookieYaml, selectedGames, pendingServer)
                 val archive = replaceZip(packaged, "config/config.yaml", mergedYaml)
                 val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive)
                 val function = waitForFunction(functionName)
@@ -1022,6 +1027,64 @@ open class HuaweiCloudActivity : Activity() {
             .replace("\"", "\\\"")
             .replace("\r", "").replace("\n", "")
         lines[index] = " ".repeat(indent) + "cookie: \"$escaped\"" + lineEnding
+        return lines.joinToString("\n")
+    }
+
+    /** Update only each supported game's checkin flag inside games.cn or games.os. */
+    private fun replaceCloudGames(source: String, selected: Set<String>, server: String): String {
+        val supported = if (server == "cn") {
+            linkedSetOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
+        } else {
+            linkedSetOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
+        }
+        if (!supported.containsAll(selected)) error("游戏选择中包含当前服务器不支持的项目，已停止上传。")
+        val lines = source.split("\n").toMutableList()
+        var inGames = false
+        var inServer = false
+        var currentGame: String? = null
+        val matches = mutableMapOf<String, MutableList<Int>>()
+        supported.forEach { matches[it] = mutableListOf() }
+        for (i in lines.indices) {
+            val line = lines[i].removeSuffix("\r")
+            val trimmed = line.trim()
+            val indent = line.takeWhile { it == ' ' }.length
+            if (indent == 0) {
+                inGames = trimmed == "games:"
+                inServer = false
+                currentGame = null
+                continue
+            }
+            if (!inGames) continue
+            if (indent == 2) {
+                inServer = trimmed == "$server:"
+                currentGame = null
+                continue
+            }
+            if (!inServer) continue
+            if (indent == 4 && trimmed.endsWith(":")) {
+                currentGame = trimmed.removeSuffix(":").takeIf { it in supported }
+                continue
+            }
+            if (indent == 6 && trimmed.startsWith("checkin:")) {
+                val game = currentGame ?: continue
+                matches[game]?.add(i)
+            }
+        }
+        val missing = supported.filter { matches[it]?.size != 1 }
+        if (missing.isNotEmpty()) {
+            error("云端配置中无法唯一定位游戏签到选项：" + missing.joinToString("、") +
+                "。为避免改动错误配置，已停止上传。")
+        }
+        for (game in supported) {
+            val index = matches.getValue(game).single()
+            val old = lines[index]
+            val ending = if (old.endsWith("\r")) "\r" else ""
+            val indent = old.takeWhile { it == ' ' }.length
+            val comment = old.removeSuffix("\r").substringAfter("checkin:", "").trim()
+                .takeIf { it.startsWith("#") }.orEmpty()
+            val suffix = if (comment.isNotEmpty()) " $comment" else ""
+            lines[index] = " ".repeat(indent) + "checkin: " + (game in selected).toString() + suffix + ending
+        }
         return lines.joinToString("\n")
     }
 
