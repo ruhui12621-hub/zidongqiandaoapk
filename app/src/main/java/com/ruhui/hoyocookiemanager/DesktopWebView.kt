@@ -90,6 +90,21 @@ object DesktopWebView {
         view.isFocusable = true
         view.isFocusableInTouchMode = true
 
+        // Keep horizontal drags inside WebView when hosted by a scrolling parent.
+        // Returning false preserves WebView's own pinch-zoom and page gestures.
+        view.setOnTouchListener { touched, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN,
+                android.view.MotionEvent.ACTION_MOVE,
+                android.view.MotionEvent.ACTION_POINTER_DOWN ->
+                    touched.parent?.requestDisallowInterceptTouchEvent(true)
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL ->
+                    touched.parent?.requestDisallowInterceptTouchEvent(false)
+            }
+            false
+        }
+
         val cookies = CookieManager.getInstance()
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(view, true)
