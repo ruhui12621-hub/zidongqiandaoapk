@@ -161,7 +161,12 @@ class MainActivity : HuaweiCloudActivity() {
                     }
                 }
                 val platformLabel = AccountStore.platformLabel(account.platform)
-                val identityHint = if (account.platformUserId != null) "已识别账号 ID" else "等待登录识别"
+                val identityHint = when {
+                account.credentialReady && account.platformUserId != null -> "凭据已保存 · ID 已识别"
+                account.credentialReady -> "凭据已保存 · 本地 ID"
+                account.platformUserId != null -> "ID 已识别 · 待登录"
+                else -> "等待登录"
+            }
                 row(
                     account.name,
                     "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
@@ -470,6 +475,15 @@ class MainActivity : HuaweiCloudActivity() {
             if (identity != null && account.platformUserId != null && account.platformUserId != identity) {
                 status.text = "检测到不同账号"
                 details.text = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
+                updateHuaweiCloudConfig("")
+                return
+            }
+            val duplicate = identity?.let { uid ->
+                store.all().firstOrNull { it.id != account.id && it.platform == platform && it.platformUserId == uid }
+            }
+            if (duplicate != null) {
+                status.text = "账号已存在"
+                details.text = "该平台 ID 已关联到「${duplicate.name}」，请直接使用已有账号，避免重复添加。"
                 updateHuaweiCloudConfig("")
                 return
             }
