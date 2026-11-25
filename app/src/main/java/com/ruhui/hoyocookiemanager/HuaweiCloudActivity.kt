@@ -259,9 +259,45 @@ open class HuaweiCloudActivity : Activity() {
                     )
                     if (!code.optString("code_type").equals("zip", true))
                         error("$label 函数不是 ZIP 代码类型，无法安全读取")
-                    val encoded = code.optJSONObject("func_code")?.optString("file").orEmpty()
-                    if (encoded.isBlank()) error("$label 函数代码未以内联方式返回；未将其视为无配置")
-                    val bytes = Base64.decode(encoded, Base64.DEFAULT)
+                    val funcCode = code.optJSONObject("func_code")
+                    val encoded = funcCode?.optString("file").orEmpty().trim()
+                    val link = funcCode?.optString("link").orEmpty().trim()
+                    val bytes = if (encoded.isNotBlank()) {
+                        Base64.decode(encoded, Base64.DEFAULT)
+                    } else {
+                        // FunctionGraph may return an empty file and a temporary OBS download URL in link.
+                        if (link.isBlank()) error("$label 函数代码既没有内联 file，也没有下载 link；不能判断配置为空")
+                        val downloadUrl = runCatching { URL(link) }.getOrElse { error("$label 函数返回了无效的代码下载地址") }
+                        if (downloadUrl.protocol != "https") error("$label 函数代码下载地址不是 HTTPS，已拒绝下载")
+                        val connection = (downloadUrl.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "GET"
+                            connectTimeout = 20000
+                            readTimeout = 60000
+                            instanceFollowRedirects = true
+                            setRequestProperty("Accept", "application/zip, application/octet-stream, */*")
+                        }
+                        try {
+                            val status = connection.responseCode
+                            if (status !in 200..299) {
+                                val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
+                                error("$label 函数代码下载失败（HTTP " + status + "）：" + detail.take(500))
+                            }
+                            if (connection.contentLengthLong > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
+                            connection.inputStream.use { input ->
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(16384)
+                                var total = 0L
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    if (total > 100L * 1024L * 1024L) error("$label 函数代码包超过 100 MB")
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toByteArray()
+                            }
+                        } finally { connection.disconnect() }
+                    }
                     if (!isZip(bytes)) error("$label 函数返回的代码包不是有效 ZIP")
                     return bytes
                 }
