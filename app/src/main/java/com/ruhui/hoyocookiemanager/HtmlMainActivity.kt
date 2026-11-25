@@ -105,7 +105,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         if (todayQuerying) return
         if (!force && todayStatuses.isNotEmpty()) return
         val sync = CloudAccountSyncState.get(this)
-        if (sync != CloudAccountSyncState.SYNCED && sync != CloudAccountSyncState.EMPTY_CONFIRMED) return
+        if (sync != CloudAccountSyncState.SYNCED && sync != CloudAccountSyncState.EMPTY_CONFIRMED && !HuaweiCloudSession.isLoggedIn()) return
         todayQuerying = true
         todaySummary = "正在读取今天的 FunctionGraph 运行日志…"
         pushState()
