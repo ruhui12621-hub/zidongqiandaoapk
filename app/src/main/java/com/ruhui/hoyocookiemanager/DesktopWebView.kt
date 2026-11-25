@@ -61,51 +61,6 @@ object DesktopWebView {
         view.evaluateJavascript(script, null)
     }
 
-    /**
-     * Skland's desktop header can exceed the WebView viewport while clipping its
-     * own navigation row. Make the header/navigation row horizontally scrollable.
-     */
-    fun enableSklandHeaderScroll(view: WebView) {
-        val script = """
-            (function() {
-              function fixHeader() {
-                var viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-                var matches = Array.from(document.querySelectorAll('body *')).filter(function(el) {
-                  if (!el.children.length && /首页|版区/.test(el.textContent || '')) return true;
-                  return false;
-                });
-                matches.forEach(function(label) {
-                  var node = label;
-                  for (var depth = 0; node && depth < 6; depth++, node = node.parentElement) {
-                    if (!node || node === document.body || node === document.documentElement) continue;
-                    var rect = node.getBoundingClientRect();
-                    var tooWide = rect.width > viewportWidth + 8;
-                    var hasOverflow = node.scrollWidth > node.clientWidth + 8;
-                    if (tooWide || hasOverflow) {
-                      node.style.setProperty('max-width', '100vw', 'important');
-                      node.style.setProperty('width', '100vw', 'important');
-                      node.style.setProperty('overflow-x', 'auto', 'important');
-                      node.style.setProperty('overscroll-behavior-x', 'contain', 'important');
-                      node.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
-                      node.style.setProperty('touch-action', 'pan-x pan-y', 'important');
-                      node.style.setProperty('scrollbar-width', 'none', 'important');
-                      break;
-                    }
-                  }
-                });
-              }
-              fixHeader();
-              if (!window.__sklandHeaderScrollObserver && document.documentElement) {
-                window.__sklandHeaderScrollObserver = new MutationObserver(fixHeader);
-                window.__sklandHeaderScrollObserver.observe(document.documentElement, {
-                  childList: true, subtree: true
-                });
-              }
-            })();
-        """.trimIndent()
-        view.evaluateJavascript(script, null)
-    }
-
     fun configure(
         view: WebView,
         multiWindow: Boolean = true,
