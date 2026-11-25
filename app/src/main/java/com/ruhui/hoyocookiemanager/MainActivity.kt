@@ -36,6 +36,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var cookieValue = ""
     private var yamlValue = ""
     private var detectedGameServer: String? = null
+    private var activeAccountId: String? = null
     private var browserVisible = false
     private var showingLauncher = true
     private var showingBrowser = false
@@ -54,7 +55,13 @@ class MainActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
+        activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         buildLauncher()
+        val requestedPlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
+        if (requestedPlatform == AccountStore.HOYOLAB || requestedPlatform == AccountStore.MIYOUSHE_CN) {
+            buildHome()
+            showBrowser()
+        }
     }
 
     override fun onDestroy() {
@@ -445,6 +452,31 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
         if (detectedGameServer != null) {
+            val platform = if (detectedGameServer == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
+            val requested = activeAccountId?.let { AccountStore(this).find(it) }
+            if (requested != null && requested.platform != platform) {
+                status.text = "账号平台不匹配"
+                details.text = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
+                updateHuaweiCloudConfig("")
+                return
+            }
+            val identity = HoYoAccountIdentity.fromCookie(found, platform)
+            val store = AccountStore(this)
+            var account = requested
+                ?: identity?.let { uid -> store.all().firstOrNull { it.platform == platform && it.platformUserId == uid } }
+                ?: store.add(platform, platformUserId = identity)
+            if (identity != null && account.platformUserId != null && account.platformUserId != identity) {
+                status.text = "检测到不同账号"
+                details.text = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
+                updateHuaweiCloudConfig("")
+                return
+            }
+            account = account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true)
+            store.update(account)
+            activeAccountId = account.id
+            getSharedPreferences("multi_account_registry", MODE_PRIVATE).edit()
+                .putString("active_${platform}", account.id).apply()
+
             val server = detectedGameServer!!
             yamlValue = makeYaml(found, server)
             status.text = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
@@ -519,7 +551,13 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
+        val platform = if (server == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
+        val registry = AccountStore(this)
+        val selectedAccountId = activeAccountId
+            ?: getSharedPreferences("multi_account_registry", Context.MODE_PRIVATE).getString("active_${platform}", null)
+        val selected = selectedAccountId?.let { registry.find(it)?.games }
+            ?: prefs.getStringSet("selected_games", setOf("zzz"))
+            ?: setOf("zzz")
         val gamesStart = yaml.indexOf("games:\n")
         val cloudStart = yaml.indexOf("\ncloud_games:", gamesStart + 1)
         if (gamesStart >= 0 && cloudStart > gamesStart) {
