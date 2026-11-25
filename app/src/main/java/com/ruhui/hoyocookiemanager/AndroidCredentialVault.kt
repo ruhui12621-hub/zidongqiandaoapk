@@ -83,7 +83,7 @@ class AndroidCredentialVault(private val activity: android.content.Context) {
             decode(j.getString("data"))
         )
         fromPassword.fill(0); fromSystem.fill(0)
-        try {
+        return try {
             val credentials = JSONObject(String(clear, Charsets.UTF_8))
             credentials.getString("ak") to credentials.getString("sk")
         } finally { clear.fill(0) }
