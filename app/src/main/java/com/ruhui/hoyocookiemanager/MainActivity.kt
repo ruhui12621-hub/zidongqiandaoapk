@@ -244,7 +244,7 @@ class MainActivity : HuaweiCloudActivity() {
                     "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
                     identityHint
                 ) {
-                    if (CloudAccountSyncState.get(this) != CloudAccountSyncState.EMPTY_CONFIRMED) {
+                    if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                         Toast.makeText(this, "请先完成云端配置同步，避免使用过期的本地账号。", Toast.LENGTH_LONG).show()
                         return@row
                     }
@@ -255,7 +255,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
 
         val canChangeAccounts = CloudAccountSyncState.get(this) == CloudAccountSyncState.EMPTY_CONFIRMED
-        val add = button(if (canChangeAccounts) "+ 添加账号" else "等待云端配置同步") {
+        val add = button(if (canChangeAccounts) "+ 添加账号" else "云端账号新增尚未开放") {
             if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                 Toast.makeText(this, "必须先成功读取华为云配置，才能添加账号。", Toast.LENGTH_LONG).show()
                 return@button
