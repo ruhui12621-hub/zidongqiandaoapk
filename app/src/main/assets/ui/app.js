@@ -3,7 +3,7 @@
 const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
-let page="home",selectedId=null,messageTab="hoyolab",cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
+let page="home",selectedId=null,cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
 const gameSelections={};
 const hoyoGameOptions={cn:[["genshin","原神"],["honkai2","崩坏2"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]],os:[["genshin","原神"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]]};
 function selectedHoyoGames(a){if(!gameSelections[a.id])gameSelections[a.id]=new Set((a.games||[]).map(g=>g.key));return gameSelections[a.id]}
@@ -78,10 +78,6 @@ function renderDetail(a){
   html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
   html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
  }
- if(a.platform==="skland"){
-  const sklandMessage=state.sklandMessage||"暂无操作记录。点击上方“打开森空岛登录页面”后，加载状态和错误信息会显示在这里。";
-  html+='<div class="skland-error-wrap"><div class="skland-error-text">'+esc(sklandMessage)+'</div><button class="skland-copy-button" data-action="copy-skland-error">复制消息</button></div>';
- }
  return html
 }
 function renderCloud(){
@@ -93,8 +89,11 @@ function renderCloud(){
  return html
 }
 function renderMessages(){
- const content=messageTab==="skland"?(state.sklandMessage||"暂无操作记录"):(state.hoyolabMessage||"暂无操作记录");
- return pageTitle("运行消息","不同服务的消息相互独立。")+'<div class="tabs"><button class="tab '+(messageTab==="hoyolab"?"active":"")+'" data-message="hoyolab">HoYoLAB</button><button class="tab '+(messageTab==="skland"?"active":"")+'" data-message="skland">森空岛</button></div><div class="message-box">'+esc(content)+'</div><button class="secondary" data-action="message-refresh">刷新消息</button>'
+ const content=state.allMessages||"暂无运行消息";
+ return pageTitle("全部运行消息","集中显示本程序各服务的操作记录、运行结果与错误信息。")+
+  '<div class="message-box all-message-box">'+esc(content)+'</div>'+
+  '<button class="secondary" data-action="message-refresh">刷新消息</button>'+
+  '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
  nav();
@@ -116,7 +115,6 @@ function showModal(){
 document.addEventListener("click",e=>{
  const accountButton=e.target.closest("[data-account]");if(accountButton){selectedId=accountButton.dataset.account;page="home";render();return}
  const platform=e.target.closest("[data-platform]");if(platform){const p=platform.dataset.platform;$("#modal-root").innerHTML="";native("addAccount",p);return}
- const msg=e.target.closest("[data-message]");if(msg){messageTab=msg.dataset.message;render();return}
  const pageButton=e.target.closest("[data-page]");if(pageButton){selectedId=null;page=pageButton.dataset.page;render();return}
  const action=e.target.closest("[data-action]")?.dataset.action;if(!action)return;
  
@@ -136,13 +134,13 @@ document.addEventListener("click",e=>{
  if(action==="open-game-picker"){showGamePicker()}
  if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id,JSON.stringify(Array.from(selectedHoyoGames(a))));toast("正在合并云端配置并上传")}
  if(action==="skland-login"){const a=account();if(a)native("openSklandLogin",a.id)}
- if(action==="copy-skland-error"){native("copyText",state.sklandMessage||"暂无操作记录")}
  if(action==="cloud-login"){
   cloudDraft.region=$("#cloud-region").value;cloudDraft.ak=$("#cloud-ak").value;cloudDraft.sk=$("#cloud-sk").value;
   native("cloudLogin",cloudDraft.region,cloudDraft.ak,cloudDraft.sk);toast("正在验证华为云凭据")
  }
  
  if(action==="message-refresh"){readState();toast("消息已刷新")}
+ if(action==="copy-all-messages"){native("copyText",state.allMessages||"暂无运行消息");toast("全部运行消息已复制")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
 function showGamePicker(){
