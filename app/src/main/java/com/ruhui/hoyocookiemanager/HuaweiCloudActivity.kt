@@ -370,32 +370,13 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    /**
-     * Initializes the existing cloud operations as a hidden backend for the HTML UI.
-     * Native widgets are never displayed; HTML owns all visible controls.
-     */
-    protected fun prepareHtmlCloudBackend(host: android.widget.FrameLayout) {
-        val hidden = LinearLayout(this).apply {
-            visibility = android.view.View.GONE
-            orientation = LinearLayout.VERTICAL
-        }
-        host.addView(hidden, android.widget.FrameLayout.LayoutParams(1, 1))
-        addHuaweiCloudPanel(
-            hidden,
-            "hoyolab",
-            { HuaweiCloudSession.lastConfigYaml },
-            loginOnly = false
-        )
-    }
-
     @android.webkit.JavascriptInterface
     protected fun htmlCloudLogin(regionCode: String, accessKey: String, secretKey: String) {
         runOnUiThread {
-            val index = regionCodes.indexOf(regionCode).takeIf { it >= 0 } ?: 0
-            region.setSelection(index)
-            ak.setText(accessKey)
-            sk.setText(secretKey)
-            login()
+            regionValue = regionCodes.firstOrNull { it == regionCode } ?: "cn-east-3"
+            accessKeyValue = accessKey
+            secretKeyValue = secretKey
+            login(regionValue, accessKeyValue, secretKeyValue)
         }
     }
 
@@ -412,22 +393,14 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { fetchFunctionLogs() }
     }
 
-    protected fun htmlLogsText(): String =
-        if (::logsOutput.isInitialized) logsOutput.text?.toString().orEmpty() else "暂无日志"
-
-    protected fun htmlLogsStatus(): String =
-        if (::logsStatus.isInitialized) logsStatus.text?.toString().orEmpty() else "尚未读取日志"
-
-    protected fun htmlCloudBackendReady(): Boolean =
-        ::region.isInitialized && ::ak.isInitialized && ::sk.isInitialized &&
-            ::loginButton.isInitialized && ::updateButton.isInitialized && ::logsButton.isInitialized
+    protected fun htmlLogsText(): String = logsOutputValue
+    protected fun htmlLogsStatus(): String = logsStatusValue
+    protected fun htmlCloudBackendReady(): Boolean = true
 
     protected fun updateHuaweiCloudConfig(value: String) {
         configYaml = value
         HuaweiCloudSession.lastConfigYaml = value
-        if (::updateButton.isInitialized) {
-            updateButton.isEnabled = value.isNotBlank() && HuaweiCloudSession.isLoggedIn()
-        }
+
     }
 
     /**
@@ -478,29 +451,10 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private fun field(parent: LinearLayout, label: String, value: String, secret: Boolean = false): EditText {
-        parent.addView(TextView(this).apply {
-            text = label
-            setTextColor(0xFFDCE2EC.toInt())
-            setPadding(0, dp(10), 0, dp(4))
-        })
-        return EditText(this).also {
-            it.setSingleLine(true)
-            it.setText(value)
-            it.setTextColor(0xFFECEFF5.toInt())
-            it.setHintTextColor(0xFF7F899A.toInt())
-            it.setHint(if (secret) "输入 SK" else "请输入 $label")
-            it.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF65718A.toInt())
-            if (secret) it.inputType = 129
-            parent.addView(it, LinearLayout.LayoutParams(-1, -2))
-        }
-    }
-
-
-    private fun login() {
-        val r = regionCodes.getOrElse(region.selectedItemPosition) { "cn-east-3" }
-        val a = ak.text.toString().trim()
-        val s = sk.text.toString()
+    private fun login(regionInput: String = regionValue, accessKeyInput: String = accessKeyValue, secretKeyInput: String = secretKeyValue) {
+        val r = regionCodes.firstOrNull { it == regionInput } ?: "cn-east-3"
+        val a = accessKeyInput.trim()
+        val s = secretKeyInput
         if (r.isBlank() || a.isBlank() || s.isBlank()) {
             val detail = "请填写 Region、AK 和 SK。"
             setCloudConnectionState("尚未连接")
@@ -511,7 +465,6 @@ open class HuaweiCloudActivity : Activity() {
         HuaweiCloudSession.region = r
         getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", r).apply()
         setCloudConnectionState("连接中")
-        if (::updateButton.isInitialized) updateButton.isEnabled = false
         showOperationMessage("华为云登录", "正在验证 AK/SK 并查询项目…", null)
         worker.execute {
             try {
@@ -538,8 +491,6 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
                     setCloudConnectionState("已连接")
-                    if (::updateButton.isInitialized) updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
-                    if (::logsButton.isInitialized) logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
                     synchronizeCloudAccounts { _, message ->
                         showOperationMessage("云端账号同步", message, CloudAccountSyncState.allowsAccountChanges(this))
@@ -557,11 +508,10 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun fetchFunctionLogs() {
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            logsStatus.text = "请先登录华为云。"; return
+            logsStatusValue = "请先登录华为云。"; return
         }
-        logsButton.isEnabled = false
-        logsStatus.text = "正在读取两个服务最近 7 天的运行日志…"
-        logsOutput.text = "正在连接华为云日志服务…"
+        logsStatusValue = "正在读取两个服务最近 7 天的运行日志…"
+        logsOutputValue = "正在连接华为云日志服务…"
         worker.execute {
             try {
                 val rendered = StringBuilder()
@@ -629,16 +579,14 @@ open class HuaweiCloudActivity : Activity() {
                     rendered.append("\n")
                 }
                 runOnUiThread {
-                    logsStatus.text = "已完成两个服务的最近 7 天日志查询。"
-                    logsOutput.text = rendered.toString()
-                    logsButton.isEnabled = true
+                    logsStatusValue = "已完成两个服务的最近 7 天日志查询。"
+                    logsOutputValue = rendered.toString()
                     showOperationMessage("运行日志读取完成", rendered.toString(), true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    logsStatus.text = "读取日志失败：" + (e.message ?: e.javaClass.simpleName)
-                    logsOutput.text = "请检查 FunctionGraph 日志配置与 LTS 查询权限。"
-                    logsButton.isEnabled = true
+                    logsStatusValue = "读取日志失败：" + (e.message ?: e.javaClass.simpleName)
+                    logsOutputValue = "请检查 FunctionGraph 日志配置与 LTS 查询权限。"
                     showOperationMessage("运行日志读取失败", e.message ?: e.javaClass.simpleName, false)
                 }
             }
@@ -916,7 +864,6 @@ open class HuaweiCloudActivity : Activity() {
                 return
             }
         }
-        updateButton.isEnabled = false
         setCloudConnectionState("已连接")
         showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在上传函数包；先测试运行，确认成功后才检查定时触发器…", null)
         worker.execute {
@@ -942,13 +889,11 @@ open class HuaweiCloudActivity : Activity() {
                 val detail = "$label 函数${action}成功。\n测试运行：$testSummary\n定时触发器：$timerSummary\n本次没有触碰另一个服务。"
                 runOnUiThread {
                     setCloudConnectionState("已连接")
-                    updateButton.isEnabled = true
                     showOperationMessage("$label 部署及检查完成", detail, true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     setCloudConnectionState("已连接")
-                    updateButton.isEnabled = true
                     showOperationMessage(if (isHoyolab) "HoYoLAB 更新失败" else "森空岛更新失败", e.message ?: e.javaClass.simpleName, false)
                 }
             }
@@ -1067,15 +1012,7 @@ open class HuaweiCloudActivity : Activity() {
     protected fun showOperationMessage(title: String, detail: String, success: Boolean?) {
         AppMessageBus.post(this, messageChannel(), title, detail, success)
         lastResultMessage = AppMessageBus.current(this, messageChannel())
-        if (::resultMessage.isInitialized) {
-            resultMessage.text = lastResultMessage
-            resultMessage.setTextColor(when (success) {
-                true -> 0xFF75D69C.toInt()
-                false -> 0xFFFF8A80.toInt()
-                else -> 0xFFE1E6EF.toInt()
-            })
-        }
-        if (::copyResultButton.isInitialized) copyResultButton.isEnabled = true
+
     }
 
     private fun readPackagedZip(path: String): ByteArray {
