@@ -24,6 +24,42 @@ object DesktopWebView {
         configure(this, multiWindow, cacheMode)
     }
 
+    /**
+     * Override restrictive viewport declarations used by some desktop login pages.
+     * Native WebView zoom remains responsible for the actual pinch gesture.
+     */
+    fun enablePageZoom(view: WebView) {
+        val script = """
+            (function() {
+              function allowZoom() {
+                var head = document.head || document.getElementsByTagName('head')[0];
+                if (!head) return;
+                var meta = document.querySelector('meta[name="viewport"]');
+                if (!meta) {
+                  meta = document.createElement('meta');
+                  meta.name = 'viewport';
+                  head.appendChild(meta);
+                }
+                var parts = (meta.content || '').split(',').map(function(x) { return x.trim(); })
+                  .filter(function(x) {
+                    return !/^(user-scalable|maximum-scale|minimum-scale|initial-scale)\\s*=/i.test(x);
+                  });
+                parts.push('user-scalable=yes', 'minimum-scale=0.5', 'maximum-scale=5');
+                meta.content = parts.join(', ');
+              }
+              allowZoom();
+              if (!window.__appZoomObserver && document.documentElement) {
+                window.__appZoomObserver = new MutationObserver(function() { allowZoom(); });
+                window.__appZoomObserver.observe(document.documentElement, {
+                  childList: true, subtree: true, attributes: true,
+                  attributeFilter: ['content', 'name']
+                });
+              }
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
+    }
+
     fun configure(
         view: WebView,
         multiWindow: Boolean = true,
