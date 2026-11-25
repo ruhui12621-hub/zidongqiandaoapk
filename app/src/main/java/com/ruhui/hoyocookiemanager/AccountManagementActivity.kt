@@ -111,8 +111,7 @@ class AccountManagementActivity : Activity() {
                 val tokenReady = runCatching { !SklandTokenVault(this@AccountManagementActivity, account.id).latest().isNullOrBlank() }.getOrDefault(false)
                 addView(text("森空岛 Token：" + if (tokenReady) "已获取" else "未获取", 14, false,
                     if (tokenReady) 0xFF8BD5A7.toInt() else 0xFFFFCC80.toInt()).apply { setPadding(0, dp(8), 0, dp(4)) })
-                addView(button("登录 / 更新凭证") {
-                    saveAccount(account, showToast = false)
+                addView(button("打开森空岛网页") {
                     startActivity(Intent(this@AccountManagementActivity, SenkongdaoActivity::class.java)
                         .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
                         .putExtra(AccountStore.EXTRA_PLATFORM, account.platform))
@@ -152,7 +151,7 @@ class AccountManagementActivity : Activity() {
         val deleteButton = button("云端删除同步尚未启用", danger = true) {
             AlertDialog.Builder(this)
                 .setTitle("删除账号？")
-                .setMessage("将删除「" + account.name + "」及其本地加密凭据，此操作无法撤销。")
+                .setMessage("将删除「" + account.name + "」的账号记录。")
                 .setNegativeButton("取消", null)
                 .setPositiveButton("确认删除") { _, _ ->
                     runCatching {
