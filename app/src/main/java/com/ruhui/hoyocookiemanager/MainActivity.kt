@@ -37,6 +37,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var yamlValue = ""
     private var detectedGameServer: String? = null
     private var activeAccountId: String? = null
+    private var activePlatform: String? = null
     private var browserVisible = false
     private var showingLauncher = true
     private var showingBrowser = false
@@ -57,9 +58,9 @@ class MainActivity : HuaweiCloudActivity() {
         CookieManager.getInstance().setAcceptCookie(true)
         migrateLegacyAccounts()
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
+        activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         buildLauncher()
-        val requestedPlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
-        if (requestedPlatform == AccountStore.HOYOLAB || requestedPlatform == AccountStore.MIYOUSHE_CN) {
+        if (activePlatform == AccountStore.HOYOLAB || activePlatform == AccountStore.MIYOUSHE_CN) {
             buildHome()
             showBrowser()
         }
@@ -276,7 +277,7 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(22), 0, dp(8))
         }
         content.addView(status)
-        content.addView(button("打开 HoYoLAB 登录页面") { showBrowser() })
+        content.addView(button(if (activePlatform == AccountStore.MIYOUSHE_CN) "打开米游社登录页面" else "打开 HoYoLAB 登录页面") { showBrowser() })
         details = text("登录后自动检测 Cookie。", 13, false, Color.rgb(160, 168, 182)).apply {
             setPadding(0, dp(4), 0, dp(12))
         }
@@ -406,7 +407,7 @@ class MainActivity : HuaweiCloudActivity() {
             }
         }
         bar.addView(back)
-        bar.addView(text("HoYoLAB 登录", 18, true),
+        bar.addView(text(if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录", 18, true),
             LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
         root.addView(bar)
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -418,7 +419,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         webView.visibility = android.view.View.VISIBLE
         if (!browserVisible || webView.url.isNullOrBlank()) {
-            webView.loadUrl("https://www.hoyolab.com/")
+            webView.loadUrl(if (activePlatform == AccountStore.MIYOUSHE_CN) "https://www.miyoushe.com/" else "https://www.hoyolab.com/")
         }
         browserVisible = true
     }
