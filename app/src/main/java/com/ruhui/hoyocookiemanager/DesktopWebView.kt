@@ -42,7 +42,7 @@ object DesktopWebView {
                 }
                 var parts = (meta.content || '').split(',').map(function(x) { return x.trim(); })
                   .filter(function(x) {
-                    return !/^(user-scalable|maximum-scale|minimum-scale|initial-scale)\\s*=/i.test(x);
+                    return !/^(user-scalable|maximum-scale|minimum-scale|initial-scale)\s*=/i.test(x);
                   });
                 parts.push('user-scalable=yes', 'minimum-scale=0.5', 'maximum-scale=5');
                 var nextContent = parts.join(', ');
