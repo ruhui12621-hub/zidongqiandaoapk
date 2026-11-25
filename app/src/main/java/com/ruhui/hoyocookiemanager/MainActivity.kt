@@ -60,6 +60,15 @@ class MainActivity : HuaweiCloudActivity() {
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         buildLauncher()
+        val cloudCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
+        if (cloudCredentials != null) {
+            synchronizeCloudAccounts { _, message ->
+                if (showingLauncher && !isFinishing) buildLauncher()
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            }
+        } else {
+            CloudAccountSyncState.set(this, CloudAccountSyncState.UNKNOWN)
+        }
         if (activePlatform == AccountStore.HOYOLAB || activePlatform == AccountStore.MIYOUSHE_CN) {
             buildHome()
             showBrowser()
@@ -185,8 +194,19 @@ class MainActivity : HuaweiCloudActivity() {
             startActivity(android.content.Intent(this, HuaweiCloudSettingsActivity::class.java))
         }
 
+        val cloudSyncState = CloudAccountSyncState.get(this)
+        val cloudSyncLabel = when (cloudSyncState) {
+            CloudAccountSyncState.SYNCING -> "正在读取华为云配置，账号操作暂时锁定"
+            CloudAccountSyncState.SYNCED -> "云端配置已读取"
+            CloudAccountSyncState.EMPTY_CONFIRMED -> "云端已确认没有历史函数配置，可进行首次初始化"
+            CloudAccountSyncState.FAILED -> "云端读取失败，账号操作已锁定"
+            else -> "请先连接华为云并读取现有配置"
+        }
+        root.addView(text(cloudSyncLabel, 12, false, Color.rgb(255, 204, 128)).apply {
+            setPadding(0, dp(2), 0, dp(8))
+        })
         root.addView(text("账号列表", 17, true).apply {
-            setPadding(0, dp(12), 0, dp(10))
+            setPadding(0, dp(8), 0, dp(10))
         })
         val accountScroll = ScrollView(this)
         val accountContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -230,7 +250,12 @@ class MainActivity : HuaweiCloudActivity() {
             }
         }
 
-        val add = button("+ 添加账号") {
+        val canChangeAccounts = CloudAccountSyncState.allowsAccountChanges(this)
+        val add = button(if (canChangeAccounts) "+ 添加账号" else "等待云端配置同步") {
+            if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                Toast.makeText(this, "必须先成功读取华为云配置，才能添加账号。", Toast.LENGTH_LONG).show()
+                return@button
+            }
             val labels = arrayOf("HoYoLAB（国际服）", "森空岛", "米游社（国服）")
             val platforms = arrayOf(AccountStore.HOYOLAB, AccountStore.SKLAND, AccountStore.MIYOUSHE_CN)
             AlertDialog.Builder(this)
@@ -245,6 +270,8 @@ class MainActivity : HuaweiCloudActivity() {
         }.apply {
             textSize = 16f
             minHeight = dp(52)
+            isEnabled = canChangeAccounts
+            alpha = if (canChangeAccounts) 1f else 0.55f
             backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
         }
         root.addView(add, LinearLayout.LayoutParams(-1, dp(52)).apply {
