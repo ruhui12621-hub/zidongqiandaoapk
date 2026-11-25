@@ -541,7 +541,7 @@ open class HuaweiCloudActivity : Activity() {
         val signature = hmac(authSk, toSign)
         val authorization = "SDK-HMAC-SHA256 Access=" + authAk + ", SignedHeaders=" + signedHeaders + ", Signature=" + signature
         val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = method; connectTimeout = 30000; readTimeout = if (method == "PUT") 180000 else 90000
+            requestMethod = method; connectTimeout = 30000; readTimeout = if (method == "GET") 90000 else 180000
             setRequestProperty("X-Sdk-Date", date); setRequestProperty("Authorization", authorization)
             setRequestProperty("Accept", "application/json")
             if (method != "GET") { doOutput = true; setRequestProperty("Content-Type", headers["content-type"]) }
