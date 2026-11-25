@@ -54,7 +54,7 @@ open class HuaweiCloudActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(TextView(this).apply {
-            text = "直接使用 APK 获取的 Cookie 更新云端配置，无需复制粘贴。"
+            text = "HoYoLAB Cookie 与森空岛 Token 均由 APK 自动写入对应部署包，直接上传华为云。"
             textSize = 14f; setTextColor(0xFFA7B0C0.toInt()); setPadding(0, dp(8), 0, dp(16))
         })
         content.addView(TextView(this).apply {
@@ -375,9 +375,17 @@ open class HuaweiCloudActivity : Activity() {
         cloudStatus.text = "正在准备 APK 内置部署包，并写入当前 Cookie…"
         worker.execute {
             try {
+                val sklandToken = SklandTokenVault(this).latest()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: error("尚未获取森空岛 Token。请先打开森空岛页面，粘贴 Token JSON 并完成解析；应用会加密保存。")
                 val hoyolabOriginal = readPackagedZip("cloud/hoyolab.zip")
-                val sklandArchive = readPackagedZip("cloud/skland.zip")
+                val sklandOriginal = readPackagedZip("cloud/skland.zip")
                 val hoyolabArchive = replaceZip(hoyolabOriginal, "config/config.yaml", configYaml)
+                val sklandArchive = replaceZip(
+                    sklandOriginal,
+                    "code/INPUT_HYPERGRYPH_TOKEN.txt",
+                    sklandToken.trim() + "\n"
+                )
                 runOnUiThread { cloudStatus.text = "正在直接上传两个服务，请不要关闭页面…" }
                 val hoyolabCreated = createOrUpdateFunction(HOYOLAB_FUNCTION, HOYOLAB_HANDLER, hoyolabArchive)
                 runOnUiThread { cloudStatus.text = "HoYoLAB 部署完成，正在部署森空岛…" }
