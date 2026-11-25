@@ -19,7 +19,7 @@ object AppMessageBus {
     fun activeChannel(): String = activeChannel
 
     fun beginSession(context: Context, channel: String, title: String, detail: String) {
-        clear(context, channel)
+        // Keep the click/Activity-launch events already recorded by the calling screen.
         post(context, channel, title, detail, null)
     }
 
@@ -64,7 +64,7 @@ object AppMessageBus {
 
     private fun sanitize(value: String): String {
         var safe = value
-        safe = Regex("(?i)(cookie|token|authorization|set-cookie|\\bAK\\b|\\bSK\\b)\\s*[:=]\\s*[^\\s,;]+")
+        safe = Regex("(?i)(cookie|token|access_token|refresh_token|authorization|set-cookie|\\bAK\\b|\\bSK\\b|stoken|ltoken|session|ticket|\\bcode\\b)\\s*[:=]\\s*[^\\s,;&]+")
             .replace(safe) { match -> match.value.substringBefore("=").substringBefore(":") + ": [已隐藏]" }
         safe = Regex("(?i)Bearer\\s+[A-Za-z0-9._~+/-]+=*").replace(safe, "Bearer [已隐藏]")
         return safe.take(4000)
