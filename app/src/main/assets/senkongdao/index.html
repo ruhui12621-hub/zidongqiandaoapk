@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0d1117">
+  <title>森空岛 Token 解析 · 操作导航</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --card: #161b22;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --primary: #388bfd;
+      --primary-dark: #1f6feb;
+      --border: #30363d;
+      --ok: #3fb950;
+      --err: #f85149;
+      --warn-bg: #2a1a0a;
+      --warn-border: #9a3412;
+      --warn-text: #fdba74;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+      padding: 20px 14px 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.45rem; margin: 0 0 6px; color: #f0f6fc; }
+    .subtitle { color: var(--muted); font-size: 0.92rem; margin: 0 0 20px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .step { display: flex; gap: 12px; align-items: flex-start; }
+    .step-num {
+      flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(56,139,253,0.15); color: var(--primary);
+      font-weight: 700; display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; margin-top: 2px; border: 1px solid rgba(56,139,253,0.35);
+    }
+    .step-body { flex: 1; min-width: 0; }
+    .step-title { font-weight: 700; font-size: 1rem; margin: 0 0 4px; color: #f0f6fc; }
+    .step-desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 10px; }
+    .step-desc strong { color: var(--text); }
+    .link-btn {
+      display: inline-block; width: 100%; text-align: center; text-decoration: none;
+      background: var(--primary); color: #fff; font-weight: 600;
+      padding: 10px 14px; border-radius: 10px; word-break: break-all;
+      border: 1px solid transparent; cursor: pointer; font-size: 0.95rem;
+    }
+    .link-btn:hover { background: var(--primary-dark); }
+    .link-btn.secondary {
+      background: transparent; color: var(--primary);
+      border: 1px solid rgba(56,139,253,0.5);
+    }
+    .link-btn.secondary:hover { background: rgba(56,139,253,0.12); }
+    .url-text { display: block; margin-top: 6px; font-size: 0.76rem; color: #6e7681; word-break: break-all; }
+    textarea {
+      width: 100%; min-height: 110px; resize: vertical;
+      background: #0d1117; color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.85rem; line-height: 1.5; outline: none;
+    }
+    textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(56,139,253,0.15); }
+    .result-box {
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: #0d1117; border: 1px dashed var(--border);
+      font-size: 0.85rem; word-break: break-all;
+    }
+    .result-label { color: var(--muted); font-size: 0.78rem; display: block; margin-bottom: 4px; }
+    .token-preview {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #a5d6ff; font-size: 0.82rem;
+    }
+    .status { margin-top: 8px; font-size: 0.85rem; min-height: 1.4em; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .row .link-btn { flex: 1 1 0; }
+    .tips {
+      background: var(--warn-bg); border: 1px solid var(--warn-border);
+      color: var(--warn-text); border-radius: 12px; padding: 12px 14px;
+      font-size: 0.86rem; margin-top: 6px;
+    }
+    .tips strong { display: block; margin-bottom: 4px; color: #fbbf24; }
+    .tips ul { margin: 4px 0 0; padding-left: 18px; }
+    .tips li { margin-bottom: 4px; }
+    .footer { text-align: center; color: #484f58; font-size: 0.78rem; margin-top: 20px; }
+    code {
+      background: #21262d; color: #a5d6ff; padding: 1px 5px;
+      border-radius: 4px; font-size: 0.86em; border: 1px solid var(--border);
+    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 6px; border: 2px solid var(--bg); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>森空岛 Token 解析 · 操作导航</h1>
+    <p class="subtitle">登录森空岛 → 复制 Token 页面 JSON → 粘贴到下方自动解析 → 复制 Token → 更新华为云函数。</p>
+
+    <!-- 步骤 1 -->
+    <div class="card">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <p class="step-title">登录森空岛</p>
+          <p class="step-desc">先在当前浏览器登录森空岛账号，保持登录状态。</p>
+          <a class="link-btn" href="https://www.skland.com/" target="_self" rel="noopener noreferrer">打开森空岛官网</a>
+          <span class="url-text">https://www.skland.com/</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 步骤 2 -->
+    <div class="card">
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <p class="step-title">打开 Token 页面并复制全部内容</p>
+          <p class="step-desc">保持登录状态打开下面链接，页面会显示一段 JSON 文本。<strong>全选并复制页面上的全部内容</strong>。</p>
+          <a class="link-btn" href="https://web-api.skland.com/account/info/hg" target="_self" rel="noopener noreferrer">打开 Token 获取页面</a>
+          <span class="url-text">https://web-api.skland.com/account/info/hg</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 步骤 3：解析与复制 -->
+    <div class="card">
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <p class="step-title">粘贴 JSON，自动解析并复制 Token</p>
+          <p class="step-desc">把上一步复制的内容粘贴到下面。页面会自动提取 <code>data.content</code>；如果你直接粘贴了 Token 字符串，也会原样识别。</p>
+
+          <textarea id="jsonInput" placeholder='粘贴 Token 页面的全部 JSON，例如：&#10;{"code":0,"message":"OK","data":{"content":"你的Token..."}}'></textarea>
+
+          <div class="result-box">
+            <span class="result-label">解析结果</span>
+            <span id="tokenPreview" class="token-preview">等待粘贴…</span>
+          </div>
+
+          <div class="row">
+            <button id="copyBtn" class="link-btn" type="button" disabled>复制 Token</button>
+            <button id="clearBtn" class="link-btn secondary" type="button">清空</button>
+          </div>
+
+          <div id="status" class="status"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 步骤 4 -->
+    <div class="card">
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <p class="step-title">更新华为云函数</p>
+          <p class="step-desc">打开华为云函数控制台，编辑 <code>INPUT_HYPERGRYPH_TOKEN.txt</code>，粘贴 Token 后点击“部署代码”。</p>
+          <a class="link-btn secondary" href="https://console.huaweicloud.com/functiongraph" target="_self" rel="noopener noreferrer">打开华为云函数控制台</a>
+          <span class="url-text">https://console.huaweicloud.com/functiongraph</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tips">
+      <strong>说明</strong>
+      <ul>
+        <li>本页面<strong>不会联网请求森空岛接口</strong>，只在你本地解析粘贴进来的文本，所以可以放心托管或本地打开。</li>
+        <li>由于浏览器的跨域与 Cookie 限制，网页无法自动替你拉取 Token JSON，手动复制粘贴这一步无法省略。</li>
+        <li>Token 等同于登录凭证，请勿分享。多账号时每行一个 Token 填入云函数。</li>
+        <li>如果复制按钮无效，通常是浏览器不允许非 HTTPS 页面使用剪贴板 API，可手动长按选中复制。</li>
+      </ul>
+    </div>
+
+    <p class="footer">本页面仅做本地文本解析，不收集、不存储任何信息。</p>
+  </div>
+
+  <script>
+    (function () {
+      var input = document.getElementById('jsonInput');
+      var preview = document.getElementById('tokenPreview');
+      var copyBtn = document.getElementById('copyBtn');
+      var clearBtn = document.getElementById('clearBtn');
+      var statusEl = document.getElementById('status');
+      var currentToken = '';
+
+      function setStatus(msg, type) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (type ? ' ' + type : '');
+      }
+
+      function maskToken(t) {
+        if (t.length <= 16) return t;
+        return t.slice(0, 10) + '…' + t.slice(-6) + '（共 ' + t.length + ' 字符）';
+      }
+
+      function parseInput(raw) {
+        var text = (raw || '').trim();
+        if (!text) return { token: '', error: '' };
+
+        // 尝试当作 JSON 解析
+        try {
+          var obj = JSON.parse(text);
+          // 常见结构：{ data: { content: "..." } }
+          if (obj && obj.data && typeof obj.data.content === 'string' && obj.data.content) {
+            return { token: obj.data.content.trim(), error: '' };
+          }
+          // 兼容直接 { content: "..." } 或字符串
+          if (obj && typeof obj.content === 'string' && obj.content) {
+            return { token: obj.content.trim(), error: '' };
+          }
+          if (typeof obj === 'string' && obj) {
+            return { token: obj.trim(), error: '' };
+          }
+          return { token: '', error: 'JSON 中未找到 data.content 字段' };
+        } catch (e) {
+          // 不是 JSON，按纯文本 Token 处理
+          // 去掉可能的引号和空白
+          var cleaned = text.replace(/^["']|["']$/g, '').trim();
+          if (cleaned && !/\s/.test(cleaned)) {
+            return { token: cleaned, error: '' };
+          }
+          return { token: '', error: '无法识别内容，请粘贴完整 JSON 或单个 Token 字符串' };
+        }
+      }
+
+      function update() {
+        var res = parseInput(input.value);
+        currentToken = res.token;
+
+        if (res.token) {
+          preview.textContent = maskToken(res.token);
+          copyBtn.disabled = false;
+          setStatus('已解析到 Token，可以点击复制。', 'ok');
+        } else {
+          preview.textContent = input.value.trim() ? '未识别到有效 Token' : '等待粘贴…';
+          copyBtn.disabled = true;
+          setStatus(res.error, res.error ? 'err' : '');
+        }
+      }
+
+      input.addEventListener('input', update);
+
+      copyBtn.addEventListener('click', function () {
+        if (!currentToken) return;
+        var done = function () { setStatus('Token 已复制到剪贴板。', 'ok'); };
+        var fail = function () { setStatus('复制失败，请手动长按选中复制。', 'err'); };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(currentToken).then(done).catch(fail);
+        } else {
+          // 兼容旧环境 / file://
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = currentToken;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            ok ? done() : fail();
+          } catch (e) {
+            fail();
+          }
+        }
+      });
+
+      clearBtn.addEventListener('click', function () {
+        input.value = '';
+        update();
+        input.focus();
+      });
+
+      update();
+    })();
+  </script>
+</body>
+</html>
