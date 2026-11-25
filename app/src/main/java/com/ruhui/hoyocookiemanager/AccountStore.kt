@@ -130,6 +130,33 @@ class AccountStore(context: Context) {
 }
 
 /**
+ * Persisted cloud-authority state. Local account mutations must remain locked until
+ * FunctionGraph has been queried successfully (including an explicit no-function result).
+ */
+object CloudAccountSyncState {
+    const val UNKNOWN = "unknown"
+    const val SYNCING = "syncing"
+    const val SYNCED = "synced"
+    const val EMPTY_CONFIRMED = "empty_confirmed"
+    const val FAILED = "failed"
+
+    private const val PREFS = "cloud_account_authority"
+    private const val KEY = "state"
+
+    fun get(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, UNKNOWN) ?: UNKNOWN
+
+    fun set(context: Context, value: String) {
+        require(value in setOf(UNKNOWN, SYNCING, SYNCED, EMPTY_CONFIRMED, FAILED))
+        check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY, value).commit()) { "云端同步状态保存失败" }
+    }
+
+    fun allowsAccountChanges(context: Context): Boolean =
+        get(context) == SYNCED || get(context) == EMPTY_CONFIRMED
+}
+
+/**
  * Extracts only stable account identifiers from a Cookie header. Never returns token values.
  * Priority is explicit user/account IDs, not stoken/ltoken/cookie_token credentials.
  */
