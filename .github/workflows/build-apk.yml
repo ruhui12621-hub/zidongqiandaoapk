@@ -20,6 +20,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Bundle latest Huawei FunctionGraph packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets/cloud
+          release_json="$(curl -fsSL https://api.github.com/repos/ruhui12621-hub/zidongqiandao-cloud-functions/releases/latest)"
+          hoyolab_url="$(jq -r '.assets[] | select(.name == "hoyolab.zip") | .browser_download_url' <<< "$release_json" | head -n1)"
+          skland_url="$(jq -r '.assets[] | select(.name == "skland.zip") | .browser_download_url' <<< "$release_json" | head -n1)"
+          test -n "$hoyolab_url" && test -n "$skland_url"
+          curl -fL --retry 3 "$hoyolab_url" -o app/src/main/assets/cloud/hoyolab.zip
+          curl -fL --retry 3 "$skland_url" -o app/src/main/assets/cloud/skland.zip
+          unzip -t app/src/main/assets/cloud/hoyolab.zip >/dev/null
+          unzip -t app/src/main/assets/cloud/skland.zip >/dev/null
+          ls -lh app/src/main/assets/cloud/
+
       - name: Build debug APK
         run: gradle assembleDebug
       - name: Upload APK
