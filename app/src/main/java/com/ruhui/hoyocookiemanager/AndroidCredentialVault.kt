@@ -17,9 +17,8 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Passwordless local credential vault.
- * Credentials are encrypted at rest with an AES-GCM key held by Android Keystore.
- * A separate non-exportable HMAC key fingerprints credential pairs for duplicate
- * detection without comparing/storing plaintext fingerprints.
+ * Only the latest successfully authenticated AK/SK pair is retained, encrypted at rest
+ * with an AES-GCM key held by Android Keystore.
  */
 class AndroidCredentialVault(private val context: android.content.Context) {
     private val file = File(context.noBackupFilesDir, "cloud_credentials.vault")
@@ -37,8 +36,7 @@ class AndroidCredentialVault(private val context: android.content.Context) {
     }
 
     /**
-     * Save the successful login credentials as the newest entry.
-     * Matching HMAC fingerprints are moved to the front instead of duplicated.
+     * Replace the single stored pair only after a successful Huawei Cloud login.
      */
     @Synchronized
     fun save(ak: String, sk: String) {
@@ -176,6 +174,6 @@ class AndroidCredentialVault(private val context: android.content.Context) {
 
     companion object {
         private const val VERSION = 2
-        private const val MAX_ENTRIES = 10
+        private const val MAX_ENTRIES = 1
     }
 }
