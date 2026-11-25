@@ -310,22 +310,24 @@ open class HuaweiCloudActivity : Activity() {
 
                 if (hoyoFunction != null) {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
-                    val rawCookie = Regex("(?m)^\\s*cookie\\s*:\\s*(.*?)\\s*$")
+                    // 仅匹配 cookie 所在行，避免 \\s 跨行匹配；空值不能静默当作同步成功。
+                    val rawCookie = Regex("(?m)^[\\t ]*cookie[\\t ]*:[\\t ]*(.*?)[\\t ]*$")
                         .find(yaml)?.groupValues?.get(1).orEmpty()
-                    val cookie = rawCookie.trim().removeSurrounding("\"").removeSurrounding("'")
-                    if (cookie.isNotBlank()) {
-                        val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
-                        val existing = if (identity != null) store.all().firstOrNull {
-                            it.platform == AccountStore.HOYOLAB && it.platformUserId == identity
-                        } else store.all().firstOrNull { account ->
-                            account.platform == AccountStore.HOYOLAB &&
-                                runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
-                        }
-                        val account = existing ?: store.add(AccountStore.HOYOLAB, platformUserId = identity)
-                        HoYoCookieVault(this, account.id).save(cookie)
-                        store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
-                        imported++
+                    val cookie = rawCookie.trim().removeSurrounding("\\"").removeSurrounding("'")
+                    if (cookie.isBlank()) {
+                        error("HoYoLAB 函数存在，但 config/config.yaml 中的 cookie 为空或未匹配到；未将其视为已成功同步。")
                     }
+                    val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
+                    val existing = if (identity != null) store.all().firstOrNull {
+                        it.platform == AccountStore.HOYOLAB && it.platformUserId == identity
+                    } else store.all().firstOrNull { account ->
+                        account.platform == AccountStore.HOYOLAB &&
+                            runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
+                    }
+                    val account = existing ?: store.add(AccountStore.HOYOLAB, platformUserId = identity)
+                    HoYoCookieVault(this, account.id).save(cookie)
+                    store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
+                    imported++
                 }
 
                 if (sklandFunction != null) {
