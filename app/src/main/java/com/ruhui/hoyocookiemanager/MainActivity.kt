@@ -161,22 +161,11 @@ class MainActivity : HuaweiCloudActivity() {
     private fun showBrowser() {
         showingBrowser = true
         if (!::webView.isInitialized) {
-            webView = WebView(this).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.loadsImagesAutomatically = true
-                settings.javaScriptCanOpenWindowsAutomatically = true
-                settings.setSupportMultipleWindows(true)
-                // 强制桌面站点布局。
-                settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.setSupportZoom(true)
-                settings.builtInZoomControls = true
-                settings.displayZoomControls = false
-                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                CookieManager.getInstance().setAcceptCookie(true)
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            webView = DesktopWebView.create(
+                this,
+                multiWindow = true,
+                cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            ).apply {
                 webChromeClient = object : WebChromeClient() {
                     override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                         recordWebDiagnostic(
@@ -286,21 +275,11 @@ class MainActivity : HuaweiCloudActivity() {
 
     // 为 window.open / target=_blank 创建 APK 内部子窗口；CookieManager 与主窗口共享。
     private fun createPopupWebView(): WebView {
-        return WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.loadsImagesAutomatically = true
-            settings.javaScriptCanOpenWindowsAutomatically = true
-            settings.setSupportMultipleWindows(false)
-            settings.userAgentString = webView.settings.userAgentString
-            settings.useWideViewPort = true
-            settings.loadWithOverviewMode = true
-            settings.setSupportZoom(true)
-            settings.builtInZoomControls = true
-            settings.displayZoomControls = false
-            settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-            CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+        return DesktopWebView.create(
+            this,
+            multiWindow = false,
+            cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+        ).apply {
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                     recordWebDiagnostic(
