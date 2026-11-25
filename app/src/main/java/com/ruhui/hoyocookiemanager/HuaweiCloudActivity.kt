@@ -55,7 +55,7 @@ open class HuaweiCloudActivity : Activity() {
             setPadding(0, 0, 0, dp(6))
         })
         content.addView(TextView(this).apply {
-            text = "HoYoLAB Cookie 与森空岛 Token 均由 APK 自动写入对应部署包，直接上传华为云。"
+            text = "HoYoLAB Cookie 与森空岛 Token 分别写入各自的部署包；两个云函数可以独立更新。"
             textSize = 14f; setTextColor(0xFFA7B0C0.toInt()); setPadding(0, dp(8), 0, dp(16))
         })
         content.addView(TextView(this).apply {
@@ -78,6 +78,7 @@ open class HuaweiCloudActivity : Activity() {
                     projectId = ""
                     cloudStatus.text = "地区已切换为 $code，请重新登录并读取该地区的函数列表。"
                     updateButton.isEnabled = false
+                    sklandUpdateButton.isEnabled = false
                     logsButton.isEnabled = false
                 }
             }
@@ -168,7 +169,7 @@ open class HuaweiCloudActivity : Activity() {
             region.setSelection(regionCodes.indexOf(regionValue).takeIf { it >= 0 } ?: 0)
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
-            cloudStatus.text = "华为云登录状态：已保持\nRegion：$regionValue\nProject ID：$projectId"
+            cloudStatus.text = "● 华为云已连接\nRegion：$regionValue\nProject ID：$projectId"
             updateButton.isEnabled = configYaml.isNotBlank()
             sklandUpdateButton.isEnabled = true
             logsButton.isEnabled = true
