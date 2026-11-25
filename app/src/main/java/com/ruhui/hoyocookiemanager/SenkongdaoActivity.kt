@@ -30,6 +30,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var checking = false
     private var saved = false
     private var lastCheck = 0L
+    private var lastLayoutDiagnosticUrl = ""
     private val pollHandler = Handler(Looper.getMainLooper())
     private val pollTask = object : Runnable {
         override fun run() {
@@ -223,7 +224,69 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 DesktopWebView.enablePageZoom(view)
                 CookieManager.getInstance().flush()
-                if (isSklandHost(url)) scheduleCheck()
+                if (isSklandHost(url)) {
+                    diagnoseSklandLayout(view, url)
+                    scheduleCheck()
+                }
+            }
+        }
+    }
+
+    /**
+     * Read-only layout diagnostics for the Skland desktop navigation.
+     * No page styles are changed and no form values, cookies or tokens are collected.
+     */
+    private fun diagnoseSklandLayout(view: WebView, url: String) {
+        if (!isSklandHost(url) || lastLayoutDiagnosticUrl == url) return
+        lastLayoutDiagnosticUrl = url
+        val script = """
+            (function() {
+              var doc = document.documentElement, body = document.body;
+              var out = {
+                url: location.origin + location.pathname,
+                viewport: { innerWidth: innerWidth, clientWidth: doc ? doc.clientWidth : 0,
+                  scrollWidth: doc ? doc.scrollWidth : 0, bodyClientWidth: body ? body.clientWidth : 0,
+                  bodyScrollWidth: body ? body.scrollWidth : 0, scrollX: scrollX,
+                  dpr: devicePixelRatio, visualWidth: visualViewport ? visualViewport.width : null,
+                  visualScale: visualViewport ? visualViewport.scale : null },
+                candidates: []
+              };
+              var els = Array.from(document.querySelectorAll('body *')).filter(function(el) {
+                if (el.children.length > 4) return false;
+                var t = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+                return t.length > 0 && t.length < 24 && /(首页|版区)/.test(t);
+              }).slice(0, 8);
+              els.forEach(function(el) {
+                var chain = [], n = el;
+                for (var i = 0; n && i < 5; i++, n = n.parentElement) {
+                  var r = n.getBoundingClientRect(), s = getComputedStyle(n);
+                  chain.push({
+                    tag: n.tagName, id: n.id || '', className: (typeof n.className === 'string' ? n.className : '').slice(0,100),
+                    text: (n.innerText || n.textContent || '').replace(/\\s+/g, ' ').trim().slice(0,32),
+                    rect: {x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), right: Math.round(r.right)},
+                    clientWidth: n.clientWidth, scrollWidth: n.scrollWidth,
+                    overflowX: s.overflowX, position: s.position, display: s.display,
+                    whiteSpace: s.whiteSpace, transform: s.transform
+                  });
+                }
+                out.candidates.push(chain);
+              });
+              return JSON.stringify(out);
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script) { encoded ->
+            runCatching {
+                val raw = org.json.JSONTokener(encoded).nextValue() as? String ?: encoded
+                val json = JSONObject(raw)
+                AppMessageBus.post(
+                    this, AppMessageBus.SKLAND, "森空岛网页布局诊断",
+                    "只读采样（未修改网页样式）：\\n" + json.toString(2), true
+                )
+            }.onFailure {
+                AppMessageBus.post(
+                    this, AppMessageBus.SKLAND, "森空岛网页布局诊断失败",
+                    it.message ?: "无法解析网页布局数据", false
+                )
             }
         }
     }
