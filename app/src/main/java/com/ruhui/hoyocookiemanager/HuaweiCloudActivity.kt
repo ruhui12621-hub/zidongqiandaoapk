@@ -377,9 +377,8 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun deployPackages(service: String) {
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            val detail = "华为云尚未连接，请先登录。"
             setCloudConnectionState("尚未连接")
-            showOperationMessage(if (service == "hoyolab") "HoYoLAB 更新失败" else "森空岛更新失败", detail, false)
+            showOperationMessage(if (service == "hoyolab") "HoYoLAB 更新失败" else "森空岛更新失败", "华为云尚未连接，请先登录。", false)
             return
         }
         val isHoyolab = service == "hoyolab"
@@ -387,41 +386,38 @@ open class HuaweiCloudActivity : Activity() {
             configYaml = configProvider?.invoke().orEmpty()
             HuaweiCloudSession.lastConfigYaml = configYaml
             if (configYaml.isBlank() || !configYaml.contains("cookie:")) {
-                val detail = "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。"
                 setCloudConnectionState("尚未连接")
-                showOperationMessage("HoYoLAB 更新失败", detail, false)
+                showOperationMessage("HoYoLAB 更新失败", "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。", false)
                 return
             }
         }
         updateButton.isEnabled = false
         setCloudConnectionState("已连接")
-        showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在准备部署包并提交到华为云…", null)
+        showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在上传函数包；上传确认后将自动测试运行并检查定时触发器…", null)
         worker.execute {
             try {
+                val functionName = if (isHoyolab) HOYOLAB_FUNCTION else SENKONGDAO_FUNCTION
                 val created = if (isHoyolab) {
-                    val archive = replaceZip(
-                        readPackagedZip("cloud/hoyolab.zip"),
-                        "config/config.yaml",
-                        configYaml
-                    )
-                    createOrUpdateFunction(HOYOLAB_FUNCTION, HOYOLAB_HANDLER, archive)
+                    val archive = replaceZip(readPackagedZip("cloud/hoyolab.zip"), "config/config.yaml", configYaml)
+                    createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive)
                 } else {
-                    val token = SklandTokenVault(this).latest()
-                        ?.takeIf { it.isNotBlank() }
+                    val token = SklandTokenVault(this).latest()?.takeIf { it.isNotBlank() }
                         ?: error("尚未获取森空岛 Token。请先登录森空岛并完成 Token 获取。")
-                    val archive = replaceZip(
-                        readPackagedZip("cloud/skland.zip"),
-                        "code/INPUT_HYPERGRYPH_TOKEN.txt",
-                        token.trim() + "\n"
-                    )
-                    createOrUpdateFunction(SENKONGDAO_FUNCTION, SENKONGDAO_HANDLER, archive)
+                    val archive = replaceZip(readPackagedZip("cloud/skland.zip"), "code/INPUT_HYPERGRYPH_TOKEN.txt", token.trim() + "\n")
+                    createOrUpdateFunction(functionName, SENKONGDAO_HANDLER, archive)
                 }
+                val function = waitForFunction(functionName)
+                val urn = function.optString("func_urn")
+                if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或修改触发器。")
+                val testSummary = invokeFunctionOnce(urn)
+                val timerSummary = ensureDailyTimerIfMissing(urn)
+                val label = if (isHoyolab) "HoYoLAB" else "森空岛"
+                val action = if (created) "创建" else "更新"
+                val detail = "$label 函数${action}成功。\n测试运行：$testSummary\n定时触发器：$timerSummary\n本次没有触碰另一个服务。"
                 runOnUiThread {
-                    val label = if (isHoyolab) "HoYoLAB" else "森空岛"
-                    val action = if (created) "创建" else "更新"
                     setCloudConnectionState("已连接")
                     updateButton.isEnabled = true
-                    showOperationMessage("$label 函数${action}成功", "本次仅提交了 $label 函数，没有触碰另一个服务。", true)
+                    showOperationMessage("$label 部署及检查完成", detail, true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -433,6 +429,74 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    private fun waitForFunction(name: String): JSONObject {
+        val base = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions"
+        var lastError = ""
+        repeat(10) { attempt ->
+            try {
+                val rows = signedGet(base + "?func_name=" + enc(name) + "&precise_search=true&maxitems=10").optJSONArray("functions")
+                val matches = if (rows == null) emptyList() else (0 until rows.length()).map { rows.getJSONObject(it) }.filter { it.optString("func_name") == name }
+                if (matches.size > 1) error("固定目标函数出现重名，已停止后续操作。")
+                val found = matches.singleOrNull()
+                if (found != null && found.optString("func_urn").isNotBlank()) return found
+            } catch (e: Exception) { lastError = e.message ?: e.javaClass.simpleName }
+            if (attempt < 9) Thread.sleep(3000)
+        }
+        error("函数包已上传，但等待函数就绪超时。" + if (lastError.isBlank()) "" else " 最近错误：$lastError")
+    }
+
+    private fun invokeFunctionOnce(functionUrn: String): String {
+        val url = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions/" + enc(functionUrn) + "/invocations"
+        val response = signedRequest("POST", url, "{}")
+        if (response.first !in 200..299) error("函数测试运行请求失败（HTTP ${response.first}）：" + response.second.take(1200))
+        val result = try { JSONObject(response.second) } catch (_: Exception) { JSONObject() }
+        val status = result.optInt("status", 200)
+        if (status >= 400) error("函数测试运行返回失败状态（$status）：" + response.second.take(1200))
+        val resultText = result.optString("result")
+        if (resultText.isNotBlank()) {
+            try {
+                val inner = JSONObject(resultText)
+                val innerStatus = inner.optInt("statusCode", 200)
+                if (innerStatus >= 400) error("函数测试运行返回业务错误（$innerStatus）：" + resultText.take(1000))
+            } catch (e: org.json.JSONException) { /* 普通文本返回值不代表调用失败。 */ }
+        }
+        val requestId = result.optString("request_id")
+        return if (requestId.isNotBlank()) "已执行一次（请求 ID：$requestId）" else "已执行一次（HTTP ${response.first}）"
+    }
+
+    private fun listFunctionTriggers(functionUrn: String): org.json.JSONArray {
+        val url = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/triggers/" + enc(functionUrn)
+        val response = signedGet(url)
+        if (!response.has("triggers") || response.optJSONArray("triggers") == null) error("华为云未返回可确认的触发器列表；为避免误覆盖，未创建任何触发器。")
+        return response.getJSONArray("triggers")
+    }
+
+    private fun ensureDailyTimerIfMissing(functionUrn: String): String {
+        val existing = listFunctionTriggers(functionUrn)
+        val timers = (0 until existing.length()).mapNotNull { existing.optJSONObject(it) }.filter { it.optString("trigger_type_code").equals("TIMER", ignoreCase = true) }
+        if (timers.isNotEmpty()) {
+            val names = timers.map { it.optJSONObject("event_data")?.optString("name")?.takeIf { name -> !name.isNullOrBlank() } ?: "未命名" }
+            return "检测到已有 ${timers.size} 个定时触发器（${names.joinToString("、")}），按要求未作任何修改。"
+        }
+        // 00:02 至 03:30（含首尾）共 209 个分钟点；随机值只在本次创建时生成一次。
+        val minuteOfDay = 2 + java.security.SecureRandom().nextInt(209)
+        val hour = minuteOfDay / 60
+        val minute = minuteOfDay % 60
+        val cron = "CRON_TZ=Asia/Shanghai 0 $minute $hour * * *"
+        val triggerName = "AutoDaily_${System.currentTimeMillis()}"
+        val body = JSONObject().put("trigger_type_code", "TIMER").put("trigger_status", "ACTIVE")
+            .put("event_data", JSONObject().put("name", triggerName).put("schedule_type", "Cron").put("schedule", cron).put("user_event", "APK 自动创建的每日任务"))
+        val url = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/triggers/" + enc(functionUrn)
+        val response = signedRequest("POST", url, body.toString())
+        if (response.first !in 200..299) error("未发现已有定时触发器，但创建每日 Cron 触发器失败（HTTP ${response.first}）：" + response.second.take(1200))
+        val verified = listFunctionTriggers(functionUrn)
+        val created = (0 until verified.length()).mapNotNull { verified.optJSONObject(it) }.any { trigger ->
+            trigger.optString("trigger_type_code").equals("TIMER", ignoreCase = true) &&
+                trigger.optJSONObject("event_data")?.optString("name") == triggerName
+        }
+        if (!created) error("华为云已接受定时触发器创建请求，但回读未能确认创建结果；为避免重复，没有再次创建。")
+        return "原先不存在定时触发器，已创建并确认每日执行：北京时间 %02d:%02d（Cron：%s）。".format(Locale.US, hour, minute, cron)
+    }
     private fun messageChannel(): String =
         if (panelService == "skland") AppMessageBus.SKLAND else AppMessageBus.HOYOLAB
 
