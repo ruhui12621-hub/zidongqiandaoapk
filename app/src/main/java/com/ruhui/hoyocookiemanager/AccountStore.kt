@@ -77,6 +77,11 @@ class AccountStore(context: Context) {
         private var legacyCleanupDone = false
 
         @Synchronized
+        fun clearMemory() {
+            synchronized(cache) { cache.clear() }
+        }
+
+        @Synchronized
         fun clearLegacyLocalData(context: Context) {
             if (legacyCleanupDone) return
             val prefs = context.getSharedPreferences("multi_account_registry", Context.MODE_PRIVATE)
