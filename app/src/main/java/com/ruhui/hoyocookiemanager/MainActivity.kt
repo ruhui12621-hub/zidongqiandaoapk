@@ -230,14 +230,24 @@ class MainActivity : HuaweiCloudActivity() {
             }
         }
 
-        val add = button("+") {
-            startActivity(android.content.Intent(this, AccountManagementActivity::class.java))
+        val add = button("+ 添加账号") {
+            val labels = arrayOf("HoYoLAB（国际服）", "森空岛", "米游社（国服）")
+            val platforms = arrayOf(AccountStore.HOYOLAB, AccountStore.SKLAND, AccountStore.MIYOUSHE_CN)
+            AlertDialog.Builder(this)
+                .setTitle("选择账号平台")
+                .setItems(labels) { _, which ->
+                    val created = AccountStore(this).add(platforms[which])
+                    startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
+                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, created.id))
+                }
+                .setNegativeButton("取消", null)
+                .show()
         }.apply {
-            textSize = 25f
-            minHeight = dp(54)
+            textSize = 16f
+            minHeight = dp(52)
             backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
         }
-        root.addView(add, LinearLayout.LayoutParams(-1, dp(54)).apply {
+        root.addView(add, LinearLayout.LayoutParams(-1, dp(52)).apply {
             topMargin = dp(4)
         })
         root.addView(text("账号凭据独立于游戏选择；相同游戏可配置在不同平台账号中。", 11, false, Color.rgb(130, 141, 158)).apply {
