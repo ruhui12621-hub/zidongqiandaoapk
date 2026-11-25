@@ -343,6 +343,40 @@ open class HuaweiCloudActivity : Activity() {
                         }
                     }
 
+                    // Restore the enabled international game list from the cloud YAML.
+                    // Without this, the imported account has an empty game set and makeYaml()
+                    // later turns every game off (including the configured ZZZ check-in).
+                    val enabledOsGames = linkedSetOf<String>()
+                    val supportedOsGames = setOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
+                    var inGamesSection = false
+                    var inOsSection = false
+                    var currentGame: String? = null
+                    yaml.lineSequence().forEach { line ->
+                        val indent = line.takeWhile { it == ' ' }.length
+                        val keyLine = line.trim()
+                        if (indent == 0) {
+                            inGamesSection = keyLine == "games:"
+                            inOsSection = false
+                            currentGame = null
+                            return@forEach
+                        }
+                        if (!inGamesSection) return@forEach
+                        if (indent == 2) {
+                            inOsSection = keyLine == "os:"
+                            currentGame = null
+                            return@forEach
+                        }
+                        if (!inOsSection) return@forEach
+                        if (indent == 4 && keyLine.endsWith(":")) {
+                            currentGame = keyLine.removeSuffix(":").takeIf { it in supportedOsGames }
+                            return@forEach
+                        }
+                        if (indent == 6 && keyLine.startsWith("checkin:") &&
+                            keyLine.substringAfter(':').trim().equals("true", true)) {
+                            currentGame?.let(enabledOsGames::add)
+                        }
+                    }
+
                     val cookie = osCookie.orEmpty()
                     if (cookie.isNotBlank() && cookie != "null" && cookie != "~" &&
                         cookie != "__HOYOLAB_COOKIE__") {
@@ -353,9 +387,17 @@ open class HuaweiCloudActivity : Activity() {
                             account.platform == AccountStore.HOYOLAB &&
                                 runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
                         }
-                        val account = existing ?: store.add(AccountStore.HOYOLAB, platformUserId = identity)
+                        val account = existing ?: store.add(
+                            AccountStore.HOYOLAB,
+                            platformUserId = identity,
+                            games = enabledOsGames
+                        )
                         HoYoCookieVault(this, account.id).save(cookie)
-                        store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
+                        store.update(account.copy(
+                            platformUserId = identity ?: account.platformUserId,
+                            games = enabledOsGames,
+                            credentialReady = true
+                        ))
                         imported++
                     }
                     // 国际服 Cookie 为空时仅跳过 HoYoLAB 凭据导入，不阻断后续森空岛 Token 同步。
