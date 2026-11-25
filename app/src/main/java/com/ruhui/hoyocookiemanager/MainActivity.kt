@@ -518,7 +518,7 @@ class MainActivity : HuaweiCloudActivity() {
         radios.setOnCheckedChangeListener { _, _ -> renderGames() }
         val scroll = ScrollView(this).apply { addView(panel) }
         AlertDialog.Builder(this)
-            .setTitle("配置选择")
+            .setTitle("服务器/游戏选择")
             .setView(scroll)
             .setNegativeButton("取消", null)
             .setPositiveButton("保存配置") { _, _ ->
