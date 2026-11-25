@@ -405,9 +405,9 @@ class MainActivity : HuaweiCloudActivity() {
                 val gameEnd = nextGame ?: section.length
                 val block = section.substring(gameStart, gameEnd)
                 val enabled = regionKey == server && selected.contains(game)
-                val changed = Regex("(?m)(^      checkin: )(true|false)").replaceFirst(block) { match ->
-                    match.groupValues[1] + enabled.toString()
-                }
+                val changed = Regex("(?m)^      checkin: (true|false)").replaceFirst(
+                    block, "      checkin: " + enabled.toString()
+                )
                 section = section.substring(0, gameStart) + changed + section.substring(gameEnd)
             }
             yaml = yaml.substring(0, regionStart) + section + yaml.substring(sectionEnd)
