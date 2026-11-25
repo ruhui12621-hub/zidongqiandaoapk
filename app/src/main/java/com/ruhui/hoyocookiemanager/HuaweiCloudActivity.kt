@@ -1,10 +1,8 @@
 package com.ruhui.hoyocookiemanager
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.os.Bundle
 import android.util.Base64
-import android.widget.*
 import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
