@@ -8,7 +8,6 @@
         android:usesCleartextTraffic="false">
         <activity
             android:name=".SenkongdaoActivity"
-            android:process=":skland"
             android:exported="false" />
         <activity
             android:name=".MainActivity"
