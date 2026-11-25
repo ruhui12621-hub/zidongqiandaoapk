@@ -61,6 +61,7 @@ class MainActivity : HuaweiCloudActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AccountStore.clearLegacyLocalData(this)
         CookieManager.getInstance().setAcceptCookie(true)
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
@@ -83,7 +84,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     override fun onDestroy() {
-        // 只销毁 WebView 实例，不清理 Cookie、缓存或站点存储；登录状态由独立数据目录持久保存。
+        // 登录 Cookie 只在本次运行期间存在；Activity 退出时清理 WebView 本地会话。
         try {
             popupWebView?.let { popup ->
                 (popup.parent as? ViewGroup)?.removeView(popup)
@@ -93,8 +94,11 @@ class MainActivity : HuaweiCloudActivity() {
             }
             if (::webView.isInitialized) {
                 webView.stopLoading()
+                webView.clearCache(true)
                 webView.destroy()
             }
+            CookieManager.getInstance().removeAllCookies { CookieManager.getInstance().flush() }
+            WebStorage.getInstance().deleteAllData()
         } catch (_: Exception) {
             // 系统回收时，WebView 数据目录仍会保留登录状态。
         }
@@ -346,7 +350,7 @@ class MainActivity : HuaweiCloudActivity() {
         content.addView(button("刷新消息") {
             hoyoMessage.text = AppMessageBus.current(this, AppMessageBus.HOYOLAB)
         })
-        content.addView(text("登录成功后自动识别当前平台账号，并将 Cookie 加密保存在该账号名下。", 13, false, Color.rgb(160, 168, 182)).apply {
+        content.addView(text("登录后读取当前会话 Cookie，仅用于生成并更新云端配置；不会在本机保存 Cookie。", 13, false, Color.rgb(160, 168, 182)).apply {
             setPadding(0, dp(8), 0, dp(12))
         })
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -794,17 +798,6 @@ class MainActivity : HuaweiCloudActivity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
         toast("已复制 $label")
-    }
-
-    private fun saveConfig() {
-        if (yamlValue.isBlank()) {
-            toast("请先获取 Cookie")
-            return
-        }
-        openFileOutput("config.yaml", Context.MODE_PRIVATE).use {
-            it.write(yamlValue.toByteArray(Charsets.UTF_8))
-        }
-        toast("已保存到应用内部 files/config.yaml")
     }
 
     private fun clearSession() {
