@@ -29,8 +29,8 @@ import android.widget.Toast
 
 class MainActivity : HuaweiCloudActivity() {
     private lateinit var root: LinearLayout
-    private lateinit var status: TextView
-    private lateinit var details: TextView
+    private var statusText = "登录状态：尚未检测"
+    private var detailsText = "登录后自动检测 Cookie。"
     private lateinit var webView: WebView
     private lateinit var loginChrome: WebView
     private var popupWebView: WebView? = null
@@ -41,14 +41,8 @@ class MainActivity : HuaweiCloudActivity() {
     private var activePlatform: String? = null
     private var returnToAccountDetail = false
     private var browserVisible = false
-    private var showingLauncher = true
     private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
-    private var firstLauncherResume = true
-    private var todayStatusQuerying = false
-    private var todayStatusQueriedAt = 0L
-    private var todayStatusMessage = "等待读取今日签到日志"
-    private var todayCheckinStatuses: Map<String, String> = emptyMap()
 
     private val cookieUrls = listOf(
         "https://www.hoyolab.com/",
@@ -103,223 +97,16 @@ class MainActivity : HuaweiCloudActivity() {
         super.onDestroy()
     }
 
-    private fun buildLauncher() {
-        showingLauncher = true
-        showingBrowser = false
-        if (::webView.isInitialized) (webView.parent as? ViewGroup)?.removeView(webView)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(20), dp(18), dp(18))
-            setBackgroundColor(Color.rgb(15, 17, 23))
-        }
-        root.addView(text("自动签到管理", 25, true).apply {
-            setPadding(0, 0, 0, dp(5))
-        })
-        root.addView(text("云服务与账号", 13, false, Color.rgb(155, 164, 178)).apply {
-            setPadding(0, 0, 0, dp(18))
-        })
-
-        fun row(parent: LinearLayout, title: String, subtitle: String, statusText: String, detailText: String? = null, action: () -> Unit) {
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), dp(14), dp(12), dp(14))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(Color.rgb(32, 38, 49))
-                    cornerRadius = dp(13).toFloat()
-                }
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { action() }
-            }
-            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            info.addView(text(title, 16, true))
-            if (subtitle.isNotBlank()) {
-                info.addView(text(subtitle, 12, false, Color.rgb(155, 164, 178)).apply {
-                    setPadding(0, dp(5), 0, 0)
-                })
-            }
-            if (!detailText.isNullOrBlank()) {
-                info.addView(text(detailText, 12, false, Color.rgb(155, 164, 178)).apply {
-                    setPadding(0, dp(5), 0, 0)
-                })
-            }
-            item.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-            if (statusText.isNotBlank()) {
-                item.addView(text(statusText, 11, false, Color.rgb(155, 164, 178)))
-            }
-            item.addView(text("›", 24, false, Color.rgb(155, 164, 178)).apply {
-                setPadding(dp(8), 0, 0, 0)
-            })
-            parent.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
-                bottomMargin = dp(10)
-            })
-        }
-
-        val cloudSaved = runCatching { AndroidCredentialVault(this).latest() != null }.getOrDefault(false)
-        val cloudStatus = when {
-            HuaweiCloudSession.isLoggedIn() -> "已连接"
-            cloudSaved -> "凭据已保存"
-            else -> "未登录"
-        }
-        row(root, "华为云登录", "管理 AK / SK、Region 和云端连接", cloudStatus) {
-            startActivity(android.content.Intent(this, HuaweiCloudSettingsActivity::class.java))
-        }
-
-        val cloudSyncState = CloudAccountSyncState.get(this)
-        val cloudSyncLabel = when (cloudSyncState) {
-            CloudAccountSyncState.SYNCING -> "正在读取华为云配置，账号操作暂时锁定"
-            CloudAccountSyncState.SYNCED -> "云端配置已读取；账号新增/删除需云端写入支持"
-            CloudAccountSyncState.EMPTY_CONFIRMED -> "云端已确认没有历史函数配置，可进行首次初始化"
-            CloudAccountSyncState.FAILED -> "云端读取失败，账号操作已锁定"
-            else -> "请先连接华为云并读取现有配置"
-        }
-        root.addView(text(cloudSyncLabel, 12, false, Color.rgb(255, 204, 128)).apply {
-            setPadding(0, dp(2), 0, dp(8))
-        })
-
-        val accounts = AccountStore(this).all()
-        val cloudAccountsReady = CloudAccountSyncState.get(this) == CloudAccountSyncState.SYNCED
-        val accountHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        accountHeader.addView(text("账号列表", 17, true), LinearLayout.LayoutParams(0, -2, 1f))
-        if (cloudAccountsReady && accounts.isNotEmpty()) {
-            accountHeader.addView(button(if (todayStatusQuerying) "读取中…" else "刷新签到状态") {
-                refreshTodayCheckinStatus(force = true)
-            }.apply {
-                isEnabled = !todayStatusQuerying
-                textSize = 12f
-                minHeight = dp(36)
-            }, LinearLayout.LayoutParams(-2, -2))
-        }
-        root.addView(accountHeader, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(8)
-            bottomMargin = dp(10)
-        })
-        val accountScroll = ScrollView(this)
-        val accountContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        accountScroll.addView(accountContainer)
-        root.addView(accountScroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        if (accounts.isEmpty()) {
-            accountContainer.addView(text("还没有添加账号。点击下方加号，选择 HoYoLAB、森空岛或米游社国服。", 13, false, Color.rgb(145, 155, 172)).apply {
-                setPadding(dp(4), dp(4), dp(4), dp(12))
-            })
-        } else {
-            accounts.forEach { account ->
-                val rawCheckinStatus = todayCheckinStatuses[account.id].orEmpty()
-                val checkinLabel = when {
-                    !cloudAccountsReady -> "今日状态待同步"
-                    rawCheckinStatus.contains("成功") -> "今日已签到"
-                    rawCheckinStatus.contains("失败") -> "今日签到失败"
-                    todayStatusQuerying && rawCheckinStatus.isBlank() -> "正在读取今日签到状态…"
-                    else -> "今日签到状态未知"
-                }
-                row(
-                    accountContainer,
-                    account.name,
-                    "",
-                    "",
-                    checkinLabel
-                ) {
-                    if (!CloudAccountSyncState.allowsAccountChanges(this)) {
-                        Toast.makeText(this, "请先完成云端配置同步，避免使用过期的本地账号。", Toast.LENGTH_LONG).show()
-                        return@row
-                    }
-                    startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
-                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id))
-                }
-            }
-        }
-
-        val canChangeAccounts = CloudAccountSyncState.get(this) == CloudAccountSyncState.EMPTY_CONFIRMED
-        val add = button(if (canChangeAccounts) "+ 添加账号" else "云端账号新增尚未开放") {
-            if (!CloudAccountSyncState.allowsAccountChanges(this)) {
-                Toast.makeText(this, "必须先成功读取华为云配置，才能添加账号。", Toast.LENGTH_LONG).show()
-                return@button
-            }
-            val labels = arrayOf("HoYoLAB（国际服）", "森空岛", "米游社（国服）")
-            val platforms = arrayOf(AccountStore.HOYOLAB, AccountStore.SKLAND, AccountStore.MIYOUSHE_CN)
-            AlertDialog.Builder(this)
-                .setTitle("选择账号平台")
-                .setItems(labels) { _, which ->
-                    val created = AccountStore(this).add(platforms[which])
-                    startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
-                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, created.id))
-                }
-                .setNegativeButton("取消", null)
-                .show()
-        }.apply {
-            textSize = 16f
-            minHeight = dp(52)
-            isEnabled = canChangeAccounts
-            alpha = if (canChangeAccounts) 1f else 0.55f
-            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
-        }
-        root.addView(add, LinearLayout.LayoutParams(-1, dp(52)).apply {
-            topMargin = dp(4)
-        })
-        root.addView(text("账号凭据独立于游戏选择；相同游戏可配置在不同平台账号中。", 11, false, Color.rgb(130, 141, 158)).apply {
-            setPadding(0, dp(12), 0, 0)
-        })
-        setContentView(root)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (firstLauncherResume) {
-            firstLauncherResume = false
-            return
-        }
-        // Refresh the home page when returning from account/cloud settings. Avoid repeated
-        // LTS requests while the user is simply navigating around the launcher.
-        if (showingLauncher && !isFinishing) {
-            buildLauncher()
-            refreshTodayCheckinStatus(force = false)
-        }
-    }
-
-    private fun refreshTodayCheckinStatus(force: Boolean) {
-        if (!showingLauncher || isFinishing || todayStatusQuerying) return
-        val now = System.currentTimeMillis()
-        if (!force && now - todayStatusQueriedAt < 5L * 60L * 1000L) return
-        val syncState = CloudAccountSyncState.get(this)
-        if (syncState != CloudAccountSyncState.SYNCED && syncState != CloudAccountSyncState.EMPTY_CONFIRMED) {
-            todayStatusMessage = when (syncState) {
-                CloudAccountSyncState.FAILED -> "云端账号配置读取失败，暂不关联签到日志"
-                CloudAccountSyncState.SYNCING -> "正在同步云端账号配置…"
-                else -> "请先连接华为云并完成账号配置同步"
-            }
-            if (showingLauncher) buildLauncher()
-            return
-        }
-        todayStatusQuerying = true
-        todayStatusQueriedAt = now
-        todayStatusMessage = "正在读取今天的 FunctionGraph 运行日志…"
-        if (showingLauncher) buildLauncher()
-        queryTodayCheckinStatusForAccounts { statuses, message ->
-            todayCheckinStatuses = statuses
-            todayStatusMessage = message
-            todayStatusQuerying = false
-            todayStatusQueriedAt = System.currentTimeMillis()
-            if (showingLauncher && !isFinishing) buildLauncher()
-        }
-    }
-
     private fun buildHome() {
         AppMessageBus.setActiveChannel(AppMessageBus.HOYOLAB)
-        showingLauncher = false
         showingBrowser = false
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(12, 15, 22))
+            setBackgroundColor(Color.rgb(5, 5, 5))
         }
-        status = TextView(this).apply { text = "登录状态：尚未检测" }
-        details = TextView(this).apply { text = "登录后自动检测 Cookie。" }
         if (!::loginChrome.isInitialized) {
             loginChrome = WebView(this).apply {
-                setBackgroundColor(Color.rgb(12, 15, 22))
+                setBackgroundColor(Color.rgb(5, 5, 5))
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
                 settings.allowFileAccess = true
@@ -344,8 +131,8 @@ class MainActivity : HuaweiCloudActivity() {
         if (!::loginChrome.isInitialized) return
         val payload = org.json.JSONObject()
             .put("title", if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录")
-            .put("status", if (::status.isInitialized) status.text.toString() else "登录状态：尚未检测")
-            .put("detail", if (::details.isInitialized) details.text.toString() else "")
+            .put("status", statusText)
+            .put("detail", detailsText)
             .put("message", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
         loginChrome.post {
             loginChrome.evaluateJavascript(
@@ -374,10 +161,8 @@ class MainActivity : HuaweiCloudActivity() {
             else buildHome()
         } else if (returnToAccountDetail) {
             finish()
-        } else if (!showingLauncher) {
-            buildLauncher()
         } else {
-            finishAffinity()
+            finish()
         }
     }
 
@@ -457,7 +242,7 @@ class MainActivity : HuaweiCloudActivity() {
                     }
                     override fun onPageFinished(view: WebView, url: String) {
                         super.onPageFinished(view, url)
-                        status.text = "页面已加载，正在检查 Cookie…"
+                        statusText = "页面已加载，正在检查 Cookie…"
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         DesktopWebView.enablePageZoom(view)
@@ -584,7 +369,7 @@ class MainActivity : HuaweiCloudActivity() {
             val requested = activeAccountId?.let { AccountStore(this).find(it) }
             if (requested != null && requested.platform != platform) {
                 status.text = "账号平台不匹配"
-                details.text = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
+                detailsText = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
                 updateHuaweiCloudConfig("")
                 pushLoginChrome()
                 return
@@ -739,56 +524,6 @@ class MainActivity : HuaweiCloudActivity() {
         return yaml
     }
 
-    private fun showConfigSelection() {
-        val savedGames = activeAccountId?.let { AccountStore(this).find(it)?.games?.toMutableSet() } ?: mutableSetOf("zzz")
-        val labels = linkedMapOf(
-            "genshin" to "原神",
-            "honkai2" to "崩坏2",
-            "honkai3rd" to "崩坏3",
-            "tears_of_themis" to "未定事件簿",
-            "honkai_sr" to "崩坏：星穹铁道",
-            "zzz" to "绝区零"
-        )
-        val checks = linkedMapOf<String, CheckBox>()
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(4))
-        }
-        panel.addView(TextView(this).apply {
-            text = "选择需要更新的游戏（可多选）"
-            textSize = 14f
-            setTextColor(Color.rgb(170, 190, 220))
-        })
-        labels.forEach { (key, label) ->
-            val check = CheckBox(this).apply {
-                text = label
-                setTextColor(Color.rgb(230, 234, 242))
-                isChecked = savedGames.contains(key)
-                setPadding(0, dp(3), 0, dp(3))
-            }
-            checks[key] = check
-            panel.addView(check)
-        }
-        val scroll = ScrollView(this).apply { addView(panel) }
-        AlertDialog.Builder(this)
-            .setTitle("游戏选择")
-            .setView(scroll)
-            .setNegativeButton("取消", null)
-            .setPositiveButton("保存配置") { _, _ ->
-                val chosen = checks.filterValues { it.isChecked }.keys
-                if (chosen.isEmpty()) {
-                    toast("至少选择一个游戏")
-                    return@setPositiveButton
-                }
-                val server = detectedGameServer
-                if (cookieValue.isNotBlank() && server != null) {
-                    yamlValue = makeYaml(cookieValue, server)
-                    updateHuaweiCloudConfig(yamlValue)
-                }
-                toast("已更新当前会话的游戏选择；需将生成的配置上传云端后才会长期生效")
-            }
-            .show()
-    }
     private fun copy(value: String, label: String) {
         if (value.isBlank()) {
             toast("请先登录并获取 Cookie")
@@ -824,32 +559,6 @@ class MainActivity : HuaweiCloudActivity() {
             pushLoginChrome()
             toast("已清除登录会话")
         }
-    }
-
-    private fun button(label: String, action: () -> Unit): Button =
-        Button(this).apply {
-            text = label
-            isAllCaps = false
-            textSize = 15f
-            setTextColor(Color.rgb(238, 241, 247))
-            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 46, 60))
-            minHeight = dp(48)
-            setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(-1, -2).apply {
-                topMargin = dp(9)
-            }
-        }
-
-    private fun text(
-        value: String,
-        size: Int,
-        bold: Boolean,
-        color: Int = Color.BLACK
-    ): TextView = TextView(this).apply {
-        text = value
-        textSize = size.toFloat()
-        setTextColor(if (color == Color.BLACK) Color.rgb(235, 238, 245) else color)
-        if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
     }
 
     private fun dp(value: Int): Int =
