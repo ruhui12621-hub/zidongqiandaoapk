@@ -21,6 +21,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var loginWebView: WebView? = null
     private var popupWebView: WebView? = null
     private lateinit var tokenStatus: TextView
+    private var parsingTokenPage = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,6 +116,12 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
                 CookieManager.getInstance().flush()
+                if (parsingTokenPage && url.substringBefore('?').trimEnd('/') == TOKEN_URL.trimEnd('/')) {
+                    view.evaluateJavascript("(function(){return document.body ? document.body.innerText : '';})()") { encoded ->
+                        parseAndSaveToken(encoded)
+                        if (loginWebView != null) loginWebView?.loadUrl("https://www.skland.com/")
+                    }
+                }
             }
         }
     }
@@ -126,24 +133,24 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             tokenStatus.setTextColor(0xFFFFCC80.toInt())
             return
         }
+        parsingTokenPage = true
         tokenStatus.text = "正在读取森空岛官方 Token…"
         tokenStatus.setTextColor(0xFFE1E6EF.toInt())
-        active.evaluateJavascript("(function(){return fetch('$TOKEN_URL',{credentials:'include'}).then(r=>r.text()).catch(e=>'__FETCH_ERROR__'+e);})()") { encoded ->
-            parseAndSaveToken(encoded)
-        }
+        active.loadUrl(TOKEN_URL)
     }
 
     private fun parseAndSaveToken(encodedBody: String) {
         try {
             val body = org.json.JSONTokener(encodedBody).nextValue() as? String ?: error("无法读取 Token 接口响应。")
-            if (body.startsWith("__FETCH_ERROR__")) error(body.removePrefix("__FETCH_ERROR__"))
             val json = JSONObject(body)
             if (json.has("code") && json.optInt("code") != 0) error("森空岛接口返回错误：" + json.optString("message", "未知错误"))
             val token = json.optJSONObject("data")?.optString("content").orEmpty().ifBlank { json.optString("content").orEmpty() }
             if (token.isBlank() || token.any(Char::isWhitespace)) error("接口没有返回有效 Token，请确认已登录森空岛。")
             SklandTokenVault(this).save(token)
+            parsingTokenPage = false
             runOnUiThread { tokenStatus.text = "✓ Token 已解析并加密保存"; tokenStatus.setTextColor(0xFF75D69C.toInt()) }
         } catch (e: Exception) {
+            parsingTokenPage = false
             runOnUiThread { tokenStatus.text = "Token 获取失败：" + (e.message ?: e.javaClass.simpleName); tokenStatus.setTextColor(0xFFFF8A80.toInt()) }
         }
     }
