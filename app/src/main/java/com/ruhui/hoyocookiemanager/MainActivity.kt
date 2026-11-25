@@ -212,56 +212,59 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(2), 0, dp(8))
         })
 
-        val todayCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.rgb(32, 38, 49))
-                cornerRadius = dp(13).toFloat()
-            }
-        }
-        val todayHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        todayHeader.addView(text("今日签到", 16, true), LinearLayout.LayoutParams(0, -2, 1f))
-        todayHeader.addView(button(if (todayStatusQuerying) "读取中…" else "刷新日志") {
-            refreshTodayCheckinStatus(force = true)
-        }.apply {
-            isEnabled = !todayStatusQuerying
-            textSize = 12f
-            minHeight = dp(38)
-        }, LinearLayout.LayoutParams(-2, -2))
-        todayCard.addView(todayHeader)
-        todayCard.addView(text(todayStatusMessage, 11, false, Color.rgb(155, 164, 178)).apply {
-            setPadding(0, dp(5), 0, dp(8))
-        })
         val todayAccounts = AccountStore(this).all()
-        if (todayAccounts.isEmpty()) {
-            todayCard.addView(text("添加并同步账号后，这里会显示各账号的今日签到结果。", 12, false, Color.rgb(155, 164, 178)))
-        } else {
-            todayAccounts.forEach { account ->
-                val line = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(0, dp(6), 0, dp(6))
+        val cloudAccountsReady = CloudAccountSyncState.get(this) == CloudAccountSyncState.SYNCED
+        // 今日签到板块只属于已成功加载的账号列表；无账号或云端同步未完成时完全不显示。
+        if (cloudAccountsReady && todayAccounts.isNotEmpty()) {
+            val todayCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(32, 38, 49))
+                    cornerRadius = dp(13).toFloat()
                 }
-                line.addView(text(account.name, 13, true), LinearLayout.LayoutParams(0, -2, 1f))
-                val checkin = todayCheckinStatuses[account.id]
-                    ?: if (todayStatusQuerying) "正在读取…" else "尚未读取"
-                val color = when {
-                    checkin.contains("成功") -> Color.rgb(115, 210, 150)
-                    checkin.contains("失败") -> Color.rgb(255, 130, 130)
-                    else -> Color.rgb(190, 199, 213)
-                }
-                line.addView(text(checkin, 11, false, color))
-                todayCard.addView(line)
             }
+            val todayHeader = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            todayHeader.addView(text("今日签到", 16, true), LinearLayout.LayoutParams(0, -2, 1f))
+            todayHeader.addView(button(if (todayStatusQuerying) "读取中…" else "刷新日志") {
+                refreshTodayCheckinStatus(force = true)
+            }.apply {
+                isEnabled = !todayStatusQuerying
+                textSize = 12f
+                minHeight = dp(38)
+            }, LinearLayout.LayoutParams(-2, -2))
+            todayCard.addView(todayHeader)
+            todayCard.addView(text(todayStatusMessage, 11, false, Color.rgb(155, 164, 178)).apply {
+                setPadding(0, dp(5), 0, dp(8))
+            })
+                todayAccounts.forEach { account ->
+                    val line = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(0, dp(6), 0, dp(6))
+                    }
+                    line.addView(text(account.name, 13, true), LinearLayout.LayoutParams(0, -2, 1f))
+                    val checkin = todayCheckinStatuses[account.id]
+                        ?: if (todayStatusQuerying) "正在读取…" else "尚未读取"
+                    val color = when {
+                        checkin.contains("成功") -> Color.rgb(115, 210, 150)
+                        checkin.contains("失败") -> Color.rgb(255, 130, 130)
+                        else -> Color.rgb(190, 199, 213)
+                    }
+                    line.addView(text(checkin, 11, false, color))
+                    todayCard.addView(line)
+                }
+            }
+            root.addView(todayCard, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(10)
+            })
+    
+    
         }
-        root.addView(todayCard, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(10)
-        })
-
+        
         root.addView(text("账号列表", 17, true).apply {
             setPadding(0, dp(8), 0, dp(10))
         })
