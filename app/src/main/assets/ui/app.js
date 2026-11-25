@@ -92,7 +92,6 @@ function renderMessages(){
  const content=state.allMessages||"暂无运行消息";
  return pageTitle("全部运行消息","集中显示本程序各服务的操作记录、运行结果与错误信息。")+
   '<div class="message-box all-message-box">'+esc(content)+'</div>'+
-  '<button class="secondary" data-action="message-refresh">刷新消息</button>'+
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
@@ -149,7 +148,6 @@ document.addEventListener("click",e=>{
   native("cloudLogin",cloudDraft.region,cloudDraft.ak,cloudDraft.sk);toast("正在验证华为云凭据")
  }
  
- if(action==="message-refresh"){readState();toast("消息已刷新")}
  if(action==="copy-all-messages"){native("copyText",state.allMessages||"暂无运行消息");toast("全部运行消息已复制")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
