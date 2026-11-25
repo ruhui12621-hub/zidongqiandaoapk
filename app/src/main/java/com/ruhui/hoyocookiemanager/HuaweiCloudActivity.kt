@@ -75,7 +75,7 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = code
                     HuaweiCloudSession.projectId = ""
                     projectId = ""
-                    cloudStatus.text = "地区已切换为 $code，请重新登录并读取该地区的函数列表。"
+                    cloudStatus.text = "[尚未连接]"
                     updateButton.isEnabled = false
                     logsButton.isEnabled = false
                 }
@@ -91,20 +91,29 @@ open class HuaweiCloudActivity : Activity() {
             setTextColor(0xFFFFCC80.toInt())
             setPadding(0, dp(10), 0, dp(8))
         })
-        content.addView(Button(this).apply {
-            text = "登录并连接华为云"; isAllCaps = false; setOnClickListener { login() }
-        })
-        cloudStatus = TextView(this).apply {
-            text = "华为云状态：尚未连接"
-            textSize = 14f
-            setTextColor(0xFFB8C1D1.toInt())
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setBackgroundColor(0xFF202631.toInt())
+        val connectionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
         }
-        content.addView(cloudStatus)
+        val loginButton = Button(this).apply {
+            text = "登录并连接华为云"
+            isAllCaps = false
+            setOnClickListener { login() }
+        }
+        connectionRow.addView(loginButton, LinearLayout.LayoutParams(0, -2, 1f))
+        cloudStatus = TextView(this).apply {
+            text = "[尚未连接]"
+            textSize = 13f
+            maxLines = 1
+            setTextColor(0xFFFFCC80.toInt())
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(10), 0, 0, 0)
+        }
+        connectionRow.addView(cloudStatus, LinearLayout.LayoutParams(-2, -2))
+        content.addView(connectionRow)
         if (service == "hoyolab") {
             content.addView(Button(this).apply {
-                text = "配置选择"; isAllCaps = false
+                text = "服务器/游戏选择"; isAllCaps = false
                 setOnClickListener { onConfigure() }
             })
         }
@@ -130,9 +139,14 @@ open class HuaweiCloudActivity : Activity() {
             setTextIsSelectable(true)
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setBackgroundColor(0xFF202631.toInt())
-            minHeight = dp(72)
+            minHeight = dp(190)
+            textSize = 13f
         }
-        content.addView(resultMessage)
+        val messageScroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(resultMessage, ScrollView.LayoutParams(-1, -2))
+        }
+        content.addView(messageScroll, LinearLayout.LayoutParams(-1, dp(230)))
         copyResultButton = Button(this).apply {
             text = "复制消息内容"
             isAllCaps = false
@@ -237,7 +251,7 @@ open class HuaweiCloudActivity : Activity() {
         val s = sk.text.toString()
         if (r.isBlank() || a.isBlank() || s.isBlank()) {
             val detail = "请填写 Region、AK 和 SK。"
-            cloudStatus.text = detail
+            cloudStatus.text = "[尚未连接]"
             showOperationMessage("华为云登录失败", detail, false)
             return
         }
@@ -278,6 +292,7 @@ open class HuaweiCloudActivity : Activity() {
                         } else {
                             if (sklandReady) "\n森空岛：Token 已就绪" else "\n森空岛：等待 Token"
                         }) + vaultWarning
+                    */
                     updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
                     logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
@@ -285,7 +300,7 @@ open class HuaweiCloudActivity : Activity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     val detail = "登录/查询失败：" + (e.message ?: e.javaClass.simpleName)
-                    cloudStatus.text = detail
+                    cloudStatus.text = "[连接失败]"
                     showOperationMessage("华为云登录失败", detail, false)
                 }
             }
@@ -395,13 +410,13 @@ open class HuaweiCloudActivity : Activity() {
             HuaweiCloudSession.lastConfigYaml = configYaml
             if (configYaml.isBlank() || !configYaml.contains("cookie:")) {
                 val detail = "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。"
-                cloudStatus.text = detail
+                cloudStatus.text = "[尚未连接]"
                 showOperationMessage("HoYoLAB 更新失败", detail, false)
                 return
             }
         }
         updateButton.isEnabled = false
-        cloudStatus.text = if (isHoyolab) "正在单独更新 HoYoLAB 函数…" else "正在单独更新森空岛函数…"
+        cloudStatus.text = "[已连接]"
         showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在准备部署包并提交到华为云…", null)
         worker.execute {
             try {
