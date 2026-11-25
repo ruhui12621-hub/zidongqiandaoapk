@@ -103,8 +103,8 @@ class AccountManagementActivity : Activity() {
                     if (key.isBlank() || value.isBlank()) null else key to value
                 }.toMap()
                 val isCn = account.platform == AccountStore.MIYOUSHE_CN
-                val cookieKeys = if (isCn) setOf("account_id", "ltuid", "stuid", "ltuid_v2") else setOf("ltuid_v2", "account_id_v2", "ltuid", "account_id")
-                val tokenKeys = if (isCn) setOf("stoken", "stoken_v2", "cookie_token", "ltoken") else setOf("ltoken_v2", "cookie_token_v2", "stoken", "cookie_token")
+                val cookieKeys = if (isCn) setOf("account_id", "ltuid", "stuid") else setOf("ltuid_v2", "account_id_v2")
+                val tokenKeys = if (isCn) setOf("stoken", "stoken_v2", "cookie_token", "ltoken") else setOf("ltoken_v2", "cookie_token_v2")
                 val cookieReady = cookieKeys.any { !fields[it].isNullOrBlank() }
                 val tokenReady = tokenKeys.any { !fields[it].isNullOrBlank() }
                 val region = if (isCn) "国服（米游社）" else "国际服（HoYoLAB）"
@@ -118,7 +118,7 @@ class AccountManagementActivity : Activity() {
                 addView(text("状态仅统计当前账号所属游戏区的本地加密凭据，不会把另一游戏区的登录状态算作成功。", 12, false, 0xFF9BA7B8.toInt()).apply {
                     setPadding(0, dp(6), 0, 0)
                 })
-                addView(button("打开 " + if (isCn) "米游社" else "HoYoLAB" + " 网页") {
+                addView(button("打开 " + (if (isCn) "米游社" else "HoYoLAB") + " 网页") {
                     openHoyoLogin(account)
                 })
                 addView(button("登录 / 更新凭证") {
