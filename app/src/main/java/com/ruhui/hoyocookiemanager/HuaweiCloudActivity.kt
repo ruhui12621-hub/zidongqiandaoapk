@@ -138,7 +138,7 @@ open class HuaweiCloudActivity : Activity() {
         }
         val messageScroll = ScrollView(this).apply {
             isFillViewport = true
-            addView(resultMessage, ScrollView.LayoutParams(-1, -2))
+            addView(resultMessage, android.widget.FrameLayout.LayoutParams(-1, -2))
         }
         content.addView(messageScroll, LinearLayout.LayoutParams(-1, dp(230)))
         copyResultButton = Button(this).apply {
