@@ -54,6 +54,7 @@ open class HuaweiCloudActivity : Activity() {
     }
 
     private fun setCloudConnectionState(state: String) { connectionLabel = state }
+    protected fun cloudConnectionStatus(): String = connectionLabel
 
     /** Called after a successful cloud login and account synchronization. */
     protected open fun onCloudLoginSyncComplete() {}
@@ -493,103 +494,6 @@ open class HuaweiCloudActivity : Activity() {
                     showOperationMessage("华为云登录失败", detail, false)
                 }
             }
-        }
-    }
-
-    /**
-     * Query only today's LTS output for the two scheduled check-in functions.
-     * Credentials are read from the encrypted local vault.
-     */
-    protected fun queryTodayCheckinStatus(onResult: (String, String, String) -> Unit) {
-        val saved = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
-        if (saved == null) {
-            onResult("未配置 AK/SK", "未配置 AK/SK", "请先在任一服务页连接华为云")
-            return
-        }
-        val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
-        val selectedRegion = prefs.getString("cloud_region", "cn-east-3") ?: "cn-east-3"
-        worker.execute {
-            var hoyo = "查询中"
-            var skland = "查询中"
-            var detail = ""
-            try {
-                authAk = saved.first
-                authSk = saved.second
-                regionValue = selectedRegion
-                val projects = signedGet("https://iam.$regionValue.myhuaweicloud.com/v3/projects")
-                val rows = projects.optJSONArray("projects") ?: error("IAM 未返回项目列表")
-                projectId = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
-                    .firstOrNull { it.optString("name").equals(regionValue, true) }
-                    ?.optString("id").orEmpty()
-                if (projectId.isBlank()) error("AK/SK 已读取，但未找到 $regionValue 对应的项目")
-                HuaweiCloudSession.ak = authAk
-                HuaweiCloudSession.sk = authSk
-                HuaweiCloudSession.region = regionValue
-                HuaweiCloudSession.projectId = projectId
-
-                fun queryOne(functionName: String): String {
-                    val listUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions?func_name=" +
-                        enc(functionName) + "&precise_search=true&maxitems=10"
-                    val functions = signedGet(listUrl).optJSONArray("functions")
-                        ?: return "函数不存在或无法查询"
-                    val matches = (0 until functions.length()).mapNotNull { functions.optJSONObject(it) }
-                        .filter { it.optString("func_name") == functionName }
-                    if (matches.size != 1) return "函数不存在或无法唯一识别"
-                    val urn = matches.single().optString("func_urn")
-                    val logDetail = signedGet(
-                        "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail"
-                    )
-                    val groupId = logDetail.optString("group_id")
-                    val streamId = logDetail.optString("stream_id")
-                    if (groupId.isBlank() || streamId.isBlank()) return "未启用日志或日志流不可用"
-
-                    val calendar = Calendar.getInstance()
-                    calendar.set(Calendar.HOUR_OF_DAY, 0)
-                    calendar.set(Calendar.MINUTE, 0)
-                    calendar.set(Calendar.SECOND, 0)
-                    calendar.set(Calendar.MILLISECOND, 0)
-                    val start = calendar.timeInMillis
-                    val end = System.currentTimeMillis()
-                    val queryUrl = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId/groups/${enc(groupId)}/streams/${enc(streamId)}/content/query"
-                    val body = JSONObject().put("start_time", start.toString())
-                        .put("end_time", end.toString()).put("limit", 1000)
-                        .put("is_desc", true).put("search_type", "init")
-                        .put("is_count", true).put("is_iterative", true)
-                    val response = signedRequest("POST", queryUrl, body.toString())
-                    if (response.first !in 200..299) error("LTS HTTP ${response.first}: ${response.second.take(300)}")
-                    val logs = JSONObject(response.second).optJSONArray("logs") ?: return "今天暂无运行记录"
-                    if (logs.length() == 0) return "今天暂无运行记录"
-
-                    val contents = (0 until logs.length()).mapNotNull { i ->
-                        logs.optJSONObject(i)?.optString("content")?.takeIf { it.isNotBlank() }
-                    }
-                    // LTS is queried newest-first; use the newest explicit business result only.
-                    val latestOutcome = contents.firstOrNull { line ->
-                        line.contains("签到成功") || line.contains("签到完成") ||
-                            line.contains("签到失败") || line.contains("check-in success", true) ||
-                            line.contains("checkin success", true) || line.contains("check-in failed", true) ||
-                            line.contains("checkin failed", true)
-                    }.orEmpty()
-                    return when {
-                        latestOutcome.contains("签到成功") || latestOutcome.contains("签到完成") ||
-                            latestOutcome.contains("check-in success", true) ||
-                            latestOutcome.contains("checkin success", true) -> "签到成功"
-                        latestOutcome.contains("签到失败") || latestOutcome.contains("check-in failed", true) ||
-                            latestOutcome.contains("checkin failed", true) -> "签到失败（请查看函数运行消息）"
-                        else -> "今天已运行，但日志未包含可确认的签到结果"
-                    }
-                }
-
-                try { hoyo = queryOne(HOYOLAB_FUNCTION) }
-                catch (e: Exception) { hoyo = "查询失败：${e.message ?: e.javaClass.simpleName}" }
-                try { skland = queryOne(SKLAND_FUNCTION) }
-                catch (e: Exception) { skland = "查询失败：${e.message ?: e.javaClass.simpleName}" }
-            } catch (e: Exception) {
-                detail = e.message ?: e.javaClass.simpleName
-                if (hoyo == "查询中") hoyo = "查询失败：$detail"
-                if (skland == "查询中") skland = "查询失败：$detail"
-            }
-            runOnUiThread { onResult(hoyo, skland, detail) }
         }
     }
 
