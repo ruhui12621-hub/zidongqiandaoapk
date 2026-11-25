@@ -24,6 +24,7 @@ class AccountManagementActivity : Activity() {
         "zzz" to "绝区零", "arknights" to "明日方舟"
     )
     private var accountId: String? = null
+    private var firstResume = true
     private var nameInput: EditText? = null
     private val checks = linkedMapOf<String, CheckBox>()
 
@@ -40,7 +41,7 @@ class AccountManagementActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (accountId != null) render()
+        if (firstResume) firstResume = false else if (accountId != null) render()
     }
 
     private fun render() {
