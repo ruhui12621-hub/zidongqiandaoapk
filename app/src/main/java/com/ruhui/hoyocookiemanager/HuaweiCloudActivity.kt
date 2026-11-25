@@ -122,7 +122,7 @@ open class HuaweiCloudActivity : Activity() {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setPadding(0, dp(22), 0, dp(6))
         })
-        lastResultMessage = AppMessageBus.current(this)
+        lastResultMessage = AppMessageBus.current(this, messageChannel())
         resultMessage = TextView(this).apply {
             text = lastResultMessage
             textSize = 13f
@@ -442,8 +442,11 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    private fun messageChannel(): String =
+        if (panelService == "skland") AppMessageBus.SKLAND else AppMessageBus.HOYOLAB
+
     protected fun showOperationMessage(title: String, detail: String, success: Boolean?) {
-        AppMessageBus.post(this, title, detail, success)
+        AppMessageBus.post(this, messageChannel(), title, detail, success)
         lastResultMessage = AppMessageBus.current(this)
         if (::resultMessage.isInitialized) {
             resultMessage.text = (when (success) { true -> "✓ "; false -> "✕ "; else -> "… " }) + lastResultMessage
