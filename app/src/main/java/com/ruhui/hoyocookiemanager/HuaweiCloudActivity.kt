@@ -23,8 +23,6 @@ open class HuaweiCloudActivity : Activity() {
     private var accessKeyValue = ""
     private var secretKeyValue = ""
     private var connectionLabel = "尚未连接"
-    private var logsStatusValue = "登录华为云后即可读取两个服务的运行日志。"
-    private var logsOutputValue = "暂无日志"
     private var lastResultMessage = ""
     private var authAk = ""
     private var authSk = ""
@@ -56,6 +54,9 @@ open class HuaweiCloudActivity : Activity() {
     }
 
     private fun setCloudConnectionState(state: String) { connectionLabel = state }
+
+    /** Called after a successful cloud login and account synchronization. */
+    protected open fun onCloudLoginSyncComplete() {}
 
     /**
      * Read the existing FunctionGraph packages before account editing is enabled.
@@ -391,13 +392,6 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { deployHoyolabAccount(accountId, selectedGamesJson) }
     }
 
-    @android.webkit.JavascriptInterface
-    protected fun htmlFetchLogs() {
-        runOnUiThread { fetchFunctionLogs() }
-    }
-
-    protected fun htmlLogsText(): String = logsOutputValue
-    protected fun htmlLogsStatus(): String = logsStatusValue
     protected fun htmlCloudBackendReady(): Boolean = true
 
     protected fun updateHuaweiCloudConfig(value: String) {
@@ -495,8 +489,9 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.projectId = pid
                     setCloudConnectionState("已连接")
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
-                    synchronizeCloudAccounts { _, message ->
+                    synchronizeCloudAccounts { success, message ->
                         showOperationMessage("云端账号同步", message, CloudAccountSyncState.allowsAccountChanges(this))
+                        if (success) onCloudLoginSyncComplete()
                     }
                 }
             } catch (e: Exception) {
@@ -508,94 +503,6 @@ open class HuaweiCloudActivity : Activity() {
             }
         }
     }
-
-    private fun fetchFunctionLogs() {
-        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            logsStatusValue = "请先登录华为云。"; return
-        }
-        logsStatusValue = "正在读取两个服务最近 7 天的运行日志…"
-        logsOutputValue = "正在连接华为云日志服务…"
-        worker.execute {
-            try {
-                val rendered = StringBuilder()
-                val targets = listOf("HoYoLAB" to HOYOLAB_FUNCTION, "森空岛" to SKLAND_FUNCTION)
-                for ((label, functionName) in targets) {
-                    rendered.append("【").append(label).append("】\n")
-                    val exactUrl = "https://functiongraph." + regionValue +
-                        ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions?func_name=" +
-                        enc(functionName) + "&precise_search=true&maxitems=10"
-                    val rows = signedGet(exactUrl).optJSONArray("functions")
-                    val matches = if (rows == null) emptyList() else
-                        (0 until rows.length()).map { rows.getJSONObject(it) }
-                            .filter { it.optString("func_name") == functionName }
-                    if (matches.size != 1) {
-                        rendered.append("函数尚未创建或无法唯一识别。\n\n")
-                        continue
-                    }
-                    val urn = matches.single().optString("func_urn")
-                    val detailUrl = "https://functiongraph." + regionValue +
-                        ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions/" +
-                        enc(urn) + "/lts-log-detail"
-                    val detail = signedGet(detailUrl)
-                    val groupId = detail.optString("group_id")
-                    val streamId = detail.optString("stream_id")
-                    if (groupId.isBlank() || streamId.isBlank()) {
-                        rendered.append("尚未获取到日志组/日志流。\n\n")
-                        continue
-                    }
-                    val now = System.currentTimeMillis()
-                    val startTime = now - 7L * 24L * 60L * 60L * 1000L
-                    val queryUrl = "https://lts." + regionValue + ".myhuaweicloud.com/v2/" +
-                        projectId + "/groups/" + enc(groupId) + "/streams/" + enc(streamId) + "/content/query"
-                    val logs = mutableListOf<JSONObject>()
-                    val seen = mutableSetOf<String>()
-                    var scrollId = ""
-                    var lineNum = ""
-                    var page = 0
-                    var complete = false
-                    while (page < 1000 && !complete) {
-                        val body = JSONObject().put("start_time", startTime.toString())
-                            .put("end_time", now.toString()).put("limit", 5000)
-                            .put("is_desc", true).put("search_type", if (page == 0) "init" else "forwards")
-                            .put("is_count", true).put("is_iterative", true)
-                        if (scrollId.isNotBlank()) body.put("scroll_id", scrollId)
-                        else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
-                        val response = signedRequest("POST", queryUrl, body.toString())
-                        if (response.first !in 200..299) error("LTS 查询失败（HTTP ${response.first}）：" + response.second.take(1200))
-                        val result = JSONObject(response.second)
-                        val pageLogs = result.optJSONArray("logs")
-                        val count = pageLogs?.length() ?: 0
-                        if (pageLogs != null) for (i in 0 until pageLogs.length()) {
-                            val item = pageLogs.optJSONObject(i) ?: continue
-                            val key = item.optString("line_num")
-                            if (key.isBlank() || seen.add(key)) logs.add(item)
-                        }
-                        page++
-                        val nextScroll = result.optString("scrollId")
-                        if (nextScroll.isNotBlank()) scrollId = nextScroll
-                        if (count > 0) lineNum = pageLogs?.optJSONObject(count - 1)?.optString("line_num").orEmpty()
-                        complete = result.optBoolean("isQueryComplete", false) || count == 0 ||
-                            (count < 5000 && nextScroll.isBlank())
-                    }
-                    if (logs.isEmpty()) rendered.append("最近 7 天没有日志。\n")
-                    else logs.forEach { rendered.append(it.optString("content", "(空日志)")).append("\n") }
-                    rendered.append("\n")
-                }
-                runOnUiThread {
-                    logsStatusValue = "已完成两个服务的最近 7 天日志查询。"
-                    logsOutputValue = rendered.toString()
-                    showOperationMessage("运行日志读取完成", rendered.toString(), true)
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    logsStatusValue = "读取日志失败：" + (e.message ?: e.javaClass.simpleName)
-                    logsOutputValue = "请检查 FunctionGraph 日志配置与 LTS 查询权限。"
-                    showOperationMessage("运行日志读取失败", e.message ?: e.javaClass.simpleName, false)
-                }
-            }
-        }
-    }
-
 
     /**
      * Query only today's LTS output for the two scheduled check-in functions.
