@@ -306,7 +306,7 @@ open class HuaweiCloudActivity : Activity() {
                     if (preferred >= 0) spinner.setSelection(preferred)
                     cloudStatus.text = "华为云连接成功\nRegion：" + r + "\nProject ID：" + pid +
                         "\n读取到 " + found.size + " 个函数。" +
-                        if (configYaml.isBlank()) "\n但未检测到 Cookie 配置，请返回首页重新获取。" else "\n已自动接收 Cookie 配置，可以一键更新。" + vaultWarning
+                        (if (configYaml.isBlank()) "\n但未检测到 Cookie 配置，请返回首页重新获取。" else "\n已自动接收 Cookie 配置，可以一键更新。") + vaultWarning
                     updateButton.isEnabled = names.isNotEmpty() && configYaml.isNotBlank()
                     logsButton.isEnabled = names.isNotEmpty()
                 }
