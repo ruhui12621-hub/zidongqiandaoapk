@@ -34,8 +34,8 @@ open class HuaweiCloudActivity : Activity() {
     private var authAk = ""
     private var authSk = ""
     private var regionValue = "cn-east-3"
-    private val regionCodes = listOf("cn-east-3", "cn-east-2", "cn-north-4", "cn-north-1", "cn-south-1", "ap-southeast-1")
-    private val regionLabels = listOf("华东-上海一（默认）", "华东-上海二", "华北-北京四", "华北-北京一", "华南-广州", "亚太-新加坡")
+    private val regionCodes = listOf("cn-east-3", "cn-east-2", "cn-north-4", "cn-north-1", "cn-south-1", "ap-southeast-1", "ap-southeast-3")
+    private val regionLabels = listOf("华东-上海一（默认）", "华东-上海二", "华北-北京四", "华北-北京一", "华南-广州", "中国-香港", "亚太-新加坡")
     private var projectId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
