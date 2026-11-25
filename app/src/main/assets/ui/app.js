@@ -28,7 +28,7 @@ function renderHome(){
   const gameStates=Object.values(a.gameTodayStatuses||{});
   const aggregate=gameStates.some(x=>x==="failed")?"今日签到失败":
     gameStates.some(x=>x==="success")?"今日签到成功":
-    gameStates.length>0&&gameStates.every(x=>x==="unconfigured")?"未配置":
+    ((a.games||[]).length===0||gameStates.length>0&&gameStates.every(x=>x==="unconfigured"))?"未配置":
     a.todayStatus||"今日状态未知";
   const statusTone=aggregate==="今日签到成功"?"ok":aggregate==="今日签到失败"?"bad":aggregate==="未配置"?"muted":"warn";
   html+='<button class="account-card" data-account="'+esc(a.id)+'"><div class="account-avatar">'+esc(platformInitial(a.platform))+'</div><div class="account-main"><strong>'+esc(a.name)+'</strong><small>'+esc(a.platformLabel)+'</small></div><span class="account-status '+statusTone+'">'+esc(aggregate)+'</span><span class="chevron">›</span></button>'
