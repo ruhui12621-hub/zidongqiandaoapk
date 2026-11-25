@@ -176,7 +176,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             val json = JSONObject(body)
             if (json.optInt("code", -1) != 0) {
                 checking = false
-                status.text = "未登录"
+                statusText = "未登录"
                 pushSklandUi()
                 return
             }
@@ -184,7 +184,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 .ifBlank { json.optString("content").orEmpty() }
             if (token.isBlank() || token.any(Char::isWhitespace)) {
                 checking = false
-                status.text = "等待登录"
+                statusText = "等待登录"
                 pushSklandUi()
                 return
             }
@@ -198,13 +198,13 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             }
             saved = true
             checking = false
-            status.text = "已保存"
+            statusText = "已保存"
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录成功", "已自动解析登录状态并在本机加密保存 Token；未将凭据写入消息栏。", true)
             status.setTextColor(0xFF75D69C.toInt())
             pushSklandUi()
         } catch (e: Exception) {
             checking = false
-            status.text = "等待登录"
+            statusText = "等待登录"
             pushSklandUi()
             AppMessageBus.post(
                 this, AppMessageBus.SKLAND,
