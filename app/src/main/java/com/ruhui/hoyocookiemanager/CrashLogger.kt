@@ -32,6 +32,15 @@ object CrashLogger {
                     it.write(content.toByteArray(Charsets.UTF_8))
                     it.fd.sync()
                 }
+                val top = throwable.stackTrace.firstOrNull()
+                val location = if (top == null) "位置未知" else
+                    "${top.className}.${top.methodName}:${top.lineNumber}"
+                AppMessageBus.post(
+                    context,
+                    "应用发生未捕获异常",
+                    "异常类型：${throwable.javaClass.simpleName}；线程：${thread.name}；位置：$location。完整堆栈已保存到本地崩溃记录。",
+                    false
+                )
             } catch (_: Throwable) {
                 // 崩溃记录写入失败时，仍交给系统原有处理器。
             }
