@@ -57,7 +57,7 @@ class AccountStore(context: Context) {
             platform = platform,
             name = name.trim().ifBlank { defaultName(platform, all().count { it.platform == platform } + 1) },
             platformUserId = normalized,
-            games = games
+            games = if (games.isNotEmpty()) games else if (platform == SKLAND) setOf("endfield") else games
         )
         save(all() + account)
         return account
