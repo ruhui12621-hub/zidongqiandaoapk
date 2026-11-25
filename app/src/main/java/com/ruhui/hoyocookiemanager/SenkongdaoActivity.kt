@@ -2,6 +2,8 @@ package com.ruhui.hoyocookiemanager
 
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +30,14 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var checking = false
     private var saved = false
     private var lastCheck = 0L
+    private val pollHandler = Handler(Looper.getMainLooper())
+    private val pollTask = object : Runnable {
+        override fun run() {
+            if (!loginMode || saved) return
+            scheduleCheck()
+            pollHandler.postDelayed(this, 2000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,6 +147,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         }
         browserFrame.addView(probe, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM or Gravity.END))
         main.loadUrl(HOME_URL)
+        pollHandler.removeCallbacks(pollTask)
+        pollHandler.postDelayed(pollTask, 2500L)
     }
 
     private fun configureLogin(view: WebView, popup: Boolean) {
@@ -212,6 +224,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private fun hasToken() = !runCatching { SklandTokenVault(this).latest() }.getOrNull().isNullOrBlank()
 
     private fun leaveLogin() {
+        pollHandler.removeCallbacks(pollTask)
         destroyAll()
         buildHome()
     }
@@ -250,6 +263,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        pollHandler.removeCallbacks(pollTask)
         destroyAll()
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         super.onDestroy()
