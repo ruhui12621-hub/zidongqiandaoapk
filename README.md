@@ -22,3 +22,10 @@ The APK build workflow automatically downloads the latest sanitized HoYoLAB and 
 - HoYoLAB Cookie remains in the WebView cookie store and is sent only as part of the HoYoLAB deployment package.
 - Skland Token is encrypted at rest with Android Keystore.
 - Never commit real Cookies, Tokens, push credentials, passwords, or Huawei Cloud AK/SK.
+## Cloud-first account restore
+
+- On app startup, when saved Huawei Cloud credentials are available, the app queries the configured FunctionGraph region and reads the existing HoYoLAB and Skland function packages before allowing account changes.
+- FunctionGraph ZIP responses are read from Base64 `func_code.file` when present, or downloaded from Huawei's temporary HTTPS `func_code.link` when the file field is empty. Downloads are size-limited and ZIP-validated.
+- Authentication, network, missing code payload, malformed ZIP, or missing expected config-file errors are treated as sync failures, never as proof that no previous cloud configuration exists. Account changes remain locked in that state.
+- Only a successful query confirming that both configured functions do not exist is treated as a first-time empty cloud state.
+- Existing-cloud multi-account add/delete write-back and read-after-write verification are not yet enabled; local-only destructive changes remain blocked.
