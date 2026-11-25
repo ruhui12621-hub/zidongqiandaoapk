@@ -116,7 +116,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             } catch (e: Exception) {
                 val detail = "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
                 AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录窗口启动失败", detail, false)
-                status.text = "登录窗口启动失败，详情已记录到通用消息栏"
+                status.text = "登录窗口启动失败，详情已记录到森空岛操作消息"
             }
         })
         val scroll = ScrollView(this)
@@ -207,7 +207,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                     true
                 } catch (e: Exception) {
                     AppMessageBus.post(
-                        this@SenkongdaoActivity,
+                        this@SenkongdaoActivity, AppMessageBus.SKLAND,
                         "森空岛验证窗口创建失败",
                         "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}",
                         false
