@@ -70,9 +70,9 @@ object AppMessageBus {
             val hoyo = prefs.getString("latest_$HOYOLAB", "").orEmpty()
             val skland = prefs.getString("latest_$SKLAND", "").orEmpty()
             listOf(
-                hoyo.takeIf { it.isNotBlank() }?.let { "【HoYoLAB / 米游社 / 华为云】\\n$it" },
-                skland.takeIf { it.isNotBlank() }?.let { "【森空岛】\\n$it" }
-            ).filterNotNull().joinToString("\\n\\n").ifBlank { "暂无运行消息" }
+                hoyo.takeIf { it.isNotBlank() }?.let { "【HoYoLAB / 米游社 / 华为云】\n$it" },
+                skland.takeIf { it.isNotBlank() }?.let { "【森空岛】\n$it" }
+            ).filterNotNull().joinToString("\n\n").ifBlank { "暂无运行消息" }
         }
     }.getOrDefault("暂无运行消息")
 
