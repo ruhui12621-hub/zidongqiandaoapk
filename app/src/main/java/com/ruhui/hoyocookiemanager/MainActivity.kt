@@ -100,7 +100,7 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, 0, 0, dp(18))
         })
 
-        fun row(title: String, subtitle: String, statusText: String, action: () -> Unit) {
+        fun row(parent: LinearLayout, title: String, subtitle: String, statusText: String, action: () -> Unit) {
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -123,7 +123,7 @@ class MainActivity : HuaweiCloudActivity() {
             item.addView(text("›", 24, false, Color.rgb(155, 164, 178)).apply {
                 setPadding(dp(8), 0, 0, 0)
             })
-            root.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
+            parent.addView(item, LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = dp(10)
             })
         }
@@ -134,16 +134,20 @@ class MainActivity : HuaweiCloudActivity() {
             cloudSaved -> "凭据已保存"
             else -> "未登录"
         }
-        row("华为云登录", "管理 AK / SK、Region 和云端连接", cloudStatus) {
+        row(root, "华为云登录", "管理 AK / SK、Region 和云端连接", cloudStatus) {
             startActivity(android.content.Intent(this, HuaweiCloudSettingsActivity::class.java))
         }
 
         root.addView(text("账号列表", 17, true).apply {
             setPadding(0, dp(12), 0, dp(10))
         })
+        val accountScroll = ScrollView(this)
+        val accountContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        accountScroll.addView(accountContainer)
+        root.addView(accountScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         val accounts = AccountStore(this).all()
         if (accounts.isEmpty()) {
-            root.addView(text("还没有添加账号。点击下方加号，选择 HoYoLAB、森空岛或米游社国服。", 13, false, Color.rgb(145, 155, 172)).apply {
+            accountContainer.addView(text("还没有添加账号。点击下方加号，选择 HoYoLAB、森空岛或米游社国服。", 13, false, Color.rgb(145, 155, 172)).apply {
                 setPadding(dp(4), dp(4), dp(4), dp(12))
             })
         } else {
@@ -168,6 +172,7 @@ class MainActivity : HuaweiCloudActivity() {
                 else -> "等待登录"
             }
                 row(
+                    accountContainer,
                     account.name,
                     "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
                     identityHint
