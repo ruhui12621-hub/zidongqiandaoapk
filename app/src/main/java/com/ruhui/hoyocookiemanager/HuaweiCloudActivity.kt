@@ -265,7 +265,7 @@ open class HuaweiCloudActivity : Activity() {
                     val bytes = if (encoded.isNotBlank()) {
                         Base64.decode(encoded, Base64.DEFAULT)
                     } else {
-                        // FunctionGraph may return an empty file and a temporary OBS download URL in link.
+                        // FunctionGraph may return an empty file and a temporary OBS download URL in link; the signed URL is fetched directly.
                         if (link.isBlank()) error("$label 函数代码既没有内联 file，也没有下载 link；不能判断配置为空")
                         val downloadUrl = runCatching { URL(link) }.getOrElse { error("$label 函数返回了无效的代码下载地址") }
                         if (downloadUrl.protocol != "https") error("$label 函数代码下载地址不是 HTTPS，已拒绝下载")
