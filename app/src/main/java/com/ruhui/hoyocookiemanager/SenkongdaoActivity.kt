@@ -235,7 +235,30 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private fun configureLogin(view: WebView, popup: Boolean) {
         desktop(view, !popup)
         view.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛网页 JavaScript 错误",
+                        "错误：${message.message()}\n来源：${message.sourceId()}\n行号：${message.lineNumber()}\n视图：${if (popup) "验证弹窗" else "主登录窗口"}", false)
+                    pushSklandUi()
+                }
+                return true
+            }
+            override fun onProgressChanged(view: WebView, newProgress: Int) {
+                if (newProgress == 0 || newProgress == 100) {
+                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页加载进度",
+                        "进度：$newProgress%\n地址：${view.url.orEmpty()}\n视图：${if (popup) "验证弹窗" else "主登录窗口"}", null)
+                    pushSklandUi()
+                }
+            }
+            override fun onReceivedTitle(view: WebView, title: String) {
+                if (title.isNotBlank()) {
+                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页标题已更新",
+                        "标题：$title\n地址：${view.url.orEmpty()}", null)
+                }
+            }
             override fun onCreateWindow(source: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+                AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网站请求打开新窗口",
+                    "是否对话框：$isDialog\n是否由用户手势触发：$isUserGesture\n来源地址：${source.url.orEmpty()}", null)
                 return try {
                     val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false)
                     configureLogin(child, true)
@@ -248,16 +271,13 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                     AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛验证窗口", "网站弹出的新窗口已在应用内成功创建。", true)
                     true
                 } catch (e: Exception) {
-                    AppMessageBus.post(
-                        this@SenkongdaoActivity, AppMessageBus.SKLAND,
-                        "森空岛验证窗口创建失败",
-                        "${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}",
-                        false
-                    )
+                    recordException("森空岛验证窗口创建失败", e)
                     false
                 }
             }
             override fun onCloseWindow(window: WebView) {
+                AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网站关闭验证窗口",
+                    "被关闭窗口地址：${window.url.orEmpty()}", null)
                 destroy(window)
                 if (popupView === window) popupView = null
                 mainView?.visibility = View.VISIBLE
