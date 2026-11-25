@@ -558,7 +558,7 @@ open class HuaweiCloudActivity : Activity() {
     companion object {
         private const val HOYOLAB_FUNCTION = "HOYOLAB20240704"
         private const val SENKONGDAO_FUNCTION = "SENKONGDAO20260122"
-        private const val HOYOLAB_HANDLER = "index.handler"
+        private const val HOYOLAB_HANDLER = "index.main_handler"
         private const val SENKONGDAO_HANDLER = "index.handler"
     }
 
