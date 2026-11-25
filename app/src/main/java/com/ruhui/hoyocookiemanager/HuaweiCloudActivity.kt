@@ -337,7 +337,7 @@ open class HuaweiCloudActivity : Activity() {
                         }
                         if (inGames && inOs && indent == 4 && keyLine.startsWith("cookie:")) {
                             val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
-                            osCookie = raw.removeSurrounding("\\"").removeSurrounding("'").trim()
+                            osCookie = raw.removeSurrounding("\"").removeSurrounding("'").trim()
                         }
                     }
 
