@@ -432,6 +432,21 @@ class MainActivity : HuaweiCloudActivity() {
             .replace("\n", "")
         yaml = yaml.replace("__HOYOLAB_COOKIE__", escaped)
 
+        if (server == "cn") {
+            val cookieFields = cookie.split(';').mapNotNull { part ->
+                val key = part.trim().substringBefore('=')
+                val value = part.trim().substringAfter('=', "")
+                if (key.isBlank() || value.isBlank()) null else key to value
+            }.toMap()
+            fun yamlValue(value: String): String = "'" + value.replace("'", "''") + "'"
+            val stuid = cookieFields["stuid"] ?: cookieFields["ltuid"] ?: ""
+            val stoken = cookieFields["stoken"] ?: cookieFields["stoken_v2"] ?: ""
+            val mid = cookieFields["mid"] ?: cookieFields["account_mid_v2"] ?: cookieFields["account_mid"] ?: ""
+            if (stuid.isNotBlank()) yaml = yaml.replace("  stuid: ''", "  stuid: " + yamlValue(stuid))
+            if (stoken.isNotBlank()) yaml = yaml.replace("  stoken: ''", "  stoken: " + yamlValue(stoken))
+            if (mid.isNotBlank()) yaml = yaml.replace("  mid: ''", "  mid: " + yamlValue(mid))
+        }
+
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val selected = prefs.getStringSet("selected_games", setOf("zzz")) ?: setOf("zzz")
         val gamesStart = yaml.indexOf("games:\n")
