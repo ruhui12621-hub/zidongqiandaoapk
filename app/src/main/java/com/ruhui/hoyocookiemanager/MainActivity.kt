@@ -473,6 +473,8 @@ class MainActivity : HuaweiCloudActivity() {
             }
             account = account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true)
             store.update(account)
+            runCatching { HoYoCookieVault(this, account.id).save(found) }
+                .onFailure { recordWebDiagnostic("账号 Cookie 加密保存失败：${it.javaClass.simpleName}") }
             activeAccountId = account.id
             getSharedPreferences("multi_account_registry", MODE_PRIVATE).edit()
                 .putString("active_${platform}", account.id).apply()
