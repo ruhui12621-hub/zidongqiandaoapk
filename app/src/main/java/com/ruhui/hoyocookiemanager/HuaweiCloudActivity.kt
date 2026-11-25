@@ -422,7 +422,9 @@ open class HuaweiCloudActivity : Activity() {
                         )
                         SklandTokenVault(this, account.id).save(token)
                         store.update(account.copy(
-                            games = if (account.games.isEmpty()) setOf("endfield") else account.games,
+                            // Endfield is an additional Skland game; keep any existing
+                            // game selections and ensure Endfield is checked as requested.
+                            games = account.games + "endfield",
                             credentialReady = true
                         ))
                         imported++
