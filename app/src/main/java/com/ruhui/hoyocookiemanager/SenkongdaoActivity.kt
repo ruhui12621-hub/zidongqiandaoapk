@@ -119,7 +119,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 if (parsingTokenPage && url.substringBefore('?').trimEnd('/') == TOKEN_URL.trimEnd('/')) {
                     view.evaluateJavascript("(function(){return document.body ? document.body.innerText : '';})()") { encoded ->
                         parseAndSaveToken(encoded)
-                        if (loginWebView != null) loginWebView?.loadUrl("https://www.skland.com/")
+                        view.loadUrl("https://www.skland.com/")
                     }
                 }
             }
