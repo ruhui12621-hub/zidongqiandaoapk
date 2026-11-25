@@ -218,6 +218,10 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             runOnUiThread { selectedAccountId = null; pushState() }
         }
 
+        @JavascriptInterface fun refreshTodayStatuses() {
+            runOnUiThread { this@HtmlMainActivity.refreshTodayStatuses(force = true) }
+        }
+
         @JavascriptInterface fun openHoyoLogin(id: String) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
