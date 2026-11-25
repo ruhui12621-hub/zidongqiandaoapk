@@ -13,7 +13,7 @@ const platformInitial=p=>p==="skland"?"森":p==="miyoushe_cn"?"米":"H";
 const statusClass=s=>/成功|已连接|已获取|同步/.test(s)?"ok":/失败|未获取/.test(s)?"bad":"warn";
 function toast(msg){const root=$("#toast-root");root.innerHTML='<div class="toast">'+esc(msg)+'</div>';const t=root.firstElementChild;requestAnimationFrame(()=>t.classList.add("show"));setTimeout(()=>t.classList.remove("show"),2200)}
 function native(name,...args){try{if(window.Android&&typeof Android[name]==="function")return Android[name](...args)}catch(e){toast("操作失败："+e.message)}}
-function refresh(){try{const raw=native("getState");if(raw)applyState(JSON.parse(raw))}catch(e){console.warn(e)}}
+function readState(){try{const raw=native("getState");if(raw)applyState(JSON.parse(raw))}catch(e){console.warn(e)}}
 function applyState(next){if(!next)return;state=next;if(!cloudDraft.region||cloudDraft.region==="cn-east-3")cloudDraft.region=state.region||"cn-east-3";if(document.activeElement&&document.activeElement.matches("input,select,textarea"))return;render()}
 window.onNativeState=raw=>{try{applyState(typeof raw==="string"?JSON.parse(raw):raw)}catch(e){console.error(e)}};
 function pageTitle(title,sub){return '<div class="page-heading"><div><div class="eyebrow">HOYO CHECK-IN</div><h1>'+title+'</h1><p>'+sub+'</p></div></div>'}
@@ -22,7 +22,7 @@ function renderHome(){
  const sync=state.syncLabel||"等待连接华为云";
  let html=pageTitle("账号总览","每个账号独立显示今日签到结果。");
  html+='<div class="card status-card"><div class="status-icon">☁</div><div class="status-copy"><strong>云端配置</strong><span>'+esc(sync)+'</span></div><span class="pill '+(state.syncState==="synced"?"ok":state.syncState==="failed"?"bad":"warn")+'">'+(state.cloudConnected?"已连接":state.cloudCredentialsSaved?"凭据已保存":"未连接")+'</span></div>';
- html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2><button class="text-button" data-action="refresh">刷新状态 ↻</button></div>';
+ html+='<div class="section-head"><h2>账号列表 <span style="color:var(--muted);font-weight:400">('+((state.accounts||[]).length)+')</span></h2></div>';
  if(!state.accounts||!state.accounts.length){html+='<div class="card empty"><div class="empty-icon">◎</div><strong>云端暂未读取到账号</strong><p>连接华为云后将自动读取现有函数配置。账号信息不会保存到本机。</p></div>'}
  else state.accounts.forEach(a=>{
   const gameStates=Object.values(a.gameTodayStatuses||{});
@@ -89,7 +89,7 @@ function renderCloud(){
  html+='<div class="card"><div class="card-title">云端凭据</div><div class="field-row"><label>Region</label><select id="cloud-region"><option value="cn-east-3">华东-上海一</option><option value="cn-east-2">华东-上海二</option><option value="cn-north-4">华北-北京四</option><option value="cn-north-1">华北-北京一</option><option value="cn-south-1">华南-广州</option><option value="ap-southeast-1">中国-香港</option><option value="ap-southeast-3">亚太-新加坡</option></select></div>';
  html+='<div class="field-row"><label>AK</label><input id="cloud-ak" autocomplete="off" autocapitalize="off" placeholder="输入华为云 Access Key"></div>';
  html+='<div class="field-row"><label>SK</label><input id="cloud-sk" type="password" autocomplete="off" placeholder="输入华为云 Secret Key"></div>';
- html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><button class="primary" data-action="cloud-login">登录并连接华为云</button><div class="cloud-connection-inline"><span class="connection-dot '+(state.cloudConnected?'connected':'')+'"></span><span>连接状态：'+(state.cloudConnected?'已连接':esc(state.syncLabel||"未连接"))+'</span></div></div>';
+ html+='<p class="hint">AK/SK 登录成功后沿用现有加密保管箱。HoYoLAB Cookie 和账号配置不会写入本地。</p><div class="cloud-login-row"><button class="primary" data-action="cloud-login">登录并连接华为云</button><div class="cloud-connection-inline"><span class="connection-dot '+(state.cloudConnected?'connected':'')+'"></span><span>连接状态：'+esc(state.cloudConnectionLabel||(state.cloudConnected?"已连接":"未连接"))+'</span></div></div></div>';
  return html
 }
 function renderMessages(){
@@ -119,7 +119,6 @@ document.addEventListener("click",e=>{
  const msg=e.target.closest("[data-message]");if(msg){messageTab=msg.dataset.message;render();return}
  const pageButton=e.target.closest("[data-page]");if(pageButton){selectedId=null;page=pageButton.dataset.page;render();return}
  const action=e.target.closest("[data-action]")?.dataset.action;if(!action)return;
- if(action==="refresh"){native("refresh");refresh();toast("正在刷新");}
  
  if(action==="add"){if(state.canAddAccount)showModal();else toast("请先成功读取云端配置")}
  if(action==="modal-close"&&e.target.classList.contains("modal-backdrop"))$("#modal-root").innerHTML="";
@@ -142,10 +141,8 @@ document.addEventListener("click",e=>{
   cloudDraft.region=$("#cloud-region").value;cloudDraft.ak=$("#cloud-ak").value;cloudDraft.sk=$("#cloud-sk").value;
   native("cloudLogin",cloudDraft.region,cloudDraft.ak,cloudDraft.sk);toast("正在验证华为云凭据")
  }
- if(action==="deploy-hoyo"){native("deploy","hoyolab");toast("正在更新 HoYoLAB 函数")}
- if(action==="deploy-skland"){native("deploy","skland");toast("正在更新森空岛函数")}
  
- if(action==="message-refresh"){refresh();toast("消息已刷新")}
+ if(action==="message-refresh"){readState();toast("消息已刷新")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
 function showGamePicker(){
@@ -166,6 +163,6 @@ document.addEventListener("input",e=>{
  if(e.target.id==="cloud-sk")cloudDraft.sk=e.target.value;
 });
 window.nativeBack=()=>{if(selectedId){selectedId=null;native("backToHome");render()}else if(page!=="home"){page="home";render()}else{toast("再按一次可退出应用")}};
-window.addEventListener("load",()=>{refresh();render()});
+window.addEventListener("load",()=>{readState();render()});
 setInterval(()=>{try{const raw=native("getState");if(raw)applyState(JSON.parse(raw))}catch(e){}},1800);
 })();
