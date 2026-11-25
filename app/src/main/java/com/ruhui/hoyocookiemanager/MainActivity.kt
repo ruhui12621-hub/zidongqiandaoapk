@@ -42,6 +42,11 @@ class MainActivity : HuaweiCloudActivity() {
     private var showingLauncher = true
     private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
+    private var firstLauncherResume = true
+    private var todayStatusQuerying = false
+    private var todayStatusQueriedAt = 0L
+    private var todayStatusMessage = "等待读取今日签到日志"
+    private var todayCheckinStatuses: Map<String, String> = emptyMap()
 
     private val cookieUrls = listOf(
         "https://www.hoyolab.com/",
@@ -62,9 +67,10 @@ class MainActivity : HuaweiCloudActivity() {
         buildLauncher()
         val cloudCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
         if (cloudCredentials != null) {
-            synchronizeCloudAccounts { _, message ->
+            synchronizeCloudAccounts { success, message ->
                 if (showingLauncher && !isFinishing) buildLauncher()
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                if (success && showingLauncher && !isFinishing) refreshTodayCheckinStatus(force = true)
             }
         } else {
             CloudAccountSyncState.set(this, CloudAccountSyncState.UNKNOWN)
@@ -205,6 +211,57 @@ class MainActivity : HuaweiCloudActivity() {
         root.addView(text(cloudSyncLabel, 12, false, Color.rgb(255, 204, 128)).apply {
             setPadding(0, dp(2), 0, dp(8))
         })
+
+        val todayCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(32, 38, 49))
+                cornerRadius = dp(13).toFloat()
+            }
+        }
+        val todayHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        todayHeader.addView(text("今日签到", 16, true), LinearLayout.LayoutParams(0, -2, 1f))
+        todayHeader.addView(button(if (todayStatusQuerying) "读取中…" else "刷新日志") {
+            refreshTodayCheckinStatus(force = true)
+        }.apply {
+            isEnabled = !todayStatusQuerying
+            textSize = 12f
+            minHeight = dp(38)
+        }, LinearLayout.LayoutParams(-2, -2))
+        todayCard.addView(todayHeader)
+        todayCard.addView(text(todayStatusMessage, 11, false, Color.rgb(155, 164, 178)).apply {
+            setPadding(0, dp(5), 0, dp(8))
+        })
+        val todayAccounts = AccountStore(this).all()
+        if (todayAccounts.isEmpty()) {
+            todayCard.addView(text("添加并同步账号后，这里会显示各账号的今日签到结果。", 12, false, Color.rgb(155, 164, 178)))
+        } else {
+            todayAccounts.forEach { account ->
+                val line = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, dp(6), 0, dp(6))
+                }
+                line.addView(text(account.name, 13, true), LinearLayout.LayoutParams(0, -2, 1f))
+                val checkin = todayCheckinStatuses[account.id]
+                    ?: if (todayStatusQuerying) "正在读取…" else "尚未读取"
+                val color = when {
+                    checkin.contains("成功") -> Color.rgb(115, 210, 150)
+                    checkin.contains("失败") -> Color.rgb(255, 130, 130)
+                    else -> Color.rgb(190, 199, 213)
+                }
+                line.addView(text(checkin, 11, false, color))
+                todayCard.addView(line)
+            }
+        }
+        root.addView(todayCard, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(10)
+        })
+
         root.addView(text("账号列表", 17, true).apply {
             setPadding(0, dp(8), 0, dp(10))
         })
@@ -289,10 +346,42 @@ class MainActivity : HuaweiCloudActivity() {
 
     override fun onResume() {
         super.onResume()
-        // AccountManagementActivity returns to this Activity; rebuild the launcher from
-        // the latest local registry so newly added/edited/deleted accounts appear at once.
+        if (firstLauncherResume) {
+            firstLauncherResume = false
+            return
+        }
+        // Refresh the home page when returning from account/cloud settings. Avoid repeated
+        // LTS requests while the user is simply navigating around the launcher.
         if (showingLauncher && !isFinishing) {
             buildLauncher()
+            refreshTodayCheckinStatus(force = false)
+        }
+    }
+
+    private fun refreshTodayCheckinStatus(force: Boolean) {
+        if (!showingLauncher || isFinishing || todayStatusQuerying) return
+        val now = System.currentTimeMillis()
+        if (!force && now - todayStatusQueriedAt < 5L * 60L * 1000L) return
+        val syncState = CloudAccountSyncState.get(this)
+        if (syncState != CloudAccountSyncState.SYNCED && syncState != CloudAccountSyncState.EMPTY_CONFIRMED) {
+            todayStatusMessage = when (syncState) {
+                CloudAccountSyncState.FAILED -> "云端账号配置读取失败，暂不关联签到日志"
+                CloudAccountSyncState.SYNCING -> "正在同步云端账号配置…"
+                else -> "请先连接华为云并完成账号配置同步"
+            }
+            if (showingLauncher) buildLauncher()
+            return
+        }
+        todayStatusQuerying = true
+        todayStatusQueriedAt = now
+        todayStatusMessage = "正在读取今天的 FunctionGraph 运行日志…"
+        if (showingLauncher) buildLauncher()
+        queryTodayCheckinStatusForAccounts { statuses, message ->
+            todayCheckinStatuses = statuses
+            todayStatusMessage = message
+            todayStatusQuerying = false
+            todayStatusQueriedAt = System.currentTimeMillis()
+            if (showingLauncher && !isFinishing) buildLauncher()
         }
     }
 
