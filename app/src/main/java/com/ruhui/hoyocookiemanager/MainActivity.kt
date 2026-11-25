@@ -244,6 +244,10 @@ class MainActivity : HuaweiCloudActivity() {
                     "$platformLabel · ${if (gameNames.isEmpty()) "尚未选择游戏" else gameNames.joinToString("、")}",
                     identityHint
                 ) {
+                    if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                        Toast.makeText(this, "请先完成云端配置同步，避免使用过期的本地账号。", Toast.LENGTH_LONG).show()
+                        return@row
+                    }
                     startActivity(android.content.Intent(this, AccountManagementActivity::class.java)
                         .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id))
                 }
