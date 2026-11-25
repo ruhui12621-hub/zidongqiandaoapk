@@ -311,11 +311,12 @@ open class HuaweiCloudActivity : Activity() {
                 if (hoyoFunction != null) {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
                     // 仅匹配 cookie 所在行，避免 \\s 跨行匹配；空值不能静默当作同步成功。
-                    val rawCookie = Regex("(?m)^[\\t ]*cookie[\\t ]*:[\\t ]*(.*?)[\\t ]*$")
-                        .find(yaml)?.groupValues?.get(1).orEmpty()
-                    val cookie = rawCookie.trim().removeSurrounding("\"").removeSurrounding("'")
-                    if (cookie.isBlank()) {
-                        error("HoYoLAB 函数存在，但 config/config.yaml 中的 cookie 为空或未匹配到；未将其视为已成功同步。")
+                    val cookieMatch = Regex("(?m)^[\\t ]*cookie[\\t ]*:[\\t ]*(.*?)[\\t ]*$").find(yaml)
+                        ?: error("HoYoLAB 函数存在，但 config/config.yaml 中没有 cookie 字段；请检查云端函数配置文件。")
+                    val rawCookie = cookieMatch.groupValues[1].substringBefore(" #").trim()
+                    val cookie = rawCookie.removeSurrounding("\"").removeSurrounding("'").trim()
+                    if (cookie.isBlank() || cookie == "null" || cookie == "~") {
+                        error("HoYoLAB 云端配置中的 cookie 字段确实为空（例如 cookie: \"\"）；当前函数包没有可同步的 HoYoLAB 账号凭据。请先将有效 Cookie 写入云端配置并更新函数，账号变更仍保持锁定。")
                     }
                     val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
                     val existing = if (identity != null) store.all().firstOrNull {
