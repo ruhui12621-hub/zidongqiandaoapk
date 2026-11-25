@@ -427,6 +427,9 @@ open class HuaweiCloudActivity : Activity() {
                     if (::updateButton.isInitialized) updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
                     if (::logsButton.isInitialized) logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
+                    synchronizeCloudAccounts { _, message ->
+                        showOperationMessage("云端账号同步", message, CloudAccountSyncState.allowsAccountChanges(this))
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
