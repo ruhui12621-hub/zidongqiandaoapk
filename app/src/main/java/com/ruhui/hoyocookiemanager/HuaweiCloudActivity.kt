@@ -731,14 +731,14 @@ open class HuaweiCloudActivity : Activity() {
                     val matches = (0 until functions.length()).mapNotNull { functions.optJSONObject(it) }.filter { it.optString("func_name") == functionName }
                     if (matches.size != 1) return "函数不存在或无法唯一识别" to emptyList()
                     val urn = matches.single().optString("func_urn")
-                    val detail = signedGet("https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/§{enc(urn)}/lts-log-detail")
+                    val detail = signedGet("https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail")
                     val groupId = detail.optString("group_id"); val streamId = detail.optString("stream_id")
                     if (groupId.isBlank() || streamId.isBlank()) return "未启用日志或日志流不可用" to emptyList()
                     val calendar = Calendar.getInstance()
                     calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0)
                     calendar.set(Calendar.SECOND, 0); calendar.set(Calendar.MILLISECOND, 0)
                     val start = calendar.timeInMillis; val end = System.currentTimeMillis()
-                    val queryUrl = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId/groups/§{enc(groupId)}/streams/§{enc(streamId)}/content/query"
+                    val queryUrl = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId/groups/${enc(groupId)}/streams/${enc(streamId)}/content/query"
                     val logs = mutableListOf<String>(); val seen = mutableSetOf<String>()
                     var scrollId = ""; var lineNum = ""; var page = 0; var complete = false
                     while (page < 100 && !complete) {
@@ -747,7 +747,7 @@ open class HuaweiCloudActivity : Activity() {
                             .put("is_count", true).put("is_iterative", true)
                         if (scrollId.isNotBlank()) body.put("scroll_id", scrollId) else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
                         val response = signedRequest("POST", queryUrl, body.toString())
-                        if (response.first !in 200..299) error("LTS 查询失败（HTTP §{response.first}）：§{response.second.take(500)}")
+                        if (response.first !in 200..299) error("LTS 查询失败（HTTP ${response.first}）：${response.second.take(500)}")
                         val result = JSONObject(response.second); val pageLogs = result.optJSONArray("logs"); val count = pageLogs?.length() ?: 0
                         if (pageLogs != null) for (i in 0 until count) {
                             val item = pageLogs.optJSONObject(i) ?: continue
@@ -800,7 +800,7 @@ open class HuaweiCloudActivity : Activity() {
                             val ids = listOfNotNull(account.platformUserId, account.name).map { it.trim() }.filter { it.length >= 3 }
                             logs.filter { line -> ids.any { id ->
                                 if (id == account.name) line.contains(id, true)
-                                else Regex("(?<![A-Za-z0-9])§{Regex.escape(id)}(?![A-Za-z0-9])", RegexOption.IGNORE_CASE).containsMatchIn(line)
+                                else Regex("(?<![A-Za-z0-9])${Regex.escape(id)}(?![A-Za-z0-9])", RegexOption.IGNORE_CASE).containsMatchIn(line)
                             } }
                         }
                         val perGame = linkedMapOf<String, String>()
