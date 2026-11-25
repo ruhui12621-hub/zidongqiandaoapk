@@ -95,7 +95,7 @@ class MainActivity : HuaweiCloudActivity() {
             refreshFromWebView()
         }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(14) })
         root.addView(button("森空岛") {
-            startActivity(android.content.Intent(this, SenkongdaoActivity::class.java))
+            startActivity(android.content.Intent(this, SenkongdaoActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         }, LinearLayout.LayoutParams(-1, dp(58)))
         setContentView(root)
     }
