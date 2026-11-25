@@ -164,6 +164,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             .put("todaySummary", todaySummary)
             .put("hoyolabMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
             .put("sklandMessage", AppMessageBus.current(this, AppMessageBus.SKLAND))
+            .put("sklandError", AppMessageBus.current(this, AppMessageBus.SKLAND).takeIf { it.startsWith("✕") } ?: "")
             .put("cloudMessage", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
             .put("logsText", htmlLogsText())
             .put("logsStatus", htmlLogsStatus())
@@ -231,11 +232,27 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         @JavascriptInterface fun openSklandLogin(id: String) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
-                startActivity(
-                    Intent(this@HtmlMainActivity, SenkongdaoActivity::class.java)
-                        .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
-                        .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
-                )
+                runCatching {
+                    startActivity(
+                        Intent(this@HtmlMainActivity, SenkongdaoActivity::class.java)
+                            .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
+                            .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
+                    )
+                }.onFailure { error ->
+                    AppMessageBus.post(
+                        this@HtmlMainActivity, AppMessageBus.SKLAND, "森空岛页面打开失败",
+                        "${error.javaClass.simpleName}: ${error.message ?: "无详细错误信息"}", false
+                    )
+                    pushState()
+                }
+            }
+        }
+
+        @JavascriptInterface fun copyText(value: String) {
+            runOnUiThread {
+                val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("错误消息", value))
+                android.widget.Toast.makeText(this@HtmlMainActivity, "报错消息已复制", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
