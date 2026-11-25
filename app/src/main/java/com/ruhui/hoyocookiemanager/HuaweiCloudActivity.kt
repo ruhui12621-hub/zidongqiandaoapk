@@ -80,7 +80,6 @@ open class HuaweiCloudActivity : Activity() {
                     projectId = ""
                     cloudStatus.text = "地区已切换为 $code，请重新登录并读取该地区的函数列表。"
                     updateButton.isEnabled = false
-                    sklandUpdateButton.isEnabled = false
                     logsButton.isEnabled = false
                 }
             }
