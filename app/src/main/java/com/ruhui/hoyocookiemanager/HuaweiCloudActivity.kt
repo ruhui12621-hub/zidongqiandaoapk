@@ -295,7 +295,7 @@ open class HuaweiCloudActivity : Activity() {
         worker.execute {
             try {
                 val rendered = StringBuilder()
-                val targets = listOf("HoYoLAB" to HOYOLAB_FUNCTION, "森空岛" to SENKONGDAO_FUNCTION)
+                val targets = listOf("HoYoLAB" to HOYOLAB_FUNCTION, "森空岛" to SKLAND_FUNCTION)
                 for ((label, functionName) in targets) {
                     rendered.append("【").append(label).append("】\n")
                     val exactUrl = "https://functiongraph." + regionValue +
@@ -396,7 +396,7 @@ open class HuaweiCloudActivity : Activity() {
         showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在上传函数包；上传确认后将自动测试运行并检查定时触发器…", null)
         worker.execute {
             try {
-                val functionName = if (isHoyolab) HOYOLAB_FUNCTION else SENKONGDAO_FUNCTION
+                val functionName = if (isHoyolab) HOYOLAB_FUNCTION else SKLAND_FUNCTION
                 val created = if (isHoyolab) {
                     val archive = replaceZip(readPackagedZip("cloud/hoyolab.zip"), "config/config.yaml", configYaml)
                     createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive)
@@ -672,7 +672,7 @@ open class HuaweiCloudActivity : Activity() {
 
     companion object {
         private const val HOYOLAB_FUNCTION = "HOYOLAB20240704"
-        private const val SENKONGDAO_FUNCTION = "SENKONGDAO"
+        private const val SKLAND_FUNCTION = "SKLand20260122"
         private const val HOYOLAB_HANDLER = "index.main_handler"
         private const val SENKONGDAO_HANDLER = "index.handler"
     }
