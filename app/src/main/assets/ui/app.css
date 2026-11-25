@@ -38,3 +38,6 @@
 .status-card-link{width:100%;text-align:left;cursor:pointer}.status-card-link:active{transform:scale(.99)}
 .connection-dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:var(--amber)}
 .connection-dot.connected{background:var(--green);box-shadow:0 0 10px rgba(80,210,140,.35)}
+
+/* Conventional compact refresh action in the account-list heading. */
+.refresh-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid rgba(214,179,106,.38);border-radius:11px;background:linear-gradient(145deg,#211b11,#15120d);color:var(--gold-bright);font-size:12px;font-weight:650;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.18)}.refresh-button:active{transform:scale(.97);background:#2b2113}.refresh-button:disabled{opacity:.58;cursor:wait}.refresh-icon{font-size:18px;line-height:1;font-weight:500}.refresh-button:disabled .refresh-icon{animation:refresh-spin .9s linear infinite}@keyframes refresh-spin{to{transform:rotate(360deg)}}
