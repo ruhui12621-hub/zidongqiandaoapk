@@ -223,7 +223,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             }
         }
         browserFrame.addView(probe, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM or Gravity.END))
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "主 WebView 已创建", "桌面 UA：${main.settings.userAgentString}\n多窗口：${main.settings.supportMultipleWindows}\nJavaScript：${main.settings.javaScriptEnabled}\nDOM Storage：${main.settings.domStorageEnabled}\nWebView 内核：${runCatching { if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage()?.versionName ?: "未知" else "系统版本未提供" }.getOrDefault("读取失败")}", true)
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "主 WebView 已创建", "桌面 UA：${main.settings.userAgentString}\n多窗口：${main.settings.supportMultipleWindows()}\nJavaScript：${main.settings.javaScriptEnabled}\nDOM Storage：${main.settings.domStorageEnabled}\nWebView 内核：${runCatching { if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage()?.versionName ?: "未知" else "系统版本未提供" }.getOrDefault("读取失败")}", true)
         AppMessageBus.post(this, AppMessageBus.SKLAND, "请求加载森空岛首页", "即将调用 WebView.loadUrl。\n目标地址：$HOME_URL", null)
         main.loadUrl(HOME_URL)
         AppMessageBus.post(this, AppMessageBus.SKLAND, "已调用首页加载", "WebView.loadUrl 已执行；是否真正加载成功，以后续页面回调为准。", null)
