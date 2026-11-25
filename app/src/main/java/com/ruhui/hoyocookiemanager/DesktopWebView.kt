@@ -61,6 +61,31 @@ object DesktopWebView {
         view.evaluateJavascript(script, null)
     }
 
+    /**
+     * Use a fixed desktop layout viewport for Skland pages that otherwise keep
+     * a narrow mobile viewport despite the desktop user agent.
+     *
+     * The page itself is not restyled; native WebView overview/zoom handles
+     * fitting and user interaction.
+     */
+    fun enableDesktopViewport(view: WebView) {
+        val script = """
+            (function() {
+              var head = document.head || document.getElementsByTagName('head')[0];
+              if (!head) return;
+              var meta = document.querySelector('meta[name="viewport"]');
+              if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                head.appendChild(meta);
+              }
+              meta.setAttribute('content',
+                'width=980, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes');
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
+    }
+
     fun configure(
         view: WebView,
         multiWindow: Boolean = true,
