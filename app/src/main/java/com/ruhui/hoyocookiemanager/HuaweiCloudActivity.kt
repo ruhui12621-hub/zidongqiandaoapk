@@ -404,7 +404,7 @@ open class HuaweiCloudActivity : Activity() {
                     val token = SklandTokenVault(this).latest()?.takeIf { it.isNotBlank() }
                         ?: error("尚未获取森空岛 Token。请先登录森空岛并完成 Token 获取。")
                     val archive = replaceZip(readPackagedZip("cloud/skland.zip"), "code/INPUT_HYPERGRYPH_TOKEN.txt", token.trim() + "\n")
-                    createOrUpdateFunction(functionName, SENKONGDAO_HANDLER, archive)
+                    createOrUpdateFunction(functionName, SKLAND_HANDLER, archive)
                 }
                 val function = waitForFunction(functionName)
                 val urn = function.optString("func_urn")
@@ -674,7 +674,7 @@ open class HuaweiCloudActivity : Activity() {
         private const val HOYOLAB_FUNCTION = "HOYOLAB20240704"
         private const val SKLAND_FUNCTION = "SKLand20260122"
         private const val HOYOLAB_HANDLER = "index.main_handler"
-        private const val SENKONGDAO_HANDLER = "index.handler"
+        private const val SKLAND_HANDLER = "index.handler"
     }
 
     override fun onDestroy() {
