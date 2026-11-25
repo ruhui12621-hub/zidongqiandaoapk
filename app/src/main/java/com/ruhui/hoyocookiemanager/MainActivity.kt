@@ -258,6 +258,11 @@ class MainActivity : HuaweiCloudActivity() {
 
     override fun onResume() {
         super.onResume()
+        // AccountManagementActivity returns to this Activity; rebuild the launcher from
+        // the latest local registry so newly added/edited/deleted accounts appear at once.
+        if (showingLauncher && !isFinishing) {
+            buildLauncher()
+        }
     }
 
     private fun buildHome() {
