@@ -271,7 +271,7 @@ open class HuaweiCloudActivity : Activity() {
                     ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
                         while (true) {
                             val entry = zip.nextEntry ?: break
-                            val path = entry.name.replace('\\\\', '/')
+                            val path = entry.name.replace('\\', '/')
                             if (!entry.isDirectory && (path == target || path.endsWith("/$target"))) {
                                 if (found != null) error("$label 配置文件出现多个匹配项")
                                 val output = ByteArrayOutputStream()
@@ -301,7 +301,7 @@ open class HuaweiCloudActivity : Activity() {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
                     val rawCookie = Regex("(?m)^\\s*cookie\\s*:\\s*(.*?)\\s*$")
                         .find(yaml)?.groupValues?.get(1).orEmpty()
-                    val cookie = rawCookie.trim().removeSurrounding("\\"").removeSurrounding("'")
+                    val cookie = rawCookie.trim().removeSurrounding("\"").removeSurrounding("'")
                     if (cookie.isNotBlank()) {
                         val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
                         val existing = if (identity != null) store.all().firstOrNull {
