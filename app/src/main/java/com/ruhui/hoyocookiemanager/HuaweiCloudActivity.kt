@@ -310,25 +310,53 @@ open class HuaweiCloudActivity : Activity() {
 
                 if (hoyoFunction != null) {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
-                    // 仅匹配 cookie 所在行，避免 \\s 跨行匹配；空值不能静默当作同步成功。
-                    val cookieMatch = Regex("(?m)^[\\t ]*cookie[\\t ]*:[\\t ]*(.*?)[\\t ]*$").find(yaml)
-                        ?: error("HoYoLAB 函数存在，但 config/config.yaml 中没有 cookie 字段；请检查云端函数配置文件。")
-                    val rawCookie = cookieMatch.groupValues[1].substringBefore(" #").trim()
-                    val cookie = rawCookie.removeSurrounding("\"").removeSurrounding("'").trim()
-                    if (cookie.isBlank() || cookie == "null" || cookie == "~") {
-                        error("HoYoLAB 云端配置中的 cookie 字段确实为空（例如 cookie: \"\"）；当前函数包没有可同步的 HoYoLAB 账号凭据。请先将有效 Cookie 写入云端配置并更新函数，账号变更仍保持锁定。")
+
+                    // 国服凭据位于 account.cookie，允许为空；国际服凭据必须单独读取 games.os.cookie。
+                    // 不能用全局 cookie 正则，否则会先命中国服空值并误判整个同步失败。
+                    var inGames = false
+                    var inOs = false
+                    var osCookie: String? = null
+                    yaml.lineSequence().forEach { line ->
+                        val indent = line.takeWhile { it == ' ' }.length
+                        val keyLine = line.trim()
+                        if (indent == 0 && keyLine == "games:") {
+                            inGames = true
+                            inOs = false
+                            return@forEach
+                        }
+                        if (indent == 0 && inGames) {
+                            inGames = false
+                            inOs = false
+                        }
+                        if (inGames && indent == 2 && keyLine == "os:") {
+                            inOs = true
+                            return@forEach
+                        }
+                        if (inGames && indent == 2 && keyLine.endsWith(":") && keyLine != "os:") {
+                            inOs = false
+                        }
+                        if (inGames && inOs && indent == 4 && keyLine.startsWith("cookie:")) {
+                            val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
+                            osCookie = raw.removeSurrounding("\\"").removeSurrounding("'").trim()
+                        }
                     }
-                    val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
-                    val existing = if (identity != null) store.all().firstOrNull {
-                        it.platform == AccountStore.HOYOLAB && it.platformUserId == identity
-                    } else store.all().firstOrNull { account ->
-                        account.platform == AccountStore.HOYOLAB &&
-                            runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
+
+                    val cookie = osCookie.orEmpty()
+                    if (cookie.isNotBlank() && cookie != "null" && cookie != "~" &&
+                        cookie != "__HOYOLAB_COOKIE__") {
+                        val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
+                        val existing = if (identity != null) store.all().firstOrNull {
+                            it.platform == AccountStore.HOYOLAB && it.platformUserId == identity
+                        } else store.all().firstOrNull { account ->
+                            account.platform == AccountStore.HOYOLAB &&
+                                runCatching { HoYoCookieVault(this, account.id).latest() == cookie }.getOrDefault(false)
+                        }
+                        val account = existing ?: store.add(AccountStore.HOYOLAB, platformUserId = identity)
+                        HoYoCookieVault(this, account.id).save(cookie)
+                        store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
+                        imported++
                     }
-                    val account = existing ?: store.add(AccountStore.HOYOLAB, platformUserId = identity)
-                    HoYoCookieVault(this, account.id).save(cookie)
-                    store.update(account.copy(platformUserId = identity ?: account.platformUserId, credentialReady = true))
-                    imported++
+                    // 国际服 Cookie 为空时仅跳过 HoYoLAB 凭据导入，不阻断后续森空岛 Token 同步。
                 }
 
                 if (sklandFunction != null) {
