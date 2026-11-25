@@ -122,8 +122,9 @@ open class HuaweiCloudActivity : Activity() {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setPadding(0, dp(22), 0, dp(6))
         })
+        lastResultMessage = AppMessageBus.current(this)
         resultMessage = TextView(this).apply {
-            text = "暂无操作记录"
+            text = lastResultMessage
             textSize = 13f
             setTextColor(0xFFE1E6EF.toInt())
             setTextIsSelectable(true)
@@ -135,9 +136,9 @@ open class HuaweiCloudActivity : Activity() {
         copyResultButton = Button(this).apply {
             text = "复制消息内容"
             isAllCaps = false
-            isEnabled = false
+            isEnabled = lastResultMessage != "暂无操作记录"
             setOnClickListener {
-                if (lastResultMessage.isNotBlank()) {
+                if (lastResultMessage.isNotBlank() && lastResultMessage != "暂无操作记录") {
                     val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("操作消息", lastResultMessage))
                     Toast.makeText(this@HuaweiCloudActivity, "消息内容已复制", Toast.LENGTH_SHORT).show()
@@ -441,8 +442,9 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun showOperationMessage(title: String, detail: String, success: Boolean?) {
-        lastResultMessage = title + "\n" + detail
+    protected fun showOperationMessage(title: String, detail: String, success: Boolean?) {
+        AppMessageBus.post(this, title, detail, success)
+        lastResultMessage = AppMessageBus.current(this)
         if (::resultMessage.isInitialized) {
             resultMessage.text = (when (success) { true -> "✓ "; false -> "✕ "; else -> "… " }) + lastResultMessage
             resultMessage.setTextColor(when (success) {
