@@ -153,11 +153,15 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             setPadding(dp(10), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, -2, 1f))
         status = TextView(this).apply {
-            text = if (hasToken()) "Token 已保存" else "等待登录后自动检测"
-            textSize = 12f
+            text = if (hasToken()) "已保存" else "未登录"
+            textSize = 11f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
             setTextColor(0xFFB8C1D1.toInt())
+            maxWidth = dp(76)
         }
-        bar.addView(status)
+        bar.addView(status, LinearLayout.LayoutParams(dp(76), -2))
         root.addView(bar)
         browserFrame = FrameLayout(this)
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -229,7 +233,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         if (!loginMode || saved || checking || now - lastCheck < 8000L) return
         lastCheck = now
         checking = true
-        status.text = "正在安全检测登录状态…"
+        status.text = "检测中"
         probeView?.loadUrl(TOKEN_URL)
     }
 
@@ -239,25 +243,25 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             val json = JSONObject(body)
             if (json.optInt("code", -1) != 0) {
                 checking = false
-                status.text = "尚未登录成功；完成登录后会自动继续检测"
+                status.text = "未登录"
                 return
             }
             val token = json.optJSONObject("data")?.optString("content").orEmpty()
                 .ifBlank { json.optString("content").orEmpty() }
             if (token.isBlank() || token.any(Char::isWhitespace)) {
                 checking = false
-                status.text = "等待有效登录状态…"
+                status.text = "等待登录"
                 return
             }
             SklandTokenVault(this).save(token)
             saved = true
             checking = false
-            status.text = "✓ 已自动解析并加密保存 Token"
+            status.text = "已保存"
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录成功", "已自动解析登录状态并在本机加密保存 Token；未将凭据写入消息栏。", true)
             status.setTextColor(0xFF75D69C.toInt())
         } catch (e: Exception) {
             checking = false
-            status.text = "等待登录完成；系统会自动重试"
+            status.text = "等待登录"
             AppMessageBus.post(
                 this, AppMessageBus.SKLAND,
                 "森空岛登录检测异常",
