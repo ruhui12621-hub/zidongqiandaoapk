@@ -69,10 +69,15 @@ class AccountManagementActivity : Activity() {
                 "${AccountStore.platformLabel(account.platform)} · ${if (games.isEmpty()) "尚未选择游戏" else games.joinToString("、")}",
                 12, false, 0xFF9BA7B8.toInt()
             ).apply { setPadding(0, dp(5), 0, 0) })
-            info.addView(text(
-                if (account.platformUserId != null) "已识别平台账号 ID" else "等待登录后识别账号 ID",
-                11, false, 0xFF8995A8.toInt()
-            ).apply { setPadding(0, dp(4), 0, 0) })
+            val accountStatus = when {
+                account.credentialReady && account.platformUserId != null -> "凭据已保存 · 平台 ID 已识别"
+                account.credentialReady -> "凭据已保存 · 使用本地唯一 ID"
+                account.platformUserId != null -> "平台 ID 已识别 · 等待登录"
+                else -> "等待登录"
+            }
+            info.addView(text(accountStatus, 11, false, 0xFF8995A8.toInt()).apply {
+                setPadding(0, dp(4), 0, 0)
+            })
             row.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(text("›", 25, false, 0xFF9BA7B8.toInt()))
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
