@@ -21,7 +21,7 @@ class AccountManagementActivity : Activity() {
     private val gameLabels = linkedMapOf(
         "genshin" to "原神", "honkai2" to "崩坏2", "honkai3rd" to "崩坏3",
         "tears_of_themis" to "未定事件簿", "honkai_sr" to "崩坏：星穹铁道",
-        "zzz" to "绝区零", "arknights" to "明日方舟"
+        "zzz" to "绝区零", "arknights" to "明日方舟", "endfield" to "明日方舟：终末地"
     )
     private var accountId: String? = null
     private var firstResume = true
@@ -127,7 +127,7 @@ class AccountManagementActivity : Activity() {
                 when (account.platform) {
                     AccountStore.HOYOLAB -> key != "honkai2" && key != "arknights"
                     AccountStore.MIYOUSHE_CN -> key != "arknights"
-                    AccountStore.SKLAND -> key == "arknights"
+                    AccountStore.SKLAND -> key == "arknights" || key == "endfield"
                     else -> false
                 }
             }
