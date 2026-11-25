@@ -89,8 +89,8 @@ class AccountManagementActivity : Activity() {
             addView(text("凭据获取状态", 14, true))
             if (account.platform == AccountStore.HOYOLAB || account.platform == AccountStore.MIYOUSHE_CN) {
                 val isCn = account.platform == AccountStore.MIYOUSHE_CN
-                val cookieReady = account.credentialReady
-                val tokenReady = account.credentialReady
+                val cookieReady = account.cookieReady
+                val tokenReady = account.tokenReady
                 val region = if (isCn) "国服（米游社）" else "国际服（HoYoLAB）"
                 addView(text("账号游戏区：" + region, 13, true, 0xFFB9C9E5.toInt()).apply {
                     setPadding(0, dp(8), 0, dp(8))
