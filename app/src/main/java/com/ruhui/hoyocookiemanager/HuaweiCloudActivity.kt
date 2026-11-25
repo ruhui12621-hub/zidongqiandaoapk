@@ -562,6 +562,12 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { fetchFunctionLogs() }
     }
 
+    protected fun htmlLogsText(): String =
+        if (::logsOutput.isInitialized) logsOutput.text?.toString().orEmpty() else "暂无日志"
+
+    protected fun htmlLogsStatus(): String =
+        if (::logsStatus.isInitialized) logsStatus.text?.toString().orEmpty() else "尚未读取日志"
+
     protected fun htmlCloudBackendReady(): Boolean =
         ::region.isInitialized && ::ak.isInitialized && ::sk.isInitialized &&
             ::loginButton.isInitialized && ::updateButton.isInitialized && ::logsButton.isInitialized
