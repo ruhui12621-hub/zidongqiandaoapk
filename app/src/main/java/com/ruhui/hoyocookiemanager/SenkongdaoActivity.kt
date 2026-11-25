@@ -222,11 +222,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         view.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 DesktopWebView.enablePageZoom(view)
-                if (isSklandHost(url)) {
-                    DesktopWebView.enableSklandHeaderScroll(view)
-                    scheduleCheck()
-                }
                 CookieManager.getInstance().flush()
+                if (isSklandHost(url)) scheduleCheck()
             }
         }
     }
