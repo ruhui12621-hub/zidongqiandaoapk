@@ -380,14 +380,6 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    @android.webkit.JavascriptInterface
-    protected fun htmlDeploy(service: String, yaml: String) {
-        runOnUiThread {
-            if (service == "hoyolab" && yaml.isNotBlank()) updateHuaweiCloudConfig(yaml)
-            deployPackages(if (service == "skland") "skland" else "hoyolab")
-        }
-    }
-
     protected fun htmlDeployHoyoAccount(accountId: String, selectedGamesJson: String) {
         runOnUiThread { deployHoyolabAccount(accountId, selectedGamesJson) }
     }
@@ -740,58 +732,6 @@ open class HuaweiCloudActivity : Activity() {
                 }
             }
             runOnUiThread { onResult(statuses, gameStatuses, summary) }
-        }
-    }
-
-    private fun deployPackages(service: String) {
-        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            setCloudConnectionState("尚未连接")
-            showOperationMessage(if (service == "hoyolab") "HoYoLAB 更新失败" else "森空岛更新失败", "华为云尚未连接，请先登录。", false)
-            return
-        }
-        val isHoyolab = service == "hoyolab"
-        if (isHoyolab) {
-            configYaml = configProvider?.invoke().orEmpty()
-            HuaweiCloudSession.lastConfigYaml = configYaml
-            if (configYaml.isBlank() || !configYaml.contains("cookie:")) {
-                setCloudConnectionState("尚未连接")
-                showOperationMessage("HoYoLAB 更新失败", "HoYoLAB 尚未获取有效 Cookie，本次未执行更新。", false)
-                return
-            }
-        }
-        setCloudConnectionState("已连接")
-        showOperationMessage(if (isHoyolab) "HoYoLAB 更新中" else "森空岛更新中", "正在上传函数包；先测试运行，确认成功后才检查定时触发器…", null)
-        worker.execute {
-            try {
-                val functionName = if (isHoyolab) HOYOLAB_FUNCTION else SKLAND_FUNCTION
-                val created = if (isHoyolab) {
-                    val archive = replaceZip(readPackagedZip("cloud/hoyolab.zip"), "config/config.yaml", configYaml)
-                    createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive)
-                } else {
-                    val token = SklandTokenVault(this).latest()?.takeIf { it.isNotBlank() }
-                        ?: error("尚未获取森空岛 Token。请先登录森空岛并完成 Token 获取。")
-                    val archive = replaceZip(readPackagedZip("cloud/skland.zip"), "code/INPUT_HYPERGRYPH_TOKEN.txt", token.trim() + "\n")
-                    createOrUpdateFunction(functionName, SKLAND_HANDLER, archive)
-                }
-                val function = waitForFunction(functionName)
-                val urn = function.optString("func_urn")
-                if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或修改触发器。")
-                // 必须先确认函数真实执行成功；任何异常都会在这里中止，不会查询或创建定时触发器。
-                val testSummary = invokeFunctionOnce(urn)
-                val timerSummary = ensureDailyTimerIfMissing(urn)
-                val label = if (isHoyolab) "HoYoLAB" else "森空岛"
-                val action = if (created) "创建" else "更新"
-                val detail = "$label 函数${action}成功。\n测试运行：$testSummary\n定时触发器：$timerSummary\n本次没有触碰另一个服务。"
-                runOnUiThread {
-                    setCloudConnectionState("已连接")
-                    showOperationMessage("$label 部署及检查完成", detail, true)
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    setCloudConnectionState("已连接")
-                    showOperationMessage(if (isHoyolab) "HoYoLAB 更新失败" else "森空岛更新失败", e.message ?: e.javaClass.simpleName, false)
-                }
-            }
         }
     }
 
