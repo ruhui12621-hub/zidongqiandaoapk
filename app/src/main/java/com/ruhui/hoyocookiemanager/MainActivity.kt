@@ -257,12 +257,9 @@ class MainActivity : HuaweiCloudActivity() {
                     line.addView(text(checkin, 11, false, color))
                     todayCard.addView(line)
                 }
-            }
             root.addView(todayCard, LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = dp(10)
             })
-    
-    
         }
         
         root.addView(text("账号列表", 17, true).apply {
