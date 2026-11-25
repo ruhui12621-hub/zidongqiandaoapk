@@ -66,15 +66,16 @@ class MainActivity : HuaweiCloudActivity() {
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
+        if (!returnToAccountDetail) AccountStore.clearMemory()
         buildLauncher()
         val cloudCredentials = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
-        if (cloudCredentials != null) {
+        if (cloudCredentials != null && !returnToAccountDetail) {
             synchronizeCloudAccounts { success, message ->
                 if (showingLauncher && !isFinishing) buildLauncher()
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 if (success && showingLauncher && !isFinishing) refreshTodayCheckinStatus(force = true)
             }
-        } else {
+        } else if (!returnToAccountDetail) {
             CloudAccountSyncState.set(this, CloudAccountSyncState.UNKNOWN)
         }
         if (activePlatform == AccountStore.HOYOLAB || activePlatform == AccountStore.MIYOUSHE_CN) {
@@ -100,7 +101,7 @@ class MainActivity : HuaweiCloudActivity() {
             CookieManager.getInstance().removeAllCookies { CookieManager.getInstance().flush() }
             WebStorage.getInstance().deleteAllData()
         } catch (_: Exception) {
-            // 系统回收时，WebView 数据目录仍会保留登录状态。
+            // Ignore WebView teardown failures; no credential data is written by this Activity.
         }
         super.onDestroy()
     }
