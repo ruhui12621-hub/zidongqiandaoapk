@@ -29,22 +29,31 @@ function renderHome(){
 function renderDetail(a){
  if(!a)return renderHome();
  let html='<div class="detail-head"><button class="back-button" data-action="back">‹</button><div class="detail-title"><h1>'+esc(a.name)+'</h1><p>'+esc(a.platformLabel)+' · 账号详情</p></div></div>';
- html+='<div class="card"><div class="card-title">凭据获取状态</div>';
  if(a.platform==="hoyolab"||a.platform==="miyoushe_cn"){
-  html+='<div class="metric" style="margin-bottom:10px"><span>账号游戏区</span><strong>'+(a.platform==="miyoushe_cn"?"国服 · 米游社":"国际服 · HoYoLAB")+'</strong></div>';
-  html+='<div class="grid-two"><div class="metric"><span>Cookie</span><strong style="color:'+(a.cookieReady?'var(--green)':'var(--amber)')+'">'+(a.cookieReady?'已获取':'未获取')+'</strong></div>';
-  if(!(a.games||[]).some(g=>g.key==="zzz"))html+='<div class="metric"><span>Token</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
-  html+='</div><p class="hint">状态按当前账号所属游戏区读取云端配置，不会混用国服与国际服凭据。</p>';
+  const pageCookieReady=!!(state.hoyoPageCookieReady&&state.hoyoPageCookieAccountId===a.id);
+  const serverLabel=state.hoyoPageCookieServer==="cn"?"国服":state.hoyoPageCookieServer==="os"?"国际服":"";
+  html+='<div class="card"><div class="card-title">云端信息</div>';
+  html+='<div class="metric" style="margin-bottom:12px"><span>账号游戏区</span><strong>'+(a.platform==="miyoushe_cn"?"国服 · 米游社":"国际服 · HoYoLAB")+'</strong></div>';
+  html+='<div class="game-list">';
+  if(a.games&&a.games.length)a.games.forEach(g=>html+='<span class="game-chip enabled">'+esc(g.label)+'</span>');
+  else html+='<span class="hint">云端配置未识别到已启用的游戏</span>';
+  html+='</div><p class="hint">以上账号与游戏信息来自华为云函数配置；更新 Cookie 不会改动其他云端设置。</p>';
+  html+='<div class="metric"><span>今日签到</span><strong>'+esc(a.todayStatus||"状态未知")+'</strong></div></div>';
+  html+='<div class="card"><div class="card-title">更新上传</div>';
+  html+='<div class="metric" style="margin-bottom:12px"><span>网页 Cookie 获取状态</span><strong style="color:'+(pageCookieReady?'var(--green)':'var(--amber)')+'">'+(pageCookieReady?'已获取'+(serverLabel?' · '+serverLabel:''):'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
+  html+='<button class="primary" data-action="deploy-hoyo-account" '+(!pageCookieReady||!state.cloudConnected?'disabled':'')+'>更新云函数并上传</button>';
+  html+='<p class="hint">上传时使用 APK 内置函数 ZIP，并将本次网页获取的 Cookie 写入云端原配置对应位置；其他云端配置保持不变。请先连接华为云。</p></div>';
  }else{
+  html+='<div class="card"><div class="card-title">凭据获取状态</div>';
   html+='<div class="metric"><span>森空岛 Token</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
-  html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
+  html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button></div>';
+  html+='<div class="card"><div class="card-title">签到游戏（云端只读）</div><div class="game-list">';
+  if(a.games&&a.games.length)a.games.forEach(g=>html+='<span class="game-chip enabled">'+esc(g.label)+'</span>');
+  else html+='<span class="hint">云端配置未识别到已启用的游戏</span>';
+  html+='</div><p class="hint">游戏选择直接来自云端配置，不在本机保存或修改。</p></div>';
+  html+='<div class="card"><div class="card-title">今日签到</div><span class="pill '+statusClass(a.todayStatus)+'">'+esc(a.todayStatus||"状态未知")+'</span></div>';
  }
- html+='</div><div class="card"><div class="card-title">签到游戏（云端只读）</div><div class="game-list">';
- if(a.games&&a.games.length)a.games.forEach(g=>html+='<span class="game-chip enabled">'+esc(g.label)+'</span>');
- else html+='<span class="hint">云端配置未识别到已启用的游戏</span>';
- html+='</div><p class="hint">游戏选择直接来自云端配置，不在本机保存或修改。</p></div>';
- html+='<div class="card"><div class="card-title">今日签到</div><span class="pill '+statusClass(a.todayStatus)+'">'+esc(a.todayStatus||"状态未知")+'</span></div>';
  if(a.platform==="skland"){
   const sklandMessage=state.sklandMessage||"暂无操作记录。点击上方“打开森空岛登录页面”后，加载状态和错误信息会显示在这里。";
   html+='<div class="skland-error-wrap"><div class="skland-error-text">'+esc(sklandMessage)+'</div><button class="skland-copy-button" data-action="copy-skland-error">复制消息</button></div>';
@@ -96,6 +105,7 @@ document.addEventListener("click",e=>{
  if(action==="modal-close"&&e.target.closest(".modal"))$("#modal-root").innerHTML="";
  if(action==="back"){selectedId=null;native("backToHome");render()}
  if(action==="hoyo-login"){const a=account();if(a)native("openHoyoLogin",a.id)}
+ if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id);toast("正在合并云端配置并上传")}
  if(action==="skland-login"){const a=account();if(a)native("openSklandLogin",a.id)}
  if(action==="copy-skland-error"){native("copyText",state.sklandMessage||"暂无操作记录")}
  if(action==="cloud-login"){
