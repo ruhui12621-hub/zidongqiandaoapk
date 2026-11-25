@@ -154,6 +154,14 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 CookieManager.getInstance().flush()
             }
 
+            @Suppress("DEPRECATION")
+            override fun onReceivedError(view: WebView, errorCode: Int, description: String, failingUrl: String) {
+                super.onReceivedError(view, errorCode, description, failingUrl)
+                val detail = "网页加载失败（$errorCode）：$description\\n地址：$failingUrl"
+                AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛网页加载失败", detail, false)
+                pushSklandUi()
+            }
+
             override fun onReceivedError(
                 view: WebView,
                 request: android.webkit.WebResourceRequest,
