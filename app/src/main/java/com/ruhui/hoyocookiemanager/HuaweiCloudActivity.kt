@@ -116,80 +116,82 @@ open class HuaweiCloudActivity : Activity() {
             content.addView(updateButton)
     
         }
-        lastResultMessage = AppMessageBus.current(this, messageChannel())
-            .takeIf { it.isNotBlank() && it != "暂无操作记录" } ?: "暂无操作消息"
-        resultMessage = TextView(this).apply {
-            text = lastResultMessage
-            textSize = 13f
-            setTextColor(0xFFE1E6EF.toInt())
-            setTextIsSelectable(true)
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setBackgroundColor(0xFF202631.toInt())
-            minHeight = dp(190)
-            textSize = 13f
-        }
-        val messageScroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(resultMessage, android.widget.FrameLayout.LayoutParams(-1, -2))
-        }
-        content.addView(messageScroll, LinearLayout.LayoutParams(-1, dp(230)))
-        copyResultButton = Button(this).apply {
-            text = "复制消息内容"
-            isAllCaps = false
-            isEnabled = lastResultMessage != "暂无操作消息"
-            setOnClickListener {
-                if (lastResultMessage.isNotBlank() && lastResultMessage != "暂无操作消息") {
-                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("操作消息", lastResultMessage))
-                    Toast.makeText(this@HuaweiCloudActivity, "消息内容已复制", Toast.LENGTH_SHORT).show()
+        if (!loginOnly) {
+            lastResultMessage = AppMessageBus.current(this, messageChannel())
+                .takeIf { it.isNotBlank() && it != "暂无操作记录" } ?: "暂无操作消息"
+            resultMessage = TextView(this).apply {
+                text = lastResultMessage
+                textSize = 13f
+                setTextColor(0xFFE1E6EF.toInt())
+                setTextIsSelectable(true)
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                setBackgroundColor(0xFF202631.toInt())
+                minHeight = dp(190)
+                textSize = 13f
+            }
+            val messageScroll = ScrollView(this).apply {
+                isFillViewport = true
+                addView(resultMessage, android.widget.FrameLayout.LayoutParams(-1, -2))
+            }
+            content.addView(messageScroll, LinearLayout.LayoutParams(-1, dp(230)))
+            copyResultButton = Button(this).apply {
+                text = "复制消息内容"
+                isAllCaps = false
+                isEnabled = lastResultMessage != "暂无操作消息"
+                setOnClickListener {
+                    if (lastResultMessage.isNotBlank() && lastResultMessage != "暂无操作消息") {
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("操作消息", lastResultMessage))
+                        Toast.makeText(this@HuaweiCloudActivity, "消息内容已复制", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        }
-        content.addView(copyResultButton)
-        content.addView(TextView(this).apply {
-            text = "函数运行日志"
-            textSize = 20f
-            setTextColor(0xFFECEFF5.toInt())
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, dp(26), 0, dp(6))
-        })
-        content.addView(TextView(this).apply {
-            text = "读取 HoYoLAB 与森空岛两个服务最近一周的运行输出。"
-            textSize = 13f
-            setTextColor(0xFFA7B0C0.toInt())
-            setPadding(0, 0, 0, dp(8))
-        })
-        content.addView(TextView(this).apply {
-            text = "固定查询最近 7 天，自动分页读取全部日志。"
-            textSize = 13f
-            setTextColor(0xFFA7B0C0.toInt())
-            setPadding(0, 0, 0, dp(8))
-        })
-        logsButton = Button(this).apply {
-            text = "读取运行日志"
-            isAllCaps = false
-            isEnabled = false
-            setOnClickListener { fetchFunctionLogs() }
-        }
-        content.addView(logsButton)
-        logsStatus = TextView(this).apply {
-            text = "登录华为云后即可读取两个服务的运行日志。"
-            textSize = 13f
-            setTextColor(0xFFA7B0C0.toInt())
-            setPadding(0, dp(8), 0, dp(6))
-        }
-        content.addView(logsStatus)
-        logsOutput = TextView(this).apply {
-            textSize = 12f
-            setTextColor(0xFFE1E6EF.toInt())
-            setTextIsSelectable(true)
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setBackgroundColor(0xFF202631.toInt())
-            minHeight = dp(90)
-            text = "暂无日志"
-        }
-        val logsScroll = ScrollView(this).apply { addView(logsOutput) }
-        content.addView(logsScroll, LinearLayout.LayoutParams(-1, dp(260)))
+            content.addView(copyResultButton)
+            content.addView(TextView(this).apply {
+                text = "函数运行日志"
+                textSize = 20f
+                setTextColor(0xFFECEFF5.toInt())
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setPadding(0, dp(26), 0, dp(6))
+            })
+            content.addView(TextView(this).apply {
+                text = "读取 HoYoLAB 与森空岛两个服务最近一周的运行输出。"
+                textSize = 13f
+                setTextColor(0xFFA7B0C0.toInt())
+                setPadding(0, 0, 0, dp(8))
+            })
+            content.addView(TextView(this).apply {
+                text = "固定查询最近 7 天，自动分页读取全部日志。"
+                textSize = 13f
+                setTextColor(0xFFA7B0C0.toInt())
+                setPadding(0, 0, 0, dp(8))
+            })
+            logsButton = Button(this).apply {
+                text = "读取运行日志"
+                isAllCaps = false
+                isEnabled = false
+                setOnClickListener { fetchFunctionLogs() }
+            }
+            content.addView(logsButton)
+            logsStatus = TextView(this).apply {
+                text = "登录华为云后即可读取两个服务的运行日志。"
+                textSize = 13f
+                setTextColor(0xFFA7B0C0.toInt())
+                setPadding(0, dp(8), 0, dp(6))
+            }
+            content.addView(logsStatus)
+            logsOutput = TextView(this).apply {
+                textSize = 12f
+                setTextColor(0xFFE1E6EF.toInt())
+                setTextIsSelectable(true)
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                setBackgroundColor(0xFF202631.toInt())
+                minHeight = dp(90)
+                text = "暂无日志"
+            }
+            val logsScroll = ScrollView(this).apply { addView(logsOutput) }
+            content.addView(logsScroll, LinearLayout.LayoutParams(-1, dp(260)))
+            }
         if (HuaweiCloudSession.isLoggedIn()) {
             projectId = HuaweiCloudSession.projectId
             regionValue = HuaweiCloudSession.region
@@ -198,7 +200,7 @@ open class HuaweiCloudActivity : Activity() {
             authSk = HuaweiCloudSession.sk
             setCloudConnectionState("已连接")
             if (::updateButton.isInitialized) updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
-            logsButton.isEnabled = true
+            if (::logsButton.isInitialized) logsButton.isEnabled = true
         }
     }
 
