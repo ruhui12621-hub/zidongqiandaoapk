@@ -63,6 +63,7 @@ class SenkongdaoActivity : Activity() {
     }
 
     override fun onDestroy() {
+        CookieManager.getInstance().flush()
         if (::webView.isInitialized) {
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.stopLoading()
