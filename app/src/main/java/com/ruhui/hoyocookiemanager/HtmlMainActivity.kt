@@ -282,8 +282,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun deployHoyoAccount(id: String) {
-            htmlDeployHoyoAccount(id)
+        @JavascriptInterface fun deployHoyoAccount(id: String, selectedGamesJson: String) {
+            htmlDeployHoyoAccount(id, selectedGamesJson)
             pushState()
         }
 
