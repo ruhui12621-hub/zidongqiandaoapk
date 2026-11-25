@@ -409,6 +409,7 @@ open class HuaweiCloudActivity : Activity() {
                 val function = waitForFunction(functionName)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或修改触发器。")
+                // 必须先确认函数真实执行成功；任何异常都会在这里中止，不会查询或创建定时触发器。
                 val testSummary = invokeFunctionOnce(urn)
                 val timerSummary = ensureDailyTimerIfMissing(urn)
                 val label = if (isHoyolab) "HoYoLAB" else "森空岛"
