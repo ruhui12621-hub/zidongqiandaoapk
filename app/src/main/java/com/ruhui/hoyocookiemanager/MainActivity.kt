@@ -230,6 +230,15 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(4), 0, dp(12))
         }
         content.addView(details)
+        content.addView(text("HoYoLAB 操作消息", 16, true).apply { setPadding(0, dp(14), 0, dp(6)) })
+        val hoyoMessage = text(AppMessageBus.current(this, AppMessageBus.HOYOLAB), 12, false, Color.rgb(190, 199, 213)).apply {
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(Color.rgb(32, 38, 49))
+        }
+        content.addView(hoyoMessage)
+        content.addView(button("刷新消息") {
+            hoyoMessage.text = AppMessageBus.current(this, AppMessageBus.HOYOLAB)
+        })
         content.addView(text("登录成功后自动识别当前平台账号，并将 Cookie 加密保存在该账号名下。", 13, false, Color.rgb(160, 168, 182)).apply {
             setPadding(0, dp(8), 0, dp(12))
         })
