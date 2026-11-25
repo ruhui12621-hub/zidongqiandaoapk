@@ -21,28 +21,10 @@ data class ManagedAccount(
 )
 
 class AccountStore(context: Context) {
-    private val prefs = context.getSharedPreferences("multi_account_registry", Context.MODE_PRIVATE)
-
+    // Account/config data is intentionally memory-only. Every app launch repopulates it
+    // from the authoritative FunctionGraph package; no account YAML or Cookie is cached locally.
     @Synchronized
-    fun all(): List<ManagedAccount> {
-        val raw = prefs.getString(KEY_ACCOUNTS, "[]") ?: "[]"
-        val array = JSONArray(raw)
-        return (0 until array.length()).mapNotNull { index ->
-            val item = array.optJSONObject(index) ?: return@mapNotNull null
-            val id = item.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val platform = item.optString("platform").takeIf { it in PLATFORMS } ?: return@mapNotNull null
-            val gamesJson = item.optJSONArray("games") ?: JSONArray()
-            val games = (0 until gamesJson.length()).mapNotNull { gamesJson.optString(it).takeIf(String::isNotBlank) }.toSet()
-            ManagedAccount(
-                id = id,
-                platform = platform,
-                name = item.optString("name").ifBlank { defaultName(platform) },
-                platformUserId = item.optString("platformUserId").takeIf { it.isNotBlank() },
-                games = games,
-                credentialReady = item.optBoolean("credentialReady", false)
-            )
-        }
-    }
+    fun all(): List<ManagedAccount> = synchronized(cache) { cache.toList() }
 
     @Synchronized
     fun add(platform: String, name: String = "", platformUserId: String? = null, games: Set<String> = emptySet()): ManagedAccount {
@@ -59,51 +41,33 @@ class AccountStore(context: Context) {
             platformUserId = normalized,
             games = if (games.isNotEmpty()) games else if (platform == SKLAND) setOf("endfield") else games
         )
-        save(all() + account)
+        synchronized(cache) { cache.add(account) }
         return account
     }
 
     @Synchronized
     fun update(account: ManagedAccount) {
         require(account.platform in PLATFORMS) { "不支持的账号平台" }
-        val rows = all().toMutableList()
-        val index = rows.indexOfFirst { it.id == account.id }
-        require(index >= 0) { "账号不存在" }
-        val normalized = normalizeUserId(account.platformUserId)
-        val duplicate = rows.any {
-            it.id != account.id && it.platform == account.platform &&
-                normalized != null && it.platformUserId == normalized
+        synchronized(cache) {
+            val index = cache.indexOfFirst { it.id == account.id }
+            require(index >= 0) { "账号不存在" }
+            val normalized = normalizeUserId(account.platformUserId)
+            val duplicate = cache.any {
+                it.id != account.id && it.platform == account.platform &&
+                    normalized != null && it.platformUserId == normalized
+            }
+            require(!duplicate) { "该平台已存在相同账号 ID" }
+            cache[index] = account.copy(platformUserId = normalized)
         }
-        require(!duplicate) { "该平台已存在相同账号 ID" }
-        rows[index] = account.copy(platformUserId = normalized)
-        save(rows)
     }
 
     @Synchronized
     fun delete(id: String) {
-        save(all().filterNot { it.id == id })
+        synchronized(cache) { cache.removeAll { it.id == id } }
     }
 
     @Synchronized
     fun find(id: String): ManagedAccount? = all().firstOrNull { it.id == id }
-
-    private fun save(rows: List<ManagedAccount>) {
-        val array = JSONArray()
-        rows.forEach { account ->
-            val games = JSONArray()
-            account.games.sorted().forEach(games::put)
-            array.put(
-                JSONObject()
-                    .put("id", account.id)
-                    .put("platform", account.platform)
-                    .put("name", account.name)
-                    .put("platformUserId", account.platformUserId ?: "")
-                    .put("games", games)
-                    .put("credentialReady", account.credentialReady)
-            )
-        }
-        check(prefs.edit().putString(KEY_ACCOUNTS, array.toString()).commit()) { "账号列表保存失败" }
-    }
 
     private fun normalizeUserId(value: String?): String? =
         value?.trim()?.takeIf { it.isNotEmpty() && it.length <= 128 }
@@ -115,6 +79,7 @@ class AccountStore(context: Context) {
         const val EXTRA_ACCOUNT_ID = "managed_account_id"
         const val EXTRA_PLATFORM = "managed_account_platform"
         const val KEY_ACCOUNTS = "accounts_json"
+        private val cache = mutableListOf<ManagedAccount>()
         val PLATFORMS = setOf(HOYOLAB, MIYOUSHE_CN, SKLAND)
 
         fun platformLabel(platform: String): String = when (platform) {
