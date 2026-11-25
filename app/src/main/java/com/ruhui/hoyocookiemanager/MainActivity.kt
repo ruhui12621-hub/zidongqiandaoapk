@@ -35,6 +35,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var cookieValue = ""
     private var yamlValue = ""
     private var browserVisible = false
+    private var showingLauncher = true
     private val webDiagnostics = mutableListOf<String>()
 
     private val cookieUrls = listOf(
@@ -58,6 +59,7 @@ class MainActivity : HuaweiCloudActivity() {
                 popup.destroy()
                 popupWebView = null
             }
+            CookieManager.getInstance().flush()
             if (::webView.isInitialized) {
                 webView.stopLoading()
                 webView.destroy()
@@ -69,6 +71,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun buildLauncher() {
+        showingLauncher = true
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -94,6 +97,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun buildHome() {
+        showingLauncher = false
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(18))
@@ -134,8 +138,10 @@ class MainActivity : HuaweiCloudActivity() {
     override fun onBackPressed() {
         if (::webView.isInitialized && webView.parent != null) {
             if (webView.canGoBack()) webView.goBack() else buildHome()
-        } else {
+        } else if (!showingLauncher) {
             buildLauncher()
+        } else {
+            super.onBackPressed()
         }
     }
 
