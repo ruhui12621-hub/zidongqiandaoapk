@@ -109,6 +109,23 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             }
         })
         root.addView(TextView(this).apply {
+            text = "森空岛操作消息"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(16), 0, dp(6))
+        })
+        val message = TextView(this).apply {
+            text = AppMessageBus.current(this@SenkongdaoActivity, AppMessageBus.SKLAND)
+            textSize = 12f
+            setTextColor(0xFFBEC7D5.toInt())
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(0xFF202631.toInt())
+        }
+        root.addView(message)
+        root.addView(button("刷新消息") {
+            message.text = AppMessageBus.current(this@SenkongdaoActivity, AppMessageBus.SKLAND)
+        })
+        root.addView(TextView(this).apply {
             text = "登录后自动检测 Token，并按当前账号 ID 独立加密保存。"
             textSize = 13f
             setTextColor(0xFF9BA7B8.toInt())
