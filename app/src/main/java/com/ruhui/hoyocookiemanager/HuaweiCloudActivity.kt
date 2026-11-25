@@ -270,8 +270,11 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.projectId = pid
                     val sklandReady = !runCatching { SklandTokenVault(this).latest() }.getOrNull().isNullOrBlank()
                     cloudStatus.text = "● 华为云已连接\nRegion：" + r + "\nProject ID：" + pid +
-                        (if (configYaml.isBlank()) "\nHoYoLAB：等待 Cookie" else "\nHoYoLAB：Cookie 已就绪") +
-                        (if (sklandReady) "\n森空岛：Token 已就绪" else "\n森空岛：等待 Token") + vaultWarning
+                        (if (panelService == "hoyolab") {
+                            if (configYaml.isBlank()) "\nHoYoLAB：等待 Cookie" else "\nHoYoLAB：Cookie 已就绪"
+                        } else {
+                            if (sklandReady) "\n森空岛：Token 已就绪" else "\n森空岛：等待 Token"
+                        }) + vaultWarning
                     updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
                     logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
