@@ -45,7 +45,7 @@ open class HuaweiCloudActivity : Activity() {
         super.onCreate(savedInstanceState)
     }
 
-    protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}) {
+    protected fun addHuaweiCloudPanel(parent: LinearLayout, service: String, configProvider: () -> String, onConfigure: () -> Unit = {}, loginOnly: Boolean = false) {
         this.configProvider = configProvider
         this.panelService = service
         configYaml = HuaweiCloudSession.lastConfigYaml
@@ -76,8 +76,8 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.projectId = ""
                     projectId = ""
                     setCloudConnectionState("尚未连接")
-                    updateButton.isEnabled = false
-                    logsButton.isEnabled = false
+                    if (::updateButton.isInitialized) updateButton.isEnabled = false
+                    if (::logsButton.isInitialized) logsButton.isEnabled = false
                 }
             }
         }
@@ -97,20 +97,23 @@ open class HuaweiCloudActivity : Activity() {
             setOnClickListener { login() }
         }
         content.addView(loginButton)
-        if (service == "hoyolab") {
-            content.addView(Button(this).apply {
-                text = "游戏选择"
+        if (!loginOnly) {
+            if (service == "hoyolab") {
+                content.addView(Button(this).apply {
+                    text = "游戏选择"
+                    isAllCaps = false
+                    setOnClickListener { onConfigure() }
+                })
+            }
+            updateButton = Button(this).apply {
+                text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
                 isAllCaps = false
-                setOnClickListener { onConfigure() }
-            })
+                isEnabled = false
+                setOnClickListener { deployPackages(service) }
+            }
+            content.addView(updateButton)
+    
         }
-        updateButton = Button(this).apply {
-            text = if (service == "hoyolab") "更新 HoYoLAB 云函数" else "更新森空岛云函数"
-            isAllCaps = false
-            isEnabled = false
-            setOnClickListener { deployPackages(service) }
-        }
-        content.addView(updateButton)
         lastResultMessage = AppMessageBus.current(this, messageChannel())
             .takeIf { it.isNotBlank() && it != "暂无操作记录" } ?: "暂无操作消息"
         resultMessage = TextView(this).apply {
@@ -192,7 +195,7 @@ open class HuaweiCloudActivity : Activity() {
             authAk = HuaweiCloudSession.ak
             authSk = HuaweiCloudSession.sk
             setCloudConnectionState("已连接")
-            updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
+            if (::updateButton.isInitialized) updateButton.isEnabled = service == "skland" || configYaml.isNotBlank()
             logsButton.isEnabled = true
         }
     }
@@ -244,7 +247,7 @@ open class HuaweiCloudActivity : Activity() {
         HuaweiCloudSession.region = r
         getSharedPreferences("app_settings", MODE_PRIVATE).edit().putString("cloud_region", r).apply()
         setCloudConnectionState("连接中")
-        updateButton.isEnabled = false
+        if (::updateButton.isInitialized) updateButton.isEnabled = false
         showOperationMessage("华为云登录", "正在验证 AK/SK 并查询项目…", null)
         worker.execute {
             try {
@@ -271,8 +274,8 @@ open class HuaweiCloudActivity : Activity() {
                     HuaweiCloudSession.region = regionValue
                     HuaweiCloudSession.projectId = pid
                     setCloudConnectionState("已连接")
-                    updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
-                    logsButton.isEnabled = true
+                    if (::updateButton.isInitialized) updateButton.isEnabled = panelService == "skland" || configYaml.isNotBlank()
+                    if (::logsButton.isInitialized) logsButton.isEnabled = true
                     showOperationMessage("华为云连接成功", "Region：$r\nProject ID：$pid" + vaultWarning, true)
                 }
             } catch (e: Exception) {
