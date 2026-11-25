@@ -3,124 +3,163 @@ package com.ruhui.hoyocookiemanager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
+import javax.crypto.Mac
 import javax.crypto.SecretKey
-import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 /**
- * Offline credential vault. The data key is wrapped independently by:
- * 1) a PBKDF2-derived key from the user's vault password, and
- * 2) an AES key held by Android Keystore.
- * Both wrappers must decrypt and match before credentials are returned.
+ * Passwordless local credential vault.
+ * Credentials are encrypted at rest with an AES-GCM key held by Android Keystore.
+ * A separate non-exportable HMAC key fingerprints credential pairs for duplicate
+ * detection without comparing/storing plaintext fingerprints.
  */
-class AndroidCredentialVault(private val activity: android.content.Context) {
-    private val file = File(activity.noBackupFilesDir, "cloud_credentials.vault")
-    private val alias = "cloud_credentials_vault_key"
+class AndroidCredentialVault(private val context: android.content.Context) {
+    private val file = File(context.noBackupFilesDir, "cloud_credentials.vault")
+    private val encryptionAlias = "cloud_credentials_vault_key"
+    private val fingerprintAlias = "cloud_credentials_fingerprint_key"
     private val random = SecureRandom()
 
     fun exists(): Boolean = file.isFile
 
     @Synchronized
-    fun save(password: CharArray, ak: String, sk: String) {
-        require(password.size >= 10) { "保管箱密码至少需要 10 个字符。" }
-        require(ak.isNotBlank() && sk.isNotBlank()) { "AK 和 SK 不能为空。" }
-        val salt = ByteArray(16).also(random::nextBytes)
-        val dataKey = ByteArray(32).also(random::nextBytes)
-        val passwordKey = derive(password, salt)
-        val passwordWrap = encrypt(SecretKeySpec(passwordKey, "AES"), dataKey)
-        val systemWrap = encrypt(getOrCreateKeystoreKey(), dataKey)
-        val payload = JSONObject().put("ak", ak).put("sk", sk).toString().toByteArray(Charsets.UTF_8)
-        val encryptedPayload = encrypt(SecretKeySpec(dataKey, "AES"), payload)
-        val json = JSONObject()
-            .put("version", 1)
-            .put("iterations", ITERATIONS)
-            .put("salt", b64(salt))
-            .put("passwordWrapNonce", b64(passwordWrap.first))
-            .put("passwordWrap", b64(passwordWrap.second))
-            .put("systemWrapNonce", b64(systemWrap.first))
-            .put("systemWrap", b64(systemWrap.second))
-            .put("dataNonce", b64(encryptedPayload.first))
-            .put("data", b64(encryptedPayload.second))
-        val temp = File(file.parentFile, file.name + ".tmp")
-        temp.writeText(json.toString(), Charsets.UTF_8)
-        if (file.exists() && !file.delete()) throw IllegalStateException("无法替换旧保管箱文件。")
-        if (!temp.renameTo(file)) throw IllegalStateException("无法安全保存保管箱文件。")
-        passwordKey.fill(0); dataKey.fill(0); payload.fill(0)
+    fun latest(): Pair<String, String>? {
+        val entries = readEntries()
+        val first = entries.optJSONObject(0) ?: return null
+        return first.getString("ak") to first.getString("sk")
     }
 
+    /**
+     * Save the successful login credentials as the newest entry.
+     * Matching HMAC fingerprints are moved to the front instead of duplicated.
+     */
     @Synchronized
-    fun unlock(password: CharArray): Pair<String, String> {
-        if (!file.isFile) error("尚未创建密码保管箱。")
-        val j = JSONObject(file.readText(Charsets.UTF_8))
-        if (j.optInt("version") != 1) error("保管箱版本不受支持。")
-        val passwordKey = derive(password, decode(j.getString("salt")), j.optInt("iterations", ITERATIONS))
-        val fromPassword = decrypt(
-            SecretKeySpec(passwordKey, "AES"),
-            decode(j.getString("passwordWrapNonce")),
-            decode(j.getString("passwordWrap"))
-        )
-        val fromSystem = decrypt(
-            getExistingKeystoreKey(),
-            decode(j.getString("systemWrapNonce")),
-            decode(j.getString("systemWrap"))
-        )
-        passwordKey.fill(0)
-        if (!java.security.MessageDigest.isEqual(fromPassword, fromSystem)) {
-            fromPassword.fill(0); fromSystem.fill(0)
-            error("保管箱密钥校验失败。")
+    fun save(ak: String, sk: String) {
+        require(ak.isNotBlank() && sk.isNotBlank()) { "AK 和 SK 不能为空。" }
+        val fingerprint = fingerprint(ak, sk)
+        val entries = readEntries()
+        val kept = JSONArray()
+        var inserted = false
+        for (i in 0 until entries.length()) {
+            val old = entries.getJSONObject(i)
+            if (MessageDigest.isEqual(
+                    fingerprint.toByteArray(Charsets.UTF_8),
+                    old.optString("fingerprint").toByteArray(Charsets.UTF_8)
+                )) {
+                if (!inserted) {
+                    kept.put(entry(ak, sk, fingerprint))
+                    inserted = true
+                }
+            } else if (kept.length() < MAX_ENTRIES) {
+                kept.put(old)
+            }
         }
-        val clear = decrypt(
-            SecretKeySpec(fromPassword, "AES"),
-            decode(j.getString("dataNonce")),
-            decode(j.getString("data"))
-        )
-        fromPassword.fill(0); fromSystem.fill(0)
-        return try {
-            val credentials = JSONObject(String(clear, Charsets.UTF_8))
-            credentials.getString("ak") to credentials.getString("sk")
-        } finally { clear.fill(0) }
+        if (!inserted) {
+            val newest = JSONArray().put(entry(ak, sk, fingerprint))
+            for (i in 0 until minOf(kept.length(), MAX_ENTRIES - 1)) newest.put(kept.getJSONObject(i))
+            writeEntries(newest)
+        } else {
+            writeEntries(kept)
+        }
     }
 
     @Synchronized
     fun delete() {
-        if (file.exists()) file.delete()
+        if (file.exists() && !file.delete()) error("无法删除保管箱文件。")
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        if (store.containsAlias(alias)) store.deleteEntry(alias)
+        if (store.containsAlias(encryptionAlias)) store.deleteEntry(encryptionAlias)
+        if (store.containsAlias(fingerprintAlias)) store.deleteEntry(fingerprintAlias)
     }
 
-    private fun derive(password: CharArray, salt: ByteArray, iterations: Int = ITERATIONS): ByteArray {
-        val spec = PBEKeySpec(password, salt, iterations, 256)
+    private fun entry(ak: String, sk: String, fingerprint: String) =
+        JSONObject().put("ak", ak).put("sk", sk).put("fingerprint", fingerprint)
+
+    private fun readEntries(): JSONArray {
+        if (!file.isFile) return JSONArray()
+        val outer = JSONObject(file.readText(Charsets.UTF_8))
+        if (outer.optInt("version") != VERSION) {
+            error("检测到旧版带密码保管箱。请先用旧版本解锁并确认 AK/SK 可用，再升级保存；新版不会擅自覆盖旧数据。")
+        }
+        val clear = decrypt(
+            getEncryptionKey(),
+            decode(outer.getString("nonce")),
+            decode(outer.getString("data"))
+        )
         return try {
-            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        } finally { spec.clearPassword() }
+            val parsed = JSONObject(String(clear, Charsets.UTF_8)).optJSONArray("entries") ?: JSONArray()
+            JSONArray().also { result ->
+                for (i in 0 until minOf(parsed.length(), MAX_ENTRIES)) {
+                    val item = parsed.optJSONObject(i) ?: continue
+                    if (item.has("ak") && item.has("sk") && item.has("fingerprint")) result.put(item)
+                }
+            }
+        } finally {
+            clear.fill(0)
+        }
     }
 
-    private fun getOrCreateKeystoreKey(): SecretKey {
+    private fun writeEntries(entries: JSONArray) {
+        val clear = JSONObject().put("entries", entries).toString().toByteArray(Charsets.UTF_8)
+        try {
+            val encrypted = encrypt(getEncryptionKey(), clear)
+            val outer = JSONObject().put("version", VERSION)
+                .put("nonce", b64(encrypted.first)).put("data", b64(encrypted.second))
+            val temp = File(file.parentFile, file.name + ".tmp")
+            temp.writeText(outer.toString(), Charsets.UTF_8)
+            // Rename over the existing file atomically where supported.
+            if (file.exists() && !file.delete()) {
+                temp.delete()
+                error("无法替换旧保管箱文件。")
+            }
+            if (!temp.renameTo(file)) {
+                temp.delete()
+                error("无法保存保管箱文件。")
+            }
+        } finally {
+            clear.fill(0)
+        }
+    }
+
+    private fun fingerprint(ak: String, sk: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(getFingerprintKey())
+        val bytes = (ak + "\u0000" + sk).toByteArray(Charsets.UTF_8)
+        return try { b64(mac.doFinal(bytes)) } finally { bytes.fill(0) }
+    }
+
+    private fun getEncryptionKey(): SecretKey = getOrCreateKey(
+        encryptionAlias,
+        KeyProperties.KEY_ALGORITHM_AES,
+        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+    )
+
+    private fun getFingerprintKey(): SecretKey = getOrCreateKey(
+        fingerprintAlias,
+        KeyProperties.KEY_ALGORITHM_HMAC_SHA256,
+        KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+    )
+
+    private fun getOrCreateKey(alias: String, algorithm: String, purposes: Int): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        generator.init(KeyGenParameterSpec.Builder(
-            alias,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true)
-            .build())
+        val generator = KeyGenerator.getInstance(algorithm, "AndroidKeyStore")
+        val builder = KeyGenParameterSpec.Builder(alias, purposes)
+        if (algorithm == KeyProperties.KEY_ALGORITHM_AES) {
+            builder.setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+        } else {
+            builder.setDigests(KeyProperties.DIGEST_SHA256)
+        }
+        generator.init(builder.build())
         return generator.generateKey()
-    }
-
-    private fun getExistingKeystoreKey(): SecretKey {
-        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        return store.getKey(alias, null) as? SecretKey
-            ?: error("系统加密密钥不存在，保管箱可能无法恢复。")
     }
 
     private fun encrypt(key: SecretKey, plain: ByteArray): Pair<ByteArray, ByteArray> {
@@ -138,5 +177,8 @@ class AndroidCredentialVault(private val activity: android.content.Context) {
     private fun b64(bytes: ByteArray) = Base64.encodeToString(bytes, Base64.NO_WRAP)
     private fun decode(value: String) = Base64.decode(value, Base64.NO_WRAP)
 
-    companion object { private const val ITERATIONS = 310000 }
+    companion object {
+        private const val VERSION = 2
+        private const val MAX_ENTRIES = 10
+    }
 }
