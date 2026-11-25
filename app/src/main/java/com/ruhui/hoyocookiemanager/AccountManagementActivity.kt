@@ -128,6 +128,22 @@ class AccountManagementActivity : Activity() {
             checks[key] = check
             panel.addView(check)
         }
+        panel.addView(button("删除此账号") {
+            AlertDialog.Builder(this)
+                .setTitle("删除账号？")
+                .setMessage("将删除「${account.name}」及其本地加密凭据。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认删除") { _, _ ->
+                    runCatching {
+                        when (account.platform) {
+                            AccountStore.SKLAND -> SklandTokenVault(this, account.id).delete()
+                            AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN -> HoYoCookieVault(this, account.id).delete()
+                        }
+                    }
+                    store.delete(account.id)
+                    render()
+                }.show()
+        })
         val scroll = ScrollView(this).apply { addView(panel) }
         AlertDialog.Builder(this)
             .setTitle(AccountStore.platformLabel(account.platform))
