@@ -7,9 +7,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
-import android.os.Build
-import android.os.Process
-import android.webkit.WebStorage
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -47,13 +44,8 @@ class MainActivity : HuaweiCloudActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 每次进程启动使用独立 WebView 数据目录，避免复用上一次的登录会话。
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            WebView.setDataDirectorySuffix("hoyo_private_" + Process.myPid())
-        }
         CookieManager.getInstance().setAcceptCookie(true)
-        buildHome()
-        refreshFromWebView()
+        buildLauncher()
     }
 
     override fun onDestroy() {
@@ -67,25 +59,54 @@ class MainActivity : HuaweiCloudActivity() {
             }
             if (::webView.isInitialized) {
                 webView.stopLoading()
-                webView.clearCache(true)
-                webView.clearHistory()
                 webView.destroy()
             }
-            CookieManager.getInstance().removeAllCookies(null)
-            CookieManager.getInstance().flush()
-            WebStorage.getInstance().deleteAllData()
         } catch (_: Exception) {
             // 系统强制回收时，下一次启动仍会切换到独立数据目录。
         }
         super.onDestroy()
     }
 
+    private fun buildLauncher() {
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(28), dp(24), dp(28))
+            setBackgroundColor(Color.rgb(15, 17, 23))
+        }
+        root.addView(text("账号工具箱", 28, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(8))
+        })
+        root.addView(text("请选择要使用的服务", 14, false, Color.rgb(155, 164, 178)).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(34))
+        })
+        root.addView(button("HoYoLAB") {
+            buildHome()
+            refreshFromWebView()
+        }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(14) })
+        root.addView(button("森空岛") {
+            startActivity(android.content.Intent(this, SenkongdaoActivity::class.java))
+        }, LinearLayout.LayoutParams(-1, dp(58)))
+        setContentView(root)
+    }
+
     private fun buildHome() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
+            setPadding(dp(18), dp(12), dp(18), dp(18))
             setBackgroundColor(Color.rgb(15, 17, 23))
         }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(button("‹ 主页") { buildLauncher() }, LinearLayout.LayoutParams(-2, -2))
+        header.addView(text("HoYoLAB", 19, true), LinearLayout.LayoutParams(0, -2, 1f).apply {
+            leftMargin = dp(12)
+        })
+        root.addView(header)
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(content)
@@ -93,7 +114,7 @@ class MainActivity : HuaweiCloudActivity() {
         content.addView(text("HoYoLAB Cookie Manager", 24, true).apply {
             setPadding(0, 0, 0, dp(6))
         })
-        content.addView(text("桌面版 HoYoLAB · 临时无痕会话 · Cookie 仅在本次运行期间保留", 13, false, Color.rgb(160, 168, 182)))
+        content.addView(text("桌面版 HoYoLAB · Cookie 登录与云函数配置", 13, false, Color.rgb(160, 168, 182)))
         status = text("登录状态：尚未检测", 16, true).apply {
             setPadding(0, dp(22), 0, dp(8))
         }
@@ -103,10 +124,18 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(8), 0, dp(18))
         }
         content.addView(details)
-
         addHuaweiCloudPanel(content, { yamlValue }) { showConfigSelection() }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (::webView.isInitialized && webView.parent != null) {
+            if (webView.canGoBack()) webView.goBack() else buildHome()
+        } else {
+            buildLauncher()
+        }
     }
 
     private fun showBrowser() {
