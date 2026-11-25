@@ -157,6 +157,7 @@ open class HuaweiCloudActivity : Activity() {
                 var imported = 0
                 val hoyoFunction = findFunction(HOYOLAB_FUNCTION)
                 val sklandFunction = findFunction(SKLAND_FUNCTION)
+                if (hoyoFunction == null) HuaweiCloudSession.lastConfigYaml = ""
 
                 if (hoyoFunction != null) {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
@@ -384,6 +385,10 @@ open class HuaweiCloudActivity : Activity() {
             if (service == "hoyolab" && yaml.isNotBlank()) updateHuaweiCloudConfig(yaml)
             deployPackages(if (service == "skland") "skland" else "hoyolab")
         }
+    }
+
+    protected fun htmlDeployHoyoAccount(accountId: String) {
+        runOnUiThread { deployHoyolabAccount(accountId) }
     }
 
     @android.webkit.JavascriptInterface
@@ -896,6 +901,128 @@ open class HuaweiCloudActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun deployHoyolabAccount(accountId: String) {
+        val title = "HoYoLAB 更新"
+        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
+            showOperationMessage("$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
+            return
+        }
+        val pendingCookie = HuaweiCloudSession.pendingHoyoCookie
+        val pendingServer = HuaweiCloudSession.pendingHoyoCookieServer
+        val pendingAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId
+        if (pendingCookie.isBlank() || pendingAccountId != accountId) {
+            showOperationMessage("$title 失败", "当前账号没有本次网页会话获取的 Cookie。请重新打开登录网页并等待显示“已获取”。", false)
+            return
+        }
+        if (pendingServer !in setOf("cn", "os")) {
+            showOperationMessage("$title 失败", "无法识别 Cookie 对应的服务器区域，已停止上传。", false)
+            return
+        }
+        val account = AccountStore(this).find(accountId)
+            ?: run { showOperationMessage("$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
+        val expectedPlatform = if (pendingServer == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
+        if (account.platform != expectedPlatform) {
+            showOperationMessage("$title 失败", "Cookie 所属服务器与当前账号平台不一致，已停止上传。", false)
+            return
+        }
+
+        showOperationMessage("$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
+        worker.execute {
+            try {
+                val functionName = HOYOLAB_FUNCTION
+                val packaged = readPackagedZip("cloud/hoyolab.zip")
+                val cloudYaml = HuaweiCloudSession.lastConfigYaml
+                val baseYaml = if (cloudYaml.isNotBlank()) cloudYaml
+                    else readZipEntryText(packaged, "config/config.yaml")
+                val mergedYaml = replaceCloudCookie(baseYaml, pendingCookie, pendingServer)
+                val archive = replaceZip(packaged, "config/config.yaml", mergedYaml)
+                val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive)
+                val function = waitForFunction(functionName)
+                val urn = function.optString("func_urn")
+                if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                val testSummary = invokeFunctionOnce(urn)
+                val timerSummary = ensureDailyTimerIfMissing(urn)
+                val action = if (created) "创建" else "更新"
+                runOnUiThread {
+                    HuaweiCloudSession.lastConfigYaml = mergedYaml
+                    configYaml = mergedYaml
+                    showOperationMessage("HoYoLAB 部署及检查完成",
+                        "函数" + action + "成功。\nCookie 已写入当前账号对应的配置位置。\n云端其余配置均保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    showOperationMessage("$title 失败", e.message ?: e.javaClass.simpleName, false)
+                }
+            }
+        }
+    }
+
+    private fun readZipEntryText(source: ByteArray, wanted: String): String {
+        var found: String? = null
+        ZipInputStream(ByteArrayInputStream(source)).use { input ->
+            while (true) {
+                val entry = input.nextEntry ?: break
+                val path = entry.name.replace('\\', '/')
+                if (!entry.isDirectory && (path == wanted || path.endsWith("/$wanted"))) {
+                    if (found != null) error("APK 内置 ZIP 中存在多个 $wanted，已停止。")
+                    val out = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > 5 * 1024 * 1024) error("$wanted 超过 5 MB。")
+                        out.write(buffer, 0, n)
+                    }
+                    found = out.toString("UTF-8")
+                }
+                input.closeEntry()
+            }
+        }
+        return found ?: error("APK 内置 ZIP 中不存在 $wanted。")
+    }
+
+    /** Replace only account.cookie (CN) or games.os.cookie (global); preserve every other YAML line. */
+    private fun replaceCloudCookie(source: String, cookie: String, server: String): String {
+        val lines = source.split("\n").toMutableList()
+        var inAccount = false
+        var inGames = false
+        var inOs = false
+        val matches = mutableListOf<Int>()
+        for (i in lines.indices) {
+            val line = lines[i].removeSuffix("\r")
+            val trimmed = line.trim()
+            val indent = line.takeWhile { it == ' ' }.length
+            if (server == "cn") {
+                if (indent == 0) inAccount = trimmed == "account:"
+                if (inAccount && indent == 2 && trimmed.startsWith("cookie:")) matches.add(i)
+            } else {
+                if (indent == 0) {
+                    inGames = trimmed == "games:"
+                    inOs = false
+                } else if (inGames && indent == 2) {
+                    inOs = trimmed == "os:"
+                } else if (inGames && inOs && indent == 4 && trimmed.startsWith("cookie:")) {
+                    matches.add(i)
+                }
+            }
+        }
+        if (matches.size != 1) {
+            val path = if (server == "cn") "account.cookie" else "games.os.cookie"
+            error("云端配置中无法唯一定位 " + path + "（匹配数：" + matches.size + "），为避免覆盖其他配置，已停止上传。")
+        }
+        val index = matches.single()
+        val oldLine = lines[index]
+        val lineEnding = if (oldLine.endsWith("\r")) "\r" else ""
+        val indent = oldLine.takeWhile { it == ' ' }.length
+        val escaped = cookie.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "").replace("\n", "")
+        lines[index] = " ".repeat(indent) + "cookie: \"$escaped\"" + lineEnding
+        return lines.joinToString("\n")
     }
 
     private fun waitForFunction(name: String): JSONObject {
