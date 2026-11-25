@@ -48,6 +48,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         try {
             buildHome()
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面", "森空岛主页布局已初始化，正在显示界面。", true)
+            pushSklandUi()
         } catch (e: Exception) {
             val detail = "主页初始化失败：${e.javaClass.simpleName}: ${e.message ?: "无详细错误信息"}"
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面初始化失败", detail, false)
@@ -59,6 +60,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         super.onResume()
         if (!loginMode) {
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛页面", "森空岛主页已进入前台。", true)
+            pushSklandUi()
         }
     }
 
@@ -224,7 +226,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             selectedAccountId?.let { id ->
                 val store = AccountStore(this)
                 store.find(id)?.let { account ->
-                    store.update(account.copy(credentialReady = true))
+                    store.update(account.copy(credentialReady = true, tokenReady = true))
                 }
             }
             saved = true
