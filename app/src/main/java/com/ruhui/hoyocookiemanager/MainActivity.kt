@@ -458,7 +458,11 @@ class MainActivity : HuaweiCloudActivity() {
             setPadding(0, dp(14), 0, dp(6))
         })
         val checks = linkedMapOf<String, CheckBox>()
+        val draftGames = savedGames.toMutableSet()
         fun renderGames() {
+            checks.forEach { (key, check) ->
+                if (check.isChecked) draftGames.add(key) else draftGames.remove(key)
+            }
             val server = if (radios.checkedRadioButtonId == cnRadio.id) "cn" else "os"
             if (panel.childCount > 3) panel.removeViews(3, panel.childCount - 3)
             checks.clear()
@@ -466,7 +470,7 @@ class MainActivity : HuaweiCloudActivity() {
                 val check = CheckBox(this).apply {
                     text = labels[key] ?: key
                     setTextColor(Color.rgb(230, 234, 242))
-                    isChecked = savedGames.contains(key)
+                    isChecked = draftGames.contains(key)
                     setPadding(0, dp(3), 0, dp(3))
                 }
                 checks[key] = check
