@@ -440,9 +440,7 @@ class MainActivity : HuaweiCloudActivity() {
             .format(java.util.Date())
         webDiagnostics.add("$time  $message")
         while (webDiagnostics.size > 40) webDiagnostics.removeAt(0)
-        if (::details.isInitialized && !browserVisible) {
-            detailsText = diagnosticsSummary()
-        }
+        if (!browserVisible) detailsText = diagnosticsSummary()
     }
 
     private fun diagnosticsSummary(): String =
