@@ -8,6 +8,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.CookieManager
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import android.webkit.ConsoleMessage
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
@@ -45,6 +47,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var tokenSavedCached = false
     private var lastUiPayload: String? = null
     private var lastCheck = 0L
+    private var loginProfileName = ""
+    private var sessionCookieManager: CookieManager? = null
+    private var sessionWebStorage: android.webkit.WebStorage? = null
+    private var profilePrepared = false
+    private var profileCleared = false
     private val pollHandler = Handler(Looper.getMainLooper())
     private val pollTask = object : Runnable {
         override fun run() {
@@ -57,7 +64,12 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppMessageBus.setActiveChannel(AppMessageBus.SKLAND)
-        CookieManager.getInstance().setAcceptCookie(true)
+        loginProfileName = LoginWebSession.profileName(intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID) ?: "unassigned")
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            android.widget.Toast.makeText(this, "当前系统 WebView 不支持独立登录空间，请更新 Android System WebView 后重试。", android.widget.Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         // The bottom status belongs to this login-page session, not an older saved token.
         tokenSavedCached = false
         AppMessageBus.beginSession(this, AppMessageBus.SKLAND, "森空岛启动", "已进入森空岛登录 Activity，开始初始化 WebView。")
@@ -196,13 +208,25 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         root.addView(View(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }, LinearLayout.LayoutParams(-1, dp(36)))
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(42)))
-        val main = DesktopWebView.create(this, multiWindow = true, fitToScreen = false)
+        val main = DesktopWebView.create(this, multiWindow = true, fitToScreen = false, profileName = loginProfileName)
         mainView = main
         configureLogin(main, false)
+        val profile = WebViewCompat.getProfile(main)
+        sessionCookieManager = profile.cookieManager
+        sessionWebStorage = profile.webStorage
+        sessionCookieManager?.setAcceptCookie(true)
+        sessionCookieManager?.setAcceptThirdPartyCookies(main, true)
         browserFrame.addView(main, FrameLayout.LayoutParams(-1, -1))
         AppMessageBus.post(this, AppMessageBus.SKLAND, "主 WebView 已创建", "桌面 UA：${main.settings.userAgentString}\n多窗口：${main.settings.supportMultipleWindows()}\nJavaScript：${main.settings.javaScriptEnabled}\nDOM Storage：${main.settings.domStorageEnabled}\nWebView 内核：${runCatching { if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage()?.versionName ?: "未知" else "系统版本未提供" }.getOrDefault("读取失败")}", true)
         AppMessageBus.post(this, AppMessageBus.SKLAND, "请求加载森空岛首页", "即将调用 WebView.loadUrl。\n目标地址：$HOME_URL", null)
-        main.loadUrl(HOME_URL)
+        if (!profilePrepared) {
+            profilePrepared = true
+            sessionWebStorage?.deleteAllData()
+            sessionCookieManager?.removeAllCookies {
+                sessionCookieManager?.flush()
+                if (!isFinishing && !isDestroyed) main.loadUrl(HOME_URL)
+            }
+        } else main.loadUrl(HOME_URL)
         AppMessageBus.post(this, AppMessageBus.SKLAND, "已调用首页加载", "WebView.loadUrl 已执行；是否真正加载成功，以后续页面回调为准。", null)
         pushSklandUi()
         pollHandler.removeCallbacks(pollTask)
@@ -223,7 +247,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网站请求打开新窗口",
                     "是否对话框：$isDialog\n是否由用户手势触发：$isUserGesture\n来源地址：${source.url.orEmpty()}", null)
                 return try {
-                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false, fitToScreen = false)
+                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false, fitToScreen = false, profileName = loginProfileName)
                     configureLogin(child, true)
                     popupView?.let { destroy(it) }
                     popupView = child
@@ -345,7 +369,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
 
         // Read WebView cookies on the UI thread; do the HTTP request in the background.
         // This replaces the hidden third WebView, leaving the login page free to render.
-        val cookie = CookieManager.getInstance().getCookie(TOKEN_URL).orEmpty()
+        val cookie = sessionCookieManager?.getCookie(TOKEN_URL).orEmpty()
         if (cookie.isBlank()) {
             checking = false
             statusText = "等待登录"
@@ -474,7 +498,14 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         popupView = null
         mainView = null
         checking = false
-        CookieManager.getInstance().flush()
+        clearLoginProfile()
+    }
+
+    private fun clearLoginProfile() {
+        if (profileCleared) return
+        profileCleared = true
+        sessionWebStorage?.deleteAllData()
+        sessionCookieManager?.removeAllCookies { sessionCookieManager?.flush() }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
