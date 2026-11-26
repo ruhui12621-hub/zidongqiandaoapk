@@ -593,6 +593,25 @@ open class HuaweiCloudActivity : Activity() {
                     line.contains("签到失败") || line.contains("check-in failed", true) || line.contains("checkin failed", true) -> "failed"
                     else -> "unknown"
                 }
+                fun gameLogLines(game: String, names: List<String>, source: List<String>): List<String> {
+                    val displayName = when (game) {
+                        "genshin" -> "原神"
+                        "honkai2" -> "崩坏学园2"
+                        "honkai3rd" -> "崩坏3rd"
+                        "tears_of_themis" -> "未定事件簿"
+                        "honkai_sr" -> "崩坏：星穹铁道"
+                        "zzz" -> "绝区零"
+                        else -> game
+                    }
+                    // New cloud packages emit the actual returned result with an explicit game tag.
+                    // Prefer these over the old "正在进行签到" startup marker.
+                    val tagged = source.filter { it.contains("[签到结果][$displayName]") }
+                    if (tagged.isNotEmpty()) return tagged
+                    return source.filter { line ->
+                        names.any { line.contains(it, true) } &&
+                            !line.contains("正在进行「$displayName」签到")
+                    }
+                }
                 val aliases = mapOf(
                     "genshin" to listOf("原神", "Genshin Impact", "genshin"),
                     "honkai2" to listOf("崩坏2", "Honkai 2", "Honkai Impact 2"),
@@ -627,7 +646,7 @@ open class HuaweiCloudActivity : Activity() {
                         val perGame = linkedMapOf<String, String>()
                         for (game in account.games) {
                             val names = aliases[game].orEmpty()
-                            val lines = if (names.isEmpty()) emptyList() else matched.filter { line -> names.any { line.contains(it, true) } }
+                            val lines = if (names.isEmpty()) emptyList() else gameLogLines(game, names, matched)
                             perGame[game] = when {
                                 lines.firstOrNull(::isOutcome) != null -> outcome(lines.first(::isOutcome))
                                 else -> "unknown"
@@ -644,7 +663,7 @@ open class HuaweiCloudActivity : Activity() {
                         val gameDetails = JSONObject()
                         for (game in account.games) {
                             val names = aliases[game].orEmpty()
-                            val lines = if (names.isEmpty()) emptyList() else matched.filter { line -> names.any { line.contains(it, true) } }
+                            val lines = if (names.isEmpty()) emptyList() else gameLogLines(game, names, matched)
                             val outcomeLine = lines.firstOrNull(::isOutcome)
                             gameDetails.put(game, JSONObject()
                                 .put("status", when (perGame[game]) { "success" -> "今日签到成功"; "failed" -> "今日签到失败"; else -> "未获取到明确结果" })
