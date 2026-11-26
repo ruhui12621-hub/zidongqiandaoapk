@@ -78,7 +78,7 @@ object DesktopWebView {
         val script = """
             (function() {
               var host = (location.hostname || '').toLowerCase();
-              var path = (location.pathname || '/').replace(/\\/+$/, '') || '/';
+              var path = (location.pathname || '/').replace(/\/+$/, '') || '/';
               if (!(host === 'skland.com' || host.endsWith('.skland.com')) || path !== '/') return;
               if (window.__sklandTopRightLoginAutoClickInstalled) return;
               window.__sklandTopRightLoginAutoClickInstalled = true;
@@ -106,7 +106,7 @@ object DesktopWebView {
                 var nodes = document.querySelectorAll(selector);
                 for (var i = 0; i < nodes.length; i++) {
                   var node = nodes[i];
-                  var label = (node.innerText || node.textContent || '').replace(/\\s+/g, '').trim();
+                  var label = (node.innerText || node.textContent || '').replace(/\s+/g, '').trim();
                   if (label !== '登录' && label !== '立即登录' && label !== '登录/注册') continue;
                   if (!visible(node)) continue;
 
@@ -121,7 +121,7 @@ object DesktopWebView {
                     target = parent;
                   }
                   if (!visible(target)) continue;
-                  var targetText = (target.innerText || target.textContent || '').replace(/\\s+/g, '').trim();
+                  var targetText = (target.innerText || target.textContent || '').replace(/\s+/g, '').trim();
                   if (targetText.length > 18) continue;
                   return target;
                 }
