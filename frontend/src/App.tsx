@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Check, CheckCircle2, ChevronRight, Cloud,
+  ArrowLeft, CalendarCheck, Check, CheckCircle2, ChevronRight, Cloud,
   Copy, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
-  Settings2, ShieldCheck, X, AlertCircle
+  Settings2, X, AlertCircle
 } from "lucide-react";
 
 type AnyState = any;
@@ -24,7 +24,7 @@ const callNative = (name: string, ...args: string[]) => {
   return undefined;
 };
 const safe = (value: any) => String(value ?? "");
-const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取/.test(value) ? "bad" : "muted";
+const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取|无法获取/.test(value) ? "bad" : "muted";
 const accountSummary = (platform: string, games: AnyState[], statuses: Record<string, string>) => {
   if (platform === "miyoushe_cn") return "云端签到暂未接入";
   if (!games.length) return "未启用游戏";
@@ -163,9 +163,8 @@ export default function App() {
     notify("已提交连接请求，请查看连接状态");
   };
 
-  const title = (heading: string, subtitle: string, eyebrow = "") => (
+  const title = (heading: string, subtitle: string) => (
     <div className="page-heading">
-      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
       <h1>{heading}</h1>
       <p>{subtitle}</p>
     </div>
@@ -307,11 +306,11 @@ export default function App() {
       <select id="cloud-region" value={cloudDraft.region} onChange={e => setCloudDraft({...cloudDraft,region:e.target.value})}>
         <option value="cn-east-3">华东-上海一</option><option value="cn-east-2">华东-上海二</option><option value="cn-north-4">华北-北京四</option><option value="cn-north-1">华北-北京一</option><option value="cn-south-1">华南-广州</option><option value="ap-southeast-1">中国-香港</option><option value="ap-southeast-3">亚太-新加坡</option>
       </select>
-      <label className="field-label" htmlFor="cloud-ak">AK</label>
-      <input id="cloud-ak" autoComplete="off" autoCapitalize="off" placeholder="输入华为云 Access Key" value={cloudDraft.ak} onChange={e => setCloudDraft({...cloudDraft,ak:e.target.value})}/>
-      <label className="field-label" htmlFor="cloud-sk">SK</label>
-      <input id="cloud-sk" type="password" autoComplete="off" placeholder="输入华为云 Secret Key" value={cloudDraft.sk} onChange={e => setCloudDraft({...cloudDraft,sk:e.target.value})}/>
-      <p className="helper-text">AK/SK 需要在登录华为云网页后从我的凭证中获取。</p>
+      <label className="field-label" htmlFor="cloud-ak">访问密钥 ID（AK）</label>
+      <input id="cloud-ak" autoComplete="off" autoCapitalize="off" placeholder="输入访问密钥 ID" value={cloudDraft.ak} onChange={e => setCloudDraft({...cloudDraft,ak:e.target.value})}/>
+      <label className="field-label" htmlFor="cloud-sk">秘密访问密钥（SK）</label>
+      <input id="cloud-sk" type="password" autoComplete="off" placeholder="输入秘密访问密钥" value={cloudDraft.sk} onChange={e => setCloudDraft({...cloudDraft,sk:e.target.value})}/>
+      <p className="helper-text">请在华为云控制台的「我的凭证」中获取 AK 和 SK。</p>
       <button className="primary-button full-button" onClick={submitCloudLogin}><Cloud size={17}/>连接华为云</button>
       <div className="connection-state"><span className={"connection-dot " + (state.cloudConnected ? "connected" : "")}/>{state.cloudConnected ? "已连接" : state.cloudConnectionLabel || "未连接"}</div>
     </section>
@@ -329,7 +328,7 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="topbar">
-      <div className="brand-mark"><ShieldCheck size={19}/></div>
+      <div className="brand-mark"><CalendarCheck size={19}/></div>
       <div className="brand-copy"><strong>自动签到</strong></div>
       {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
