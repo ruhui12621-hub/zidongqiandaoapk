@@ -196,7 +196,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         root.addView(View(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }, LinearLayout.LayoutParams(-1, dp(36)))
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(42)))
-        val main = DesktopWebView.create(this, multiWindow = true, fitToScreen = false)
+        val main = DesktopWebView.create(this, multiWindow = true, fitToScreen = true)
         mainView = main
         configureLogin(main, false)
         browserFrame.addView(main, FrameLayout.LayoutParams(-1, -1))
@@ -223,7 +223,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网站请求打开新窗口",
                     "是否对话框：$isDialog\n是否由用户手势触发：$isUserGesture\n来源地址：${source.url.orEmpty()}", null)
                 return try {
-                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false, fitToScreen = false)
+                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false, fitToScreen = true)
                     configureLogin(child, true)
                     popupView?.let { destroy(it) }
                     popupView = child
