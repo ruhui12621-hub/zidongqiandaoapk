@@ -46,7 +46,7 @@ jobs:
           unzip -t app/src/main/assets/cloud/hoyolab.zip >/dev/null
           unzip -t app/src/main/assets/cloud/skland.zip >/dev/null
           # Record exactly which cloud-function release is embedded in this APK.
-          jq -r '"release_tag=" + .tag_name + "\\nrelease_commit=" + .target_commitish + "\\npublished_at=" + .published_at' <<< "$release_json" > app/src/main/assets/cloud/manifest.txt
+          jq -r '"release_tag=" + .tag_name + "\nrelease_commit=" + .target_commitish + "\npublished_at=" + .published_at' <<< "$release_json" > app/src/main/assets/cloud/manifest.txt
           echo "Embedded cloud-function package manifest:"
           cat app/src/main/assets/cloud/manifest.txt
           ls -lh app/src/main/assets/cloud/
