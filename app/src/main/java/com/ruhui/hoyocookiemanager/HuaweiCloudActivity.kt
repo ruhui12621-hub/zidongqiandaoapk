@@ -701,7 +701,7 @@ open class HuaweiCloudActivity : Activity() {
                     }
 
                     // This account receives logs from exactly one platform-bound function.
-                    val platformLogs = logResults.getValue(platform).logs
+                    val platformLogs = logResults.getValue(platform)!!.logs
                     for (account in platformAccounts) {
                         val matched = if (platformAccounts.size == 1) platformLogs else {
                             val ids = listOfNotNull(account.platformUserId, account.name)
