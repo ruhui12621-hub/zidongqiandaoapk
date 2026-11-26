@@ -55,7 +55,7 @@ object DesktopWebView {
      * It applies the desktop viewport, keeps wide fixed headers synchronized
      * with document panning, then positions the page using the shared centering logic.
      */
-    fun prepareDesktopPage(view: WebView, centerVertical: Boolean = true) {
+    fun prepareDesktopPage(view: WebView) {
         // Run the steps in order: viewport changes can trigger a layout pass, so
         // measuring/centering before Chromium applies it can produce a zero X range.
         enableDesktopViewport(view) {
@@ -63,7 +63,7 @@ object DesktopWebView {
                 // Site detection and login-entry automation live in this shared
                 // pipeline. The script itself is a no-op on every non-Skland host.
                 autoClickSklandLoginEntry(view)
-                centerDesktopContent(view, centerVertical)
+                centerDesktopContent(view)
             }
         }
     }
@@ -165,11 +165,11 @@ object DesktopWebView {
     }
 
     /**
-     * Center the desktop document horizontally and optionally vertically.
+     * Center the desktop document horizontally and vertically.
      * CSS document dimensions are converted to WebView pixels with the current
      * page scale; the fixed-header synchronizer compensates for horizontal pan.
      */
-    fun centerDesktopContent(view: WebView, centerVertical: Boolean = true) {
+    fun centerDesktopContent(view) {
         fun center() {
             if (view.width <= 0 || view.height <= 0) return
             view.evaluateJavascript(
@@ -188,7 +188,7 @@ object DesktopWebView {
                     val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
                     val targetX = maxScrollX / 2
-                    val targetY = if (centerVertical) maxScrollY / 2 else 0
+                    val targetY = maxScrollY / 2
                     view.scrollTo(targetX, targetY)
                 }
             }
