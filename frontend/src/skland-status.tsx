@@ -33,7 +33,7 @@ function SklandStatus() {
     <main className="skland-status" aria-label="森空岛登录状态">
       <div className={`skland-status__label ${acquired ? "is-ready" : ""}`} role="status" aria-live="polite">
         <span className="skland-status__dot" />
-        {acquired ? "Token已获取" : "Token未获取"}
+        {acquired ? "Token 已获取" : "Token 未获取"}
       </div>
       <button className="skland-status__back" type="button" onClick={() => window.AndroidSkland?.back()}>
         返回
