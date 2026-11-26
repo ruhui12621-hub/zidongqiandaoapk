@@ -816,19 +816,21 @@ open class HuaweiCloudActivity : Activity() {
                 val function = waitForFunction(SKLAND_FUNCTION)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("森空岛函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
-                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
-                val ltsSummary = ensureLtsIsolation(urn, "skland") { detail, success -> logSklandDeployStep(detail, success) }
-                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
+                // FunctionGraph has accepted the package and reports the function ready.
+                // Commit the cloud-authoritative account metadata before later LTS/test checks.
+                deploymentReady = true
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
-                deploymentReady = true
-
                 AccountStore(this).update(account.copy(
                     platformUserId = sha256(token),
                     games = selectedGames,
                     credentialReady = true
                 ))
                 onCloudDeploymentProgress()
+
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
+                val ltsSummary = ensureLtsIsolation(urn, "skland") { detail, success -> logSklandDeployStep(detail, success) }
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
 
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用森空岛函数。")
                 logSklandDeployStep("正在使用华为云 TIMER 事件格式测试森空岛函数。")
@@ -943,14 +945,11 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "已查询到函数并取得函数 URN，函数已就绪。", true)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
-                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
-                val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
-                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
+                // FunctionGraph has accepted the package and reports the function ready.
+                // Keep the selected games and YAML in sync even if later checks fail.
+                deploymentReady = true
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
-                // From this point the function code is deployed and FunctionGraph reports it ready.
-                // Keep the local config in sync even if the later test/trigger check fails.
-                deploymentReady = true
                 AccountStore(this).update(account.copy(
                     games = selectedGames,
                     credentialReady = true
@@ -958,6 +957,10 @@ open class HuaweiCloudActivity : Activity() {
                 onCloudDeploymentProgress()
                 HuaweiCloudSession.lastConfigYaml = mergedYaml
                 configYaml = mergedYaml
+
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
+                val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
                 logAccountDeployStep(accountId, "部署阶段已完成：函数已存在且就绪，账号配置已同步；现在开始独立测试。", true)
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用函数。")
                 logAccountDeployStep(accountId, "正在使用华为云 TIMER 定时触发器事件格式测试函数（不再发送空事件 {}）。")
