@@ -2,22 +2,25 @@
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden}
 body{background:#080807}
-.panel,.shell{height:100%;min-height:0;padding:4px 10px 0;background:#080807;display:flex;flex-direction:column;gap:4px}
-header{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:22px;height:22px;flex:0 0 22px}
-header b,.brand b{font-size:13px;color:#f4e7ca;letter-spacing:.2px}
+.panel,.shell{height:100%;min-height:0;padding:3px 10px 3px;background:#080807;display:flex;flex-direction:column;gap:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px;height:20px;flex:0 0 20px}
+header b,.brand b{font-size:12px;color:#f4e7ca;letter-spacing:.15px}
 .brand{display:flex;align-items:center;flex:1;min-width:0}
 .brand small{display:none}
-.pill{font-size:9px;padding:3px 8px;border-radius:30px;background:#292116;color:#e5ca8c;white-space:nowrap;border:1px solid rgba(214,179,106,.16)}
+.pill{font-size:9px;padding:2px 7px;border-radius:30px;background:#292116;color:#e5ca8c;white-space:nowrap;border:1px solid rgba(214,179,106,.16)}
 .pill.ok{background:#14231a;color:var(--green);border-color:#294b34}
 .pill.warn{background:#302414;color:#e2bd74}
 .pill.bad{background:#301b19;color:var(--red);border-color:#63342f}
-.cookie-line,.status{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:25px;padding:4px 9px;border:1px solid #342b1e;border-radius:8px;background:#11100d}
-.cookie-line span{font-size:10px;color:#a38a5d}
-.cookie-line strong,.status b{font-size:10px;color:#dfbd78;font-weight:650;text-align:right}
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px;height:30px;flex:0 0 30px;margin-top:auto;padding:0 2px;border-top:1px solid rgba(214,179,106,.2)}
+.cookie-line{display:flex;align-items:center;justify-content:flex-start;gap:5px;min-width:0;min-height:0;padding:0;border:0;background:transparent;white-space:nowrap}
+.cookie-line .status-icon{font-size:10px;color:var(--gold)}
+.cookie-line .status-label{font-size:10px;color:#b9ad97}
+.cookie-line strong{font-size:10px;color:#dfbd78;font-weight:650;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .cookie-line strong.ok{color:var(--green)}
 .cookie-line strong.bad{color:var(--red)}
+.cookie-line .hint{display:none}
+.bottom-bar button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;width:auto;min-width:58px;height:25px;margin:0;padding:0 8px;border:1px solid rgba(214,179,106,.3);border-radius:6px;background:#17130d;color:#f0d69d;font-size:11px;font-weight:600;letter-spacing:0}
+.bottom-bar button span{font-size:14px;line-height:1}
+.bottom-bar .secondary{background:#171511;color:#e1d1af;border-color:#453923}
 .status p,.message{display:none!important}
-.bottom-actions,.actions{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin-top:auto;padding:0;min-height:34px}
-.bottom-actions button,.actions button{box-sizing:border-box;flex:0 0 176px;width:176px;max-width:58vw;min-width:0;height:34px;margin:0;padding:0 12px;border:1px solid rgba(214,179,106,.38);border-radius:7px;background:#17130d;color:#f0d69d;font-size:12px;font-weight:650;letter-spacing:.1px}
-.bottom-actions .back,.actions .secondary{display:inline-flex;align-items:center;justify-content:center}
 .hidden{display:none!important}
