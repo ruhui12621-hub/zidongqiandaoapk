@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, CalendarCheck, Check, CheckCircle2, ChevronRight, Cloud,
   Copy, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
-  Settings2, ShieldCheck, X, AlertCircle
+  Settings2, Users, X, AlertCircle
 } from "lucide-react";
 
 type AnyState = any;
@@ -195,7 +195,7 @@ export default function App() {
         </button>
       </div>
       {accounts.length === 0 ? <div className="empty-state">
-        <span className="empty-symbol"><ShieldCheck size={27}/></span>
+        <span className="empty-symbol"><Users size={27}/></span>
         <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : state.syncState === "empty_confirmed" ? "云端尚无账号" : "等待读取云端账号"}</strong>
         <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "先连接华为云，读取现有账号配置后即可添加账号。"}</p>
       </div> : <div className="account-list">{accounts.map((a: AnyState) => {
@@ -337,7 +337,7 @@ export default function App() {
       {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
     </main>
     {!selectedId && <nav className="bottom-nav">
-      <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><ShieldCheck size={19}/><span>账号</span></button>
+      <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
       <button className={page === "cloud" ? "active" : ""} onClick={() => setPage("cloud")}><Cloud size={19}/><span>华为云</span></button>
       <button className={page === "messages" ? "active" : ""} onClick={() => setPage("messages")}><FileText size={19}/><span>运行消息</span></button>
     </nav>}
