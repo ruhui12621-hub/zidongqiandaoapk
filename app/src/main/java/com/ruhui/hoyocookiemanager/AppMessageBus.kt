@@ -94,7 +94,7 @@ object AppMessageBus {
             val json = org.json.JSONObject(prefs.getString(key, "{}").orEmpty())
             json.put(stage, org.json.JSONObject()
                 .put("key", stage).put("label", label).put("status", status)
-                .put("detail", sanitize(detail).take(if (stage == "raw_output") 4000 else 500)))
+                .put("detail", sanitize(detail, if (stage == "raw_output") 12000 else 500)))
             prefs.edit().putString(key, json.toString()).apply()
         }
     }
@@ -159,11 +159,11 @@ object AppMessageBus {
     private fun normalize(channel: String): String =
         if (channel.equals(SKLAND, true)) SKLAND else HOYOLAB
 
-    private fun sanitize(value: String): String {
+    private fun sanitize(value: String, limit: Int = 4000): String {
         var safe = value
         safe = Regex("(?i)(cookie|token|access_token|refresh_token|authorization|set-cookie|\\bAK\\b|\\bSK\\b|stoken|ltoken|session|ticket|\\bcode\\b)\\s*[:=]\\s*[^\\s,;&]+")
             .replace(safe) { match -> match.value.substringBefore("=").substringBefore(":") + ": [已隐藏]" }
         safe = Regex("(?i)Bearer\\s+[A-Za-z0-9._~+/-]+=*").replace(safe, "Bearer [已隐藏]")
-        return safe.take(4000)
+        return safe.take(limit)
     }
 }
