@@ -1101,7 +1101,7 @@ open class HuaweiCloudActivity : Activity() {
         ZipInputStream(ByteArrayInputStream(source)).use { input ->
             while (true) {
                 val entry = input.nextEntry ?: break
-                val path = entry.name.replace('\\\\', '/')
+                val path = entry.name.replace('\\', '/')
                 if (!entry.isDirectory && (path == wanted || path.endsWith("/$wanted"))) {
                     if (found != null) error("ZIP 中存在多个 $wanted，已停止。")
                     val out = ByteArrayOutputStream()
