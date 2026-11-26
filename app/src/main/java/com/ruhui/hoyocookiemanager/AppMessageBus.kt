@@ -80,6 +80,7 @@ object AppMessageBus {
     /** Compact structured deployment stages shown in account details. */
     fun resetAccountStages(context: Context, accountId: String) {
         setAccountStage(context, accountId, "function", "云函数", "未执行", "")
+        setAccountStage(context, accountId, "lts", "LTS 日志隔离", "未执行", "")
         setAccountStage(context, accountId, "trigger", "定时触发器", "未执行", "")
         setAccountStage(context, accountId, "test", "函数运行测试", "未执行", "")
         setAccountStage(context, accountId, "output", "测试输出结果", "未执行", "")
@@ -106,13 +107,14 @@ object AppMessageBus {
                 .getString(key, "{}").orEmpty()
         }.getOrDefault("{}")
         val json = runCatching { org.json.JSONObject(saved) }.getOrDefault(org.json.JSONObject())
-        val order = listOf("function", "trigger", "test", "output", "raw_output")
+        val order = listOf("function", "lts", "trigger", "test", "output", "raw_output")
         val rows = org.json.JSONArray()
         order.forEach { stage ->
             val item = json.optJSONObject(stage) ?: org.json.JSONObject()
                 .put("key", stage)
                 .put("label", when(stage) {
                     "function" -> "云函数"
+                    "lts" -> "LTS 日志隔离"
                     "trigger" -> "定时触发器"
                     "test" -> "函数运行测试"
                     "output" -> "测试输出结果"
