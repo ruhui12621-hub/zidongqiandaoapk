@@ -4,7 +4,7 @@
         android:hardwareAccelerated="true"
         android:name=".CrashLoggingApplication"
         android:allowBackup="false"
-        android:label="HoYoLAB Cookie Manager"
+        android:label="游戏自动签到"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
