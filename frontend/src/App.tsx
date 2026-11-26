@@ -119,7 +119,7 @@ export default function App() {
     setGameDraft(null);
     setPage("home");
     callNative("backToHome");
-    window.scrollTo(0, 0);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior }));
   }, []);
   const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
   const goBack = () => {
