@@ -92,76 +92,38 @@ object DesktopWebView {
 
 
     /**
-     * Center the desktop page's main content in the visible WebView area.
-     * This changes scroll position only; desktop UA, viewport and zoom are untouched.
-     * A short bounded settling pass handles late layout shifts without polling.
+     * Center an oversized desktop page using WebView's native scroll position.
+     *
+     * Unlike DOM scrollTo(), this uses WebView's rendered content width and scale,
+     * so the calculation is in the same pixel coordinate system as scrollTo().
+     * A few bounded layout passes handle the viewport update and late page layout.
+     * A touch-down cancels the remaining passes without consuming the gesture.
      */
     fun centerDesktopContent(view: WebView) {
-        val script = """
-            (function() {
-              if (window.__appCenteringInstalled) {
-                if (window.__appCenterUserInteracted) return;
-              } else {
-                window.__appCenteringInstalled = true;
-                window.__appCenterUserInteracted = false;
-                var markInteraction = function() { window.__appCenterUserInteracted = true; };
-                ['touchstart', 'pointerdown', 'wheel'].forEach(function(name) {
-                  window.addEventListener(name, markInteraction, { passive: true, once: true, capture: true });
-                });
-              }
-
-              function center() {
-                if (window.__appCenterUserInteracted || !document.documentElement) return;
-                var root = document.documentElement;
-                var body = document.body;
-                var vw = window.innerWidth || root.clientWidth;
-                var vh = window.innerHeight || root.clientHeight;
-                if (!vw || !vh) return;
-
-                var candidates = [];
-                var selectors = ['main', '[role="main"]', '#root', '#app', '#__next', 'article'];
-                selectors.forEach(function(selector) {
-                  try {
-                    document.querySelectorAll(selector).forEach(function(el) {
-                      var rect = el.getBoundingClientRect();
-                      var style = window.getComputedStyle(el);
-                      if (style.display === 'none' || style.visibility === 'hidden') return;
-                      if (rect.width > vw * 0.25 && rect.height > 80) {
-                        candidates.push({ el: el, area: rect.width * Math.min(rect.height, vh * 3) });
-                      }
-                    });
-                  } catch (_) {}
-                });
-
-                var target = candidates.sort(function(a, b) { return b.area - a.area; })[0];
-                var docWidth = Math.max(root.scrollWidth, body ? body.scrollWidth : 0, vw);
-                var maxX = Math.max(0, docWidth - vw);
-                var x = maxX / 2;
-                var y = 0;
-
-                if (target) {
-                  var rect = target.el.getBoundingClientRect();
-                  var pageTop = rect.top + (window.pageYOffset || root.scrollTop || 0);
-                  var targetHeight = Math.min(rect.height, vh);
-                  y = pageTop + rect.height / 2 - vh / 2;
-                  // Keep the top of a short login panel visible rather than centering empty space.
-                  if (rect.height <= vh) y = pageTop + rect.height / 2 - vh / 2;
-                  else y = pageTop;
-                } else {
-                  var docHeight = Math.max(root.scrollHeight, body ? body.scrollHeight : 0, vh);
-                  y = Math.max(0, (docHeight - vh) / 2);
+        val delays = longArrayOf(120L, 500L, 1100L)
+        val tasks = delays.map { delay ->
+            Runnable {
+                if (!view.isAttachedToWindow || view.width <= 0) return@Runnable
+                val contentWidthPx = (view.contentWidth * view.scale).toInt()
+                val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
+                if (maxScrollX > 0) {
+                    view.scrollTo(maxScrollX / 2, view.scrollY)
                 }
+            }
+        }
 
-                var maxY = Math.max(0, (body ? body.scrollHeight : 0, root.scrollHeight) - vh);
-                window.scrollTo({ left: Math.min(maxX, Math.max(0, x)), top: Math.min(maxY, Math.max(0, y)), behavior: 'instant' });
-              }
-
-              [250, 800, 1600, 2800].forEach(function(delay) {
-                window.setTimeout(center, delay);
-              });
-            })();
-        """.trimIndent()
-        view.evaluateJavascript(script, null)
+        var touched = false
+        view.setOnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                touched = true
+                tasks.forEach(view::removeCallbacks)
+                // Do not consume or alter Chromium's native drag/pinch handling.
+            }
+            false
+        }
+        tasks.forEachIndexed { index, task ->
+            view.postDelayed(task, delays[index])
+        }
     }
 
     /** Attach a popup in the same layout slot as its source WebView. */
