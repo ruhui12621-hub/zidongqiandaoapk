@@ -51,21 +51,35 @@ object DesktopWebView {
     }
 
     /**
-     * Horizontally center an oversized desktop page using WebView's native scroll
-     * position. This does not rewrite the site's DOM or viewport metadata.
+     * Center the desktop page itself in both axes using WebView's native scroll
+     * position. The target is the midpoint of the full document, not the screen
+     * midpoint or an added spacer. This does not rewrite the site's DOM or viewport.
      */
     fun centerDesktopContent(view: WebView) {
         fun center() {
             if (view.width <= 0 || view.height <= 0) return
             view.evaluateJavascript(
-                "(function(){var d=document.documentElement,b=document.body;return Math.max(d?d.scrollWidth:0,b?b.scrollWidth:0);})()"
+                "(function(){var d=document.documentElement,b=document.body;" +
+                    "return JSON.stringify([" +
+                    "Math.max(d?d.scrollWidth:0,b?b.scrollWidth:0)," +
+                    "Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0)" +
+                    "]);})()"
             ) { result ->
-                val cssWidth = result?.trim()?.trim('"')?.toFloatOrNull() ?: return@evaluateJavascript
+                val dimensions = try {
+                    org.json.JSONArray(result ?: return@evaluateJavascript)
+                } catch (_: Exception) {
+                    return@evaluateJavascript
+                }
+                val cssWidth = dimensions.optDouble(0, 0.0).toFloat()
+                val cssHeight = dimensions.optDouble(1, 0.0).toFloat()
+                if (cssWidth <= 0f || cssHeight <= 0f) return@evaluateJavascript
                 view.post {
-                    if (view.width <= 0) return@post
+                    if (view.width <= 0 || view.height <= 0) return@post
                     val contentWidthPx = (cssWidth * view.scale).toInt()
+                    val contentHeightPx = (cssHeight * view.scale).toInt()
                     val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
-                    view.scrollTo(maxScrollX / 2, view.scrollY)
+                    val maxScrollY = (contentHeightPx - view.height).coerceAtLeast(0)
+                    view.scrollTo(maxScrollX / 2, maxScrollY / 2)
                 }
             }
         }
