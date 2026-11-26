@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import GlobalManagement from "./GlobalManagement";
 import {
   ArrowLeft, CalendarCheck, Check, CheckCircle2, ChevronRight, Cloud,
@@ -113,13 +114,15 @@ export default function App() {
 
   // Return both the React screen and native account state to the account-list tab.
   const goToAccountList = useCallback(() => {
-    // Explicitly return to the first bottom-navigation destination.
-    setSelectedId(null);
-    setTodayGame({ key: null, label: null });
-    setGameDraft(null);
-    setPage("home");
-    callNative("backToHome");
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior }));
+    // Commit the destination immediately; this navigation is React-only and
+    // must not wait for the Android JavaScript bridge.
+    flushSync(() => {
+      setSelectedId(null);
+      setTodayGame({ key: null, label: null });
+      setGameDraft(null);
+      setPage("home");
+    });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
   }, []);
   const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
   const goBack = () => {
