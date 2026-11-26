@@ -36,9 +36,11 @@ object GlobalModuleRegistry {
     val template = TemplateDefinition(
         id = "default",
         label = "通用签到模板",
-        version = 1,
+        version = 2,
         responsibilities = listOf(
             "账号注册与云端同步",
+            "统一首页账号展示模型组装",
+            "统一登录网页布局与平台呈现策略",
             "通用签到状态和结果展示",
             "华为云函数部署与配置更新",
             "日志组、日志流及运行消息管理"
@@ -78,7 +80,7 @@ object GlobalModuleRegistry {
             id = AccountStore.SKLAND,
             label = AccountStore.platformLabel(AccountStore.SKLAND),
             credentialType = "Token",
-            parserDescription = "独立提取、校验并加密保存森空岛 Token",
+            parserDescription = "解析森空岛 Token 接口响应、校验凭据并交由独立保管箱加密保存",
             games = GameCatalog.skland
         )
     )

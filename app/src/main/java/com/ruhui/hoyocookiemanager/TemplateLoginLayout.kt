@@ -9,6 +9,7 @@ import android.webkit.WebView
  * their own centering or viewport rules. Skland retains its established vertical offset.
  */
 object TemplateLoginLayout {
+    private const val SKLAND_PLATFORM_ID = "skland"
     private const val DEFAULT_VERTICAL_SCROLL_CSS_PX = 600f
     private const val SKLAND_VERTICAL_SCROLL_CSS_PX = 800f
 
@@ -34,7 +35,7 @@ object TemplateLoginLayout {
                     // Keep horizontal centering. Skland gets an additional
                     // 100 CSS-pixel vertical offset; HoYoLAB keeps the original value.
                     // Login-page positioning is a template presentation rule, selected by platform ID.
-                    val verticalOffset = if (platformId == AccountStore.SKLAND) {
+                    val verticalOffset = if (platformId == SKLAND_PLATFORM_ID) {
                         SKLAND_VERTICAL_SCROLL_CSS_PX
                     } else {
                         DEFAULT_VERTICAL_SCROLL_CSS_PX

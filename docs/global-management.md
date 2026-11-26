@@ -16,7 +16,7 @@ Template: default (唯一)
 - 日志组、日志流、运行消息及错误信息
 - 登录 WebView 的通用视口、滚动和居中布局
 
-`TemplateLoginLayout` 是统一登录页面呈现入口。森空岛原有的特殊纵向居中偏移仍由模板按平台 ID 选择，不由森空岛平台实现。森空岛自动打开网站登录入口则属于平台专有行为，由 `SklandLoginAdapter` 负责。
+`TemplateLoginLayout` 是统一登录页面呈现入口。森空岛原有的特殊纵向居中偏移仍由模板按平台 ID 选择，不由森空岛平台实现。森空岛自动打开网站登录入口、Token 接口地址和响应字段解析则属于平台专有行为，由 `SklandLoginAdapter` 负责。
 
 ## 2. 首页展示模型
 

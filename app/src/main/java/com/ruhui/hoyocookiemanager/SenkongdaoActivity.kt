@@ -30,7 +30,6 @@ import android.util.Log
 import android.widget.TextView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
