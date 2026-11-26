@@ -66,3 +66,5 @@
 .stage-result.failed{color:var(--red);border-color:rgba(217,138,130,.3)}
 .stage-result.pending{color:var(--amber);border-color:rgba(223,185,110,.3)}
 .stage-detail{margin-top:5px;color:var(--muted);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+
+.clickable-status-row{cursor:pointer}.clickable-status-row:active{background:rgba(214,179,106,.08)}.today-status-card{cursor:pointer}.detail-hint{float:right;color:var(--gold-dim);font-size:10px;font-weight:500}.today-status-card .game-status-table td:last-child:after{content:"›";color:var(--gold-dim);margin-left:8px;font-size:17px}
