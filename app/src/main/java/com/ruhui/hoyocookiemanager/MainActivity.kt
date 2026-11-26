@@ -410,8 +410,10 @@ class MainActivity : HuaweiCloudActivity() {
         val names = found.split(';')
             .mapNotNull { it.trim().substringBefore('=').takeIf { name -> name.isNotBlank() } }
             .toSet()
-        val cnMarkers = setOf("stoken", "stoken_v2", "stuid", "cookie_token", "ltoken")
-        val osMarkers = setOf("ltoken_v2", "cookie_token_v2", "account_id_v2", "ltuid_v2")
+        // Account identifiers (stuid / ltuid / account_id) are not authentication tokens.
+        // Only real credential fields may mark the login session as acquired.
+        val cnMarkers = setOf("stoken", "stoken_v2", "cookie_token", "ltoken")
+        val osMarkers = setOf("ltoken_v2", "cookie_token_v2")
         val hasCnToken = names.any { it in cnMarkers }
         val hasOsToken = names.any { it in osMarkers }
         val cookieManager = CookieManager.getInstance()
