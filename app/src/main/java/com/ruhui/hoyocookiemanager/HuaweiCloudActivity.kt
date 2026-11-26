@@ -574,14 +574,22 @@ open class HuaweiCloudActivity : Activity() {
                     }
                     return "OK" to logs
                 }
+                // “请勿重复签到”表示今天已经完成签到；即使同一条日志外层带有“签到失败”，
+                // 也必须优先按已签到处理，不能仅凭“失败”关键词误判。
+                fun isAlreadyCheckedIn(line: String): Boolean =
+                    line.contains("今日已签到") || line.contains("今天已经签到") ||
+                    line.contains("已经签到过") || line.contains("已签到过") ||
+                    line.contains("无需重复签到") || line.contains("请勿重复签到") ||
+                    line.contains("already checked in", true) || line.contains("already signed in", true) ||
+                    line.contains("already claimed", true)
                 fun isOutcome(line: String): Boolean =
-                    line.contains("签到成功") || line.contains("签到完成") || line.contains("今日已签到") ||
-                    line.contains("无需重复签到") || line.contains("签到失败") ||
+                    line.contains("签到成功") || line.contains("签到完成") || isAlreadyCheckedIn(line) ||
+                    line.contains("签到失败") ||
                     line.contains("check-in success", true) || line.contains("checkin success", true) ||
                     line.contains("check-in failed", true) || line.contains("checkin failed", true)
                 fun outcome(line: String): String = when {
-                    line.contains("签到成功") || line.contains("签到完成") || line.contains("今日已签到") ||
-                        line.contains("无需重复签到") || line.contains("check-in success", true) || line.contains("checkin success", true) -> "success"
+                    isAlreadyCheckedIn(line) || line.contains("签到成功") || line.contains("签到完成") ||
+                        line.contains("check-in success", true) || line.contains("checkin success", true) -> "success"
                     line.contains("签到失败") || line.contains("check-in failed", true) || line.contains("checkin failed", true) -> "failed"
                     else -> "unknown"
                 }
