@@ -24,6 +24,28 @@ object DesktopWebView {
         configure(this, multiWindow, cacheMode)
     }
 
+    fun enableDesktopViewport(view: WebView) {
+        val script = """
+            (function() {
+              var head = document.head || document.getElementsByTagName('head')[0];
+              if (!head) return;
+              var meta = document.querySelector('meta[name="viewport"]');
+              if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                head.appendChild(meta);
+              }
+              var desktopViewport = 'width=980, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes';
+              // Avoid rewriting the viewport meta on every same-site navigation:
+              // changing it forces Chromium to recalculate the page layout.
+              if (meta.getAttribute('content') !== desktopViewport) {
+                meta.setAttribute('content', desktopViewport);
+              }
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
+    }
+
     /** Attach a popup in the same layout slot as its source WebView. */
     fun attachPopup(
         container: android.view.ViewGroup,
