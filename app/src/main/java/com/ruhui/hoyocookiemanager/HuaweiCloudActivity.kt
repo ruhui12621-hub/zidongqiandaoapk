@@ -510,18 +510,19 @@ open class HuaweiCloudActivity : Activity() {
      * platform ID or explicit account name; otherwise the app does not guess.
      */
     protected fun queryTodayCheckinStatusForAccounts(
-        onResult: (Map<String, String>, Map<String, Map<String, String>>, String) -> Unit
+        onResult: (Map<String, String>, Map<String, Map<String, String>>, Map<String, String>, String) -> Unit
     ) {
         val accounts = AccountStore(this).all()
         val saved = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
         if (saved == null) {
             val empty = accounts.associate { a -> a.id to a.games.associateWith { "unknown" } }
-            onResult(accounts.associate { it.id to "未连接华为云" }, empty, "未配置华为云 AK/SK")
+            onResult(accounts.associate { it.id to "无法获取签到结果" }, empty, accounts.associate { it.id to JSONObject().put("reason", "未配置华为云 AK/SK").put("allRawMessages", "未配置华为云 AK/SK").toString() }, "未配置华为云 AK/SK")
             return
         }
         worker.execute {
             val statuses = linkedMapOf<String, String>()
             val gameStatuses = linkedMapOf<String, Map<String, String>>()
+            val details = linkedMapOf<String, String>()
             var summary = "今日运行日志读取完成"
             try {
                 authAk = saved.first; authSk = saved.second
@@ -599,12 +600,12 @@ open class HuaweiCloudActivity : Activity() {
                     val logResult = runCatching { readTodayLogs(functionName) }
                     if (logResult.isFailure) {
                         val msg = "日志查询失败：" + (logResult.exceptionOrNull()?.message ?: "未知错误")
-                        platformAccounts.forEach { a -> statuses[a.id] = msg; gameStatuses[a.id] = a.games.associateWith { "unknown" } }
+                        platformAccounts.forEach { a -> statuses[a.id] = "无法获取签到结果"; gameStatuses[a.id] = a.games.associateWith { "unknown" }; details[a.id] = JSONObject().put("reason", msg).put("allRawMessages", msg).toString() }
                         continue
                     }
                     val (readState, logs) = logResult.getOrThrow()
                     if (readState != "OK") {
-                        platformAccounts.forEach { a -> statuses[a.id] = readState; gameStatuses[a.id] = a.games.associateWith { "unknown" } }
+                        platformAccounts.forEach { a -> statuses[a.id] = "无法获取签到结果"; gameStatuses[a.id] = a.games.associateWith { "unknown" }; details[a.id] = JSONObject().put("reason", readState).put("allRawMessages", readState).toString() }
                         continue
                     }
                     for (account in platformAccounts) {
@@ -626,25 +627,44 @@ open class HuaweiCloudActivity : Activity() {
                             }
                         }
                         gameStatuses[account.id] = perGame
-                        statuses[account.id] = when {
+                        val accountStatus = when {
                             perGame.values.any { it == "failed" } -> "今日签到失败"
                             perGame.values.any { it == "success" } -> "今日签到成功"
                             perGame.isNotEmpty() -> "今日状态未知"
                             else -> "未配置"
                         }
+                        statuses[account.id] = accountStatus
+                        val gameDetails = JSONObject()
+                        for (game in account.games) {
+                            val names = aliases[game].orEmpty()
+                            val lines = if (names.isEmpty()) emptyList() else matched.filter { line -> names.any { line.contains(it, true) } }
+                            val outcomeLine = lines.firstOrNull(::isOutcome)
+                                ?: if (account.games.size == 1) matched.firstOrNull(::isOutcome) else null
+                            gameDetails.put(game, JSONObject()
+                                .put("status", when (perGame[game]) { "success" -> "今日签到成功"; "failed" -> "今日签到失败"; else -> "未获取到明确结果" })
+                                .put("reason", outcomeLine ?: if (lines.isEmpty()) "没有找到包含此游戏名称的签到日志，不能据此认定签到失败。" else "已找到相关日志，但没有识别到明确的成功或失败标记。")
+                                .put("rawMessages", org.json.JSONArray((if (lines.isNotEmpty()) lines else matched).take(100))))
+                        }
+                        details[account.id] = JSONObject()
+                            .put("status", accountStatus)
+                            .put("reason", "只有日志中明确出现签到成功、今日已签到、无需重复签到或签到失败等结果时才判定；日志缺失或无法匹配时显示未知。")
+                            .put("games", gameDetails)
+                            .put("allRawMessages", org.json.JSONArray(matched.take(300)))
+                            .toString()
                     }
                 }
                 accounts.filter { it.platform == AccountStore.MIYOUSHE_CN }.forEach { a ->
                     gameStatuses[a.id] = a.games.associateWith { "unknown" }
-                    statuses[a.id] = "当前未接入此平台的云端签到函数"
+                    statuses[a.id] = "无法获取签到结果"
+                    details[a.id] = JSONObject().put("reason", "当前未接入此平台的云端签到函数").put("allRawMessages", "当前未接入此平台的云端签到函数").toString()
                 }
             } catch (e: Exception) {
                 summary = "今日签到日志读取失败：" + (e.message ?: e.javaClass.simpleName)
                 accounts.filter { it.id !in statuses }.forEach { a ->
-                    statuses[a.id] = "日志查询失败"; gameStatuses[a.id] = a.games.associateWith { "unknown" }
+                    statuses[a.id] = "无法获取签到结果"; gameStatuses[a.id] = a.games.associateWith { "unknown" }; details[a.id] = JSONObject().put("reason", "日志查询失败：" + (e.message ?: e.javaClass.simpleName)).put("allRawMessages", "日志查询失败：" + (e.message ?: e.javaClass.simpleName)).toString()
                 }
             }
-            runOnUiThread { onResult(statuses, gameStatuses, summary) }
+            runOnUiThread { onResult(statuses, gameStatuses, details, summary) }
         }
     }
 
