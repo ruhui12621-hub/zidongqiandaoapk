@@ -28,7 +28,7 @@ object DesktopWebView {
         configure(this, multiWindow, cacheMode, fitToScreen, profileName)
     }
 
-    fun enableDesktopViewport(view: WebView) {
+    fun enableDesktopViewport(view: WebView, onApplied: (() -> Unit)? = null) {
         val script = """
             (function() {
               var head = document.head || document.getElementsByTagName('head')[0];
@@ -47,7 +47,7 @@ object DesktopWebView {
               }
             })();
         """.trimIndent()
-        view.evaluateJavascript(script, null)
+        view.evaluateJavascript(script) { onApplied?.invoke() }
     }
 
     /**
@@ -56,15 +56,19 @@ object DesktopWebView {
      * with document panning, then positions the page using the shared centering logic.
      */
     fun prepareDesktopPage(view: WebView, centerVertical: Boolean = true) {
-        enableDesktopViewport(view)
-        makeTopFixedHeadersFollowHorizontalScroll(view)
-        centerDesktopContent(view, centerVertical)
+        // Run the steps in order: viewport changes can trigger a layout pass, so
+        // measuring/centering before Chromium applies it can produce a zero X range.
+        enableDesktopViewport(view) {
+            makeTopFixedHeadersFollowHorizontalScroll(view) {
+                centerDesktopContent(view, centerVertical)
+            }
+        }
     }
 
     /**
-     * Center the full desktop document in both axes using WebView's native scroll.
-     * The JavaScript result is a simple comma-separated string so Android can
-     * parse it reliably (evaluateJavascript JSON-escapes returned JS strings).
+     * Center the desktop document horizontally and optionally vertically.
+     * CSS document dimensions are converted to WebView pixels with the current
+     * page scale; the fixed-header synchronizer compensates for horizontal pan.
      */
     fun centerDesktopContent(view: WebView, centerVertical: Boolean = true) {
         fun center() {
@@ -82,18 +86,18 @@ object DesktopWebView {
                 view.post {
                     if (view.width <= 0 || view.height <= 0) return@post
                     val scale = view.scale
+                    val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
-                    // Never center by scrolling into a wide document: that cuts off its
-                    // left-side navigation/header (as seen on Skland). Keep the document's
-                    // leading edge visible; native pinch zoom remains enabled in configure().
-                    // Vertical centering is retained only when explicitly requested.
+                    val targetX = maxScrollX / 2
                     val targetY = if (centerVertical) maxScrollY / 2 else 0
-                    view.scrollTo(0, targetY)
+                    view.scrollTo(targetX, targetY)
                 }
             }
         }
+        // Wait for the site's responsive layout to settle before measuring.
         view.post { center() }
-        view.postDelayed({ center() }, 650L)
+        view.postDelayed({ center() }, 500L)
+        view.postDelayed({ center() }, 1100L)
     }
 
     /**
@@ -102,7 +106,7 @@ object DesktopWebView {
      * makes the header stay pinned to the WebView while the wide desktop page pans.
      * For wide, top-level fixed bars only, compensate their left edge by scrollX.
      */
-    fun makeTopFixedHeadersFollowHorizontalScroll(view: WebView) {
+    fun makeTopFixedHeadersFollowHorizontalScroll(view: WebView, onInstalled: (() -> Unit)? = null) {
         val script = """
             (function() {
               if (window.__desktopHeaderPanSyncInstalled) return;
@@ -143,7 +147,7 @@ object DesktopWebView {
               sync();
             })();
         """.trimIndent()
-        view.evaluateJavascript(script, null)
+        view.evaluateJavascript(script) { onInstalled?.invoke() }
     }
 
     /** Attach a popup in the same layout slot as its source WebView. */
