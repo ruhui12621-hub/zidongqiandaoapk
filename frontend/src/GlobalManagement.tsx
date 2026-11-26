@@ -31,7 +31,7 @@ export default function GlobalManagement({ accounts, gameCatalog, onGoToAccountL
         const Icon = tab.icon;
         return <button key={tab.id} role="tab" aria-selected={section === tab.id}
           className={section === tab.id ? "active" : ""}
-          onClick={() => setSection(tab.id)}>
+          onClick={() => { if (tab.id === "accounts") { onGoToAccountList(); return; } setSection(tab.id); }}>
           <Icon size={16}/><span>{tab.label}</span>
         </button>;
       })}
