@@ -90,6 +90,80 @@ object DesktopWebView {
         view.evaluateJavascript(script, null)
     }
 
+
+    /**
+     * Center the desktop page's main content in the visible WebView area.
+     * This changes scroll position only; desktop UA, viewport and zoom are untouched.
+     * A short bounded settling pass handles late layout shifts without polling.
+     */
+    fun centerDesktopContent(view: WebView) {
+        val script = """
+            (function() {
+              if (window.__appCenteringInstalled) {
+                if (window.__appCenterUserInteracted) return;
+              } else {
+                window.__appCenteringInstalled = true;
+                window.__appCenterUserInteracted = false;
+                var markInteraction = function() { window.__appCenterUserInteracted = true; };
+                ['touchstart', 'pointerdown', 'wheel'].forEach(function(name) {
+                  window.addEventListener(name, markInteraction, { passive: true, once: true, capture: true });
+                });
+              }
+
+              function center() {
+                if (window.__appCenterUserInteracted || !document.documentElement) return;
+                var root = document.documentElement;
+                var body = document.body;
+                var vw = window.innerWidth || root.clientWidth;
+                var vh = window.innerHeight || root.clientHeight;
+                if (!vw || !vh) return;
+
+                var candidates = [];
+                var selectors = ['main', '[role="main"]', '#root', '#app', '#__next', 'article'];
+                selectors.forEach(function(selector) {
+                  try {
+                    document.querySelectorAll(selector).forEach(function(el) {
+                      var rect = el.getBoundingClientRect();
+                      var style = window.getComputedStyle(el);
+                      if (style.display === 'none' || style.visibility === 'hidden') return;
+                      if (rect.width > vw * 0.25 && rect.height > 80) {
+                        candidates.push({ el: el, area: rect.width * Math.min(rect.height, vh * 3) });
+                      }
+                    });
+                  } catch (_) {}
+                });
+
+                var target = candidates.sort(function(a, b) { return b.area - a.area; })[0];
+                var docWidth = Math.max(root.scrollWidth, body ? body.scrollWidth : 0, vw);
+                var maxX = Math.max(0, docWidth - vw);
+                var x = maxX / 2;
+                var y = 0;
+
+                if (target) {
+                  var rect = target.el.getBoundingClientRect();
+                  var pageTop = rect.top + (window.pageYOffset || root.scrollTop || 0);
+                  var targetHeight = Math.min(rect.height, vh);
+                  y = pageTop + rect.height / 2 - vh / 2;
+                  // Keep the top of a short login panel visible rather than centering empty space.
+                  if (rect.height <= vh) y = pageTop + rect.height / 2 - vh / 2;
+                  else y = pageTop;
+                } else {
+                  var docHeight = Math.max(root.scrollHeight, body ? body.scrollHeight : 0, vh);
+                  y = Math.max(0, (docHeight - vh) / 2);
+                }
+
+                var maxY = Math.max(0, (body ? body.scrollHeight : 0, root.scrollHeight) - vh);
+                window.scrollTo({ left: Math.min(maxX, Math.max(0, x)), top: Math.min(maxY, Math.max(0, y)), behavior: 'instant' });
+              }
+
+              [250, 800, 1600, 2800].forEach(function(delay) {
+                window.setTimeout(center, delay);
+              });
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
+    }
+
     /** Attach a popup in the same layout slot as its source WebView. */
     fun attachPopup(
         container: android.view.ViewGroup,
