@@ -15,7 +15,7 @@ import androidx.webkit.WebViewFeature
  * remain owned by each Activity.
  */
 object DesktopWebView {
-    private const val FALLBACK_VERTICAL_SCROLL_CSS_PX = 420f
+    private const val VERTICAL_SCROLL_CSS_PX = 600f
 
     const val DESKTOP_USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -174,99 +174,35 @@ object DesktopWebView {
     fun centerDesktopContent(view: WebView) {
         fun center() {
             if (view.width <= 0 || view.height <= 0) return
-            val measureScript = """
-                (function() {
-                  var d = document.documentElement, b = document.body;
-                  var w = Math.max(d ? d.scrollWidth : 0, b ? b.scrollWidth : 0);
-                  var h = Math.max(d ? d.scrollHeight : 0, b ? b.scrollHeight : 0);
-                  var maxY = Math.max(0, h - window.innerHeight);
-                  var fallbackY = Math.min($FALLBACK_VERTICAL_SCROLL_CSS_PX, maxY);
-                  var selectors = 'form,[role="dialog"],[aria-modal="true"],[class*="login"],[id*="login"],[class*="signin"],[id*="signin"],[class*="auth"],[class*="modal"],[class*="dialog"]';
-                  var nodes = document.querySelectorAll(selectors);
-                  var best = null, bestScore = -1, bestArea = Infinity;
-                  var loginWords = /登录|验证码|手机号|手机号码|密码|扫码|账号|sign.?in|log.?in|verification/i;
-
-                  function visible(el) {
-                    if (!el || !el.isConnected) return false;
-                    var style = getComputedStyle(el), r = el.getBoundingClientRect();
-                    return style.display !== 'none' && style.visibility !== 'hidden' &&
-                      Number(style.opacity || 1) > 0 && r.width >= 140 && r.height >= 100 &&
-                      r.bottom > 0 && r.top < window.innerHeight;
-                  }
-
-                  for (var i = 0; i < nodes.length; i++) {
-                    var el = nodes[i];
-                    if (!visible(el)) continue;
-                    var r = el.getBoundingClientRect();
-                    if (r.width > window.innerWidth * 0.96 || r.height > window.innerHeight * 0.96) continue;
-                    var text = (el.innerText || el.textContent || '').slice(0, 1200);
-                    var inputs = el.querySelectorAll('input');
-                    var hasPassword = !!el.querySelector('input[type="password"]');
-                    var className = (el.className && el.className.baseVal) || el.className || '';
-                    var hasLoginClass = /login|signin|auth/i.test(String(className)) ||
-                      /login|signin|auth/i.test(el.id || '');
-                    var hasLoginText = loginWords.test(text);
-                    if (!hasPassword && !hasLoginClass && !hasLoginText) continue;
-
-                    var score = 0;
-                    if (el.matches('[role="dialog"],[aria-modal="true"]')) score += 7;
-                    if (el.tagName === 'FORM') score += 3;
-                    if (hasPassword) score += 6;
-                    if (hasLoginClass) score += 6;
-                    if (hasLoginText) score += 3;
-                    if (inputs.length) score += 2;
-                    if (score > bestScore || (score === bestScore && r.width * r.height < bestArea)) {
-                      best = el;
-                      bestScore = score;
-                      bestArea = r.width * r.height;
-                    }
-                  }
-
-                  var targetY = fallbackY;
-                  if (best) {
-                    var fixed = false;
-                    for (var p = best; p && p !== document.documentElement; p = p.parentElement) {
-                      if (getComputedStyle(p).position === 'fixed') { fixed = true; break; }
-                    }
-                    if (fixed) {
-                      targetY = window.scrollY || 0;
-                    } else {
-                      var rect = best.getBoundingClientRect();
-                      var panelCenterY = rect.top + window.scrollY + rect.height / 2;
-                      targetY = panelCenterY - window.innerHeight * 0.43;
-                      targetY = Math.max(0, Math.min(maxY, targetY));
-                    }
-                  }
-                  return w + ',' + h + ',' + targetY;
-                })()
-            """.trimIndent()
-            view.evaluateJavascript(measureScript) { result ->
+            view.evaluateJavascript(
+                "(function(){var d=document.documentElement,b=document.body;" +
+                    "var w=Math.max(d?d.scrollWidth:0,b?b.scrollWidth:0);" +
+                    "var h=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0);" +
+                    "return w+','+h;})()"
+            ) { result ->
                 val dimensions = result?.trim()?.trim('"')?.split(',') ?: return@evaluateJavascript
-                if (dimensions.size != 3) return@evaluateJavascript
+                if (dimensions.size != 2) return@evaluateJavascript
                 val cssWidth = dimensions[0].toFloatOrNull() ?: return@evaluateJavascript
                 val cssHeight = dimensions[1].toFloatOrNull() ?: return@evaluateJavascript
-                val cssTargetY = dimensions[2].toFloatOrNull() ?: return@evaluateJavascript
                 view.post {
                     if (view.width <= 0 || view.height <= 0) return@post
                     val scale = view.scale
                     val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
                     val targetX = maxScrollX / 2
-                    // Keep horizontal centering, while vertically following the
-                    // detected login panel (or a modest fallback when none is found).
-                    val targetY = (cssTargetY * scale)
+                    // Keep horizontal centering and use a fixed 600 CSS-pixel
+                    // vertical offset, clamped to the page's available scroll range.
+                    val targetY = (VERTICAL_SCROLL_CSS_PX * scale)
                         .toInt()
                         .coerceIn(0, maxScrollY)
                     view.scrollTo(targetX, targetY)
                 }
             }
         }
-        // Wait for the site's responsive layout to settle before measuring.
+        // Re-measure after the site's responsive layout has settled.
         view.post { center() }
         view.postDelayed({ center() }, 500L)
         view.postDelayed({ center() }, 1100L)
-        view.postDelayed({ center() }, 2200L)
-        view.postDelayed({ center() }, 3800L)
     }
 
     /**
