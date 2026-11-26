@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import CredentialStatusBar from "./CredentialStatusBar";
 import { createRoot } from "react-dom/client";
 import "./skland-status.css";
 
@@ -30,15 +31,13 @@ function SklandStatus() {
   }, []);
 
   return (
-    <main className="skland-status" aria-label="森空岛登录状态">
-      <div className={`skland-status__label ${acquired ? "is-ready" : ""}`} role="status" aria-live="polite">
-        <span className="skland-status__dot" />
-        {acquired ? "Token 已获取" : "Token 未获取"}
-      </div>
-      <button className="skland-status__back" type="button" onClick={() => window.AndroidSkland?.back()}>
-        返回
-      </button>
-    </main>
+    <CredentialStatusBar
+      acquired={acquired}
+      label={acquired ? "Token 已获取" : "Token 未获取"}
+      ariaLabel="森空岛登录状态"
+      layout="skland"
+      onBack={() => window.AndroidSkland?.back()}
+    />
   );
 }
 
