@@ -96,26 +96,35 @@ object DesktopWebView {
             (function() {
               if (window.__desktopHeaderPanSyncInstalled) return;
               window.__desktopHeaderPanSyncInstalled = true;
-              var headers = Array.from(document.querySelectorAll('body *')).filter(function(el) {
-                var s = getComputedStyle(el), r = el.getBoundingClientRect();
-                return s.position === 'fixed' &&
-                  r.top >= -2 && r.top < Math.min(window.innerHeight * 0.35, 220) &&
-                  r.height >= 24 && r.width >= window.innerWidth * 0.55;
-              });
-              headers.forEach(function(el) {
-                var r = el.getBoundingClientRect();
-                var baseLeft = r.left;
-                el.__desktopHeaderBaseLeft = baseLeft;
-              });
-              function sync() {
+              var headers = [];
+              function scan() {
                 var x = window.scrollX || document.documentElement.scrollLeft || 0;
-                headers.forEach(function(el) {
-                  if (!el.isConnected) return;
-                  el.style.setProperty('left', (el.__desktopHeaderBaseLeft - x) + 'px', 'important');
-                  el.style.setProperty('right', 'auto', 'important');
+                Array.from(document.querySelectorAll('body *')).forEach(function(el) {
+                  if (headers.indexOf(el) !== -1) return;
+                  var s = getComputedStyle(el), r = el.getBoundingClientRect();
+                  if (s.position !== 'fixed' ||
+                      r.top < -2 || r.top >= Math.min(window.innerHeight * 0.35, 220) ||
+                      r.height < 24 || r.width < window.innerWidth * 0.55) return;
+                  el.__desktopHeaderBaseLeft = r.left + x;
+                  headers.push(el);
                 });
               }
+              function sync() {
+                scan();
+                var x = window.scrollX || document.documentElement.scrollLeft || 0;
+                headers = headers.filter(function(el) {
+                  if (!el.isConnected) return false;
+                  el.style.setProperty('left', (el.__desktopHeaderBaseLeft - x) + 'px', 'important');
+                  el.style.setProperty('right', 'auto', 'important');
+                  return true;
+                });
+              }
+              scan();
               window.addEventListener('scroll', sync, {passive:true});
+              window.addEventListener('resize', scan, {passive:true});
+              if (window.MutationObserver && document.body) {
+                new MutationObserver(scan).observe(document.body, {childList:true, subtree:true});
+              }
               sync();
             })();
         """.trimIndent()
