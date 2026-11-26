@@ -257,7 +257,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         @JavascriptInterface fun copyText(value: String) {
             runOnUiThread {
                 val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("错误消息", value))
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("复制内容", value))
             }
         }
 
