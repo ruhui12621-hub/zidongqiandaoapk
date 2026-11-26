@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, CircleHelp, Cloud,
-  Copy, ExternalLink, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
-  Settings2, ShieldCheck, Sparkles, X, AlertCircle
+  ArrowLeft, Check, CheckCircle2, ChevronRight, Cloud,
+  Copy, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
+  Settings2, ShieldCheck, X, AlertCircle
 } from "lucide-react";
 
 type AnyState = any;
@@ -39,7 +39,7 @@ const accountSummary = (games: AnyState[], statuses: Record<string, string>) => 
   if (results.every(value => value === "unconfigured")) return "未配置";
   return "签到结果待确认";
 };
-const gameStatusText = (value: string) => value === "success" ? "签到成功" : value === "failed" ? "签到失败" : value === "unconfigured" ? "未配置" : "未确认";
+const gameStatusText = (value: string) => value === "success" ? "签到成功" : value === "failed" ? "签到失败" : value === "unconfigured" ? "未配置" : "结果待确认";
 const gameTone = (value: string) => value === "success" ? "good" : value === "failed" ? "bad" : "muted";
 
 export default function App() {
