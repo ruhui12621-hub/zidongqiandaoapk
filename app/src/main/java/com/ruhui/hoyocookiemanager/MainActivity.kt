@@ -463,15 +463,14 @@ class MainActivity : HuaweiCloudActivity() {
             .toSet()
         // Account identifiers (stuid / ltuid / account_id) are not authentication tokens.
         // Only real credential fields may mark the login session as acquired.
-        val cnMarkers = setOf("stoken", "stoken_v2", "cookie_token", "ltoken")
-        val osMarkers = setOf("ltoken_v2", "cookie_token_v2")
+        val cnModule = requireNotNull(GlobalModuleRegistry.gameModule(AccountStore.MIYOUSHE_CN))
+        val osModule = requireNotNull(GlobalModuleRegistry.gameModule(AccountStore.HOYOLAB))
+        val cnMarkers = cnModule.credentialMarkers
+        val osMarkers = osModule.credentialMarkers
         val hasCnToken = names.any { it in cnMarkers }
         val hasOsToken = names.any { it in osMarkers }
         val cookieManager = sessionCookieManager ?: return
-        val cnDomainHasToken = listOf(
-            "https://www.miyoushe.com/", "https://bbs.mihoyo.com/",
-            "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/"
-        ).any { url ->
+        val cnDomainHasToken = cnModule.credentialDomains.any { url ->
             cookieManager.getCookie(url).orEmpty().split(';').any { part ->
                 part.trim().substringBefore('=') in cnMarkers
             }
@@ -516,9 +515,7 @@ class MainActivity : HuaweiCloudActivity() {
                 val value = part.trim().substringAfter('=', "").trim()
                 if (key.isBlank() || value.isBlank()) null else key to value
             }.toMap()
-            val tokenKeys = if (platform == AccountStore.MIYOUSHE_CN)
-                setOf("stoken", "stoken_v2", "cookie_token", "ltoken")
-            else setOf("ltoken_v2", "cookie_token_v2")
+            val tokenKeys = requireNotNull(GlobalModuleRegistry.gameModule(platform)).credentialMarkers
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
                 credentialReady = true,
