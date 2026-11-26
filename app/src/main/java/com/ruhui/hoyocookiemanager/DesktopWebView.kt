@@ -112,10 +112,8 @@ object DesktopWebView {
             }
         }
 
-        var touched = false
         view.setOnTouchListener { _, event ->
             if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
-                touched = true
                 tasks.forEach(view::removeCallbacks)
                 // Do not consume or alter Chromium's native drag/pinch handling.
             }
