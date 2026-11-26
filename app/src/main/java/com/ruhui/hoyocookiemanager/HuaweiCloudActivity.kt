@@ -649,32 +649,37 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    private fun showAccountDeployMessage(accountId: String, title: String, detail: String, success: Boolean?) {
+        showOperationMessage(title, detail, success)
+        AppMessageBus.postForAccount(this, accountId, title, detail, success)
+    }
+
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
         val title = "HoYoLAB 更新"
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
-            showOperationMessage("$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
+            showAccountDeployMessage(accountId, "$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
             return
         }
         val pendingCookie = HuaweiCloudSession.pendingHoyoCookie
         val pendingServer = HuaweiCloudSession.pendingHoyoCookieServer
         val pendingAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId
         if (pendingCookie.isBlank() || pendingAccountId != accountId) {
-            showOperationMessage("$title 失败", "当前账号没有本次网页会话获取的 Cookie。请重新打开登录网页并等待显示“已获取”。", false)
+            showAccountDeployMessage(accountId, "$title 失败", "当前账号没有本次网页会话获取的 Cookie。请重新打开登录网页并等待显示“已获取”。", false)
             return
         }
         if (pendingServer !in setOf("cn", "os")) {
-            showOperationMessage("$title 失败", "无法识别 Cookie 对应的服务器区域，已停止上传。", false)
+            showAccountDeployMessage(accountId, "$title 失败", "无法识别 Cookie 对应的服务器区域，已停止上传。", false)
             return
         }
         val account = AccountStore(this).find(accountId)
-            ?: run { showOperationMessage("$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
+            ?: run { showAccountDeployMessage(accountId, "$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
         val expectedPlatform = if (pendingServer == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
         if (account.platform != expectedPlatform) {
-            showOperationMessage("$title 失败", "Cookie 所属服务器与当前账号平台不一致，已停止上传。", false)
+            showAccountDeployMessage(accountId, "$title 失败", "Cookie 所属服务器与当前账号平台不一致，已停止上传。", false)
             return
         }
 
-        showOperationMessage("$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
+        showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
         worker.execute {
             try {
                 val functionName = HOYOLAB_FUNCTION
@@ -699,12 +704,12 @@ open class HuaweiCloudActivity : Activity() {
                 runOnUiThread {
                     HuaweiCloudSession.lastConfigYaml = mergedYaml
                     configYaml = mergedYaml
-                    showOperationMessage("HoYoLAB 部署及检查完成",
+                    showAccountDeployMessage(accountId, "HoYoLAB 部署及检查完成",
                         "函数" + action + "成功。\nCookie 已写入当前账号对应的配置位置。\n云端其余配置均保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    showOperationMessage("$title 失败", e.message ?: e.javaClass.simpleName, false)
+                    showAccountDeployMessage(accountId, "$title 失败", e.message ?: e.javaClass.simpleName, false)
                 }
             }
         }
