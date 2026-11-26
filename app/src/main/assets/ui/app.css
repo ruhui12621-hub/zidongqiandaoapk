@@ -41,3 +41,11 @@
 
 /* Conventional compact refresh action in the account-list heading. */
 .refresh-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid rgba(214,179,106,.38);border-radius:11px;background:linear-gradient(145deg,#211b11,#15120d);color:var(--gold-bright);font-size:12px;font-weight:650;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.18)}.refresh-button:active{transform:scale(.97);background:#2b2113}.refresh-button:disabled{opacity:.58;cursor:wait}.refresh-icon{font-size:18px;line-height:1;font-weight:500}.refresh-button:disabled .refresh-icon{animation:refresh-spin .9s linear infinite}@keyframes refresh-spin{to{transform:rotate(360deg)}}
+
+
+/* Compact per-account cloud-function deployment result at the bottom of details. */
+.cloud-update-card{margin-top:14px}
+.account-update-message{min-height:58px;max-height:26vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:12px;line-height:1.65;scrollbar-width:thin}
+.account-update-message.success{color:var(--green);border-color:rgba(139,199,160,.28)}
+.account-update-message.failed{color:var(--red);border-color:rgba(217,138,130,.3)}
+.account-update-message.pending{color:var(--amber);border-color:rgba(223,185,110,.25)}
