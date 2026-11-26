@@ -354,7 +354,7 @@ export default function App() {
       <section className="modal-sheet game-sheet" onClick={e => e.stopPropagation()}>
         <div className="modal-title"><div><h2>选择要启用的游戏</h2><p>勾选需要参与自动签到的游戏。</p></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div>
         <div className="game-options">{options.map((game: AnyState) => <label className="game-option" key={game.key}>
-          <input type="checkbox" checked={(gameDraft || []).includes(game.key)} onChange={e => setGameDraft(old => e.target.checked ? [...old,game.key] : old.filter(x => x !== game.key))}/>
+          <input type="checkbox" checked={(gameDraft || []).includes(game.key)} onChange={e => setGameDraft(old => e.target.checked ? [...(old || []),game.key] : (old || []).filter(x => x !== game.key))}/>
           <span>{game.label}</span><span className="checkmark"><Check size={14}/></span>
         </label>)}</div>
         <div className="modal-actions"><button className="secondary-button" onClick={closeModal}>取消</button><button className="primary-button" onClick={() => {setModal(null);notify("已选择；将在上传云函数时生效");}}>完成</button></div>
