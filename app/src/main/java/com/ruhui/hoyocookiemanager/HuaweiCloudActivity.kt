@@ -857,20 +857,34 @@ open class HuaweiCloudActivity : Activity() {
                 logSklandDeployStep("正在读取 APK 内置函数包 cloud/skland.zip。")
                 val packaged = readPackagedZip("cloud/skland.zip")
                 logSklandDeployStep("森空岛内置函数包读取成功，大小：${packaged.size} 字节。", true)
-                val configJson = readZipEntryTextOrNull(packaged, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH)
-                val legacyTokens = readZipEntryTextOrNull(packaged, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH)
-                if (configJson == null && legacyTokens == null) {
-                    error("森空岛内置函数包缺少账号配置和旧版 Token 文件，已停止上传。")
+                if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                    error("云端账号尚未完成同步，无法安全合并森空岛账号配置。请先重新连接华为云。")
                 }
-                val mergedConfig = SklandCloudConfigAdapter.mergeAccount(
-                    configJson,
-                    legacyTokens,
-                    token,
-                    account.platformUserId,
-                    selectedGames
-                )
+                // AccountStore is populated from the authoritative cloud package before editing.
+                // Rebuild the complete Skland account list from its independently encrypted vaults;
+                // never start from the APK's blank template and accidentally drop other cloud accounts.
+                val managedSklandAccounts = AccountStore(this).all()
+                    .filter { it.platform == AccountStore.SKLAND }
+                if (managedSklandAccounts.none { it.id == accountId }) {
+                    error("当前森空岛账号不在已同步账号列表中，已停止上传。")
+                }
+                val cloudAccounts = managedSklandAccounts.map { managed ->
+                    val managedToken = if (managed.id == accountId) token else {
+                        SklandTokenVault(this, managed.id).latest().orEmpty()
+                    }
+                    if (managedToken.isBlank() || managedToken.any(Char::isWhitespace)) {
+                        error("账号「${managed.name}」缺少有效的本机加密 Token，无法安全保留全部云端账号。")
+                    }
+                    SklandCloudConfigAdapter.CloudAccount(
+                        platformUserId = if (managed.id == accountId) sha256(token)
+                            else managed.platformUserId ?: sha256(managedToken),
+                        token = managedToken,
+                        games = if (managed.id == accountId) selectedGames else managed.games
+                    )
+                }
+                val mergedConfig = SklandCloudConfigAdapter.encodeAccounts(cloudAccounts)
                 val mergedLegacyTokens = SklandCloudConfigAdapter.legacyTokenText(mergedConfig)
-                val tokenCount = SklandCloudConfigAdapter.readAccounts(mergedConfig, null).size
+                val tokenCount = cloudAccounts.size
                 logSklandDeployStep("账号配置合并完成：共 $tokenCount 个账号；当前账号启用 ${selectedGames.size} 款游戏。未输出 Token 原文。", true)
 
                 var archive = replaceZip(
