@@ -385,6 +385,10 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { deployHoyolabAccount(accountId, selectedGamesJson) }
     }
 
+    protected fun htmlDeploySklandAccount(accountId: String) {
+        runOnUiThread { deploySklandAccount(accountId) }
+    }
+
     protected fun htmlCloudBackendReady(): Boolean = true
 
     protected fun updateHuaweiCloudConfig(value: String) {
@@ -647,6 +651,137 @@ open class HuaweiCloudActivity : Activity() {
     /** Detailed step-by-step messages stay in the app-wide message stream. */
     private fun logAccountDeployStep(accountId: String, detail: String, success: Boolean? = null) {
         showOperationMessage("HoYoLAB 部署进度", detail, success)
+    }
+
+
+    private fun showSklandDeployMessage(accountId: String, title: String, detail: String, success: Boolean?) {
+        AppMessageBus.post(this, AppMessageBus.SKLAND, title, detail, success)
+        AppMessageBus.postForAccount(this, accountId, title, detail, success)
+    }
+
+    private fun logSklandDeployStep(detail: String, success: Boolean? = null) {
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛部署进度", detail, success)
+    }
+
+    /**
+     * Deploy the Skland function independently from HoYoLAB. The Skland package
+     * stores one token per line in code/INPUT_HYPERGRYPH_TOKEN.txt; replace only
+     * the token belonging to this account and preserve every other cloud token.
+     */
+    private fun deploySklandAccount(accountId: String) {
+        AppMessageBus.resetAccountStages(this, accountId)
+        val title = "森空岛更新"
+        if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
+            showSklandDeployMessage(accountId, "$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
+            return
+        }
+        val account = AccountStore(this).find(accountId)
+            ?: run { showSklandDeployMessage(accountId, "$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
+        if (account.platform != AccountStore.SKLAND) {
+            showSklandDeployMessage(accountId, "$title 失败", "当前账号不是森空岛账号，已停止上传。", false)
+            return
+        }
+        val token = try {
+            SklandTokenVault(this, accountId).latest().orEmpty()
+        } catch (e: Exception) {
+            showSklandDeployMessage(accountId, "$title 失败", "读取本机加密 Token 失败：${e.message ?: e.javaClass.simpleName}", false)
+            return
+        }
+        if (token.isBlank() || token.any(Char::isWhitespace)) {
+            showSklandDeployMessage(accountId, "$title 失败", "当前账号尚未成功获取可用 Token。请先打开森空岛登录页面并完成登录。", false)
+            return
+        }
+
+        AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端森空岛函数并准备上传。")
+        showSklandDeployMessage(accountId, "$title 进行中", "正在读取森空岛内置函数包，并仅更新当前账号对应的 Token；其他账号和云端配置保持不变。", null)
+        worker.execute {
+            var deploymentReady = false
+            try {
+                logSklandDeployStep("正在读取 APK 内置函数包 cloud/skland.zip。")
+                val packaged = readPackagedZip("cloud/skland.zip")
+                logSklandDeployStep("森空岛内置函数包读取成功，大小：${packaged.size} 字节。", true)
+                val tokenPath = "code/INPUT_HYPERGRYPH_TOKEN.txt"
+                val cloudTokens = readZipEntryText(packaged, tokenPath)
+                logSklandDeployStep("已读取云函数 Token 列表；不会在消息中输出 Token 原文。", true)
+                val mergedTokens = replaceSklandToken(cloudTokens, token, account.platformUserId)
+                val tokenCount = mergedTokens.lineSequence().map { it.trim() }
+                    .count { it.isNotBlank() && !it.startsWith("#") }
+                logSklandDeployStep("已合并当前账号 Token，云端保留并整理后共 $tokenCount 个 Token。", true)
+                val archive = replaceZip(packaged, tokenPath, mergedTokens)
+                logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
+
+                val created = createOrUpdateFunction(SKLAND_FUNCTION, SKLAND_HANDLER, archive) { detail, success ->
+                    logSklandDeployStep(detail, success)
+                }
+                logSklandDeployStep("函数代码提交完成，正在等待 FunctionGraph 函数就绪。")
+                val function = waitForFunction(SKLAND_FUNCTION)
+                val urn = function.optString("func_urn")
+                if (urn.isBlank()) error("森空岛函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
+                    if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
+                deploymentReady = true
+
+                AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用森空岛函数。")
+                logSklandDeployStep("正在使用华为云 TIMER 定时触发器事件格式测试森空岛函数。")
+                val testSummary = invokeFunctionOnce(urn)
+                AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "森空岛函数调用成功。")
+                AppMessageBus.setAccountStage(this, accountId, "output", "测试输出结果", "成功", testSummary)
+                logSklandDeployStep("森空岛 TIMER 事件格式测试完成：$testSummary", true)
+
+                AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器", "进行中", "正在查询森空岛函数现有定时触发器。")
+                logSklandDeployStep("正在查询森空岛函数现有定时触发器。")
+                val timerSummary = ensureDailyTimerIfMissing(urn)
+                val triggerExists = timerSummary.contains("检测到已有")
+                AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器",
+                    if (triggerExists) "已存在" else "已创建",
+                    if (triggerExists) "检测到已有定时触发器，未重复创建。" else timerSummary)
+                logSklandDeployStep("森空岛定时触发器检查完成：$timerSummary", true)
+
+                val action = if (created) "创建" else "更新"
+                runOnUiThread {
+                    showSklandDeployMessage(accountId, "森空岛部署及检查完成",
+                        "最终结果：森空岛函数${action}成功。\n当前账号 Token 已写入函数包；其他森空岛账号 Token 均予以保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    val reason = e.message ?: e.javaClass.simpleName
+                    val currentStages = AppMessageBus.currentAccountStages(this, accountId)
+                    val activeStage = (0 until currentStages.length()).mapNotNull { currentStages.optJSONObject(it) }
+                        .firstOrNull { it.optString("status") == "进行中" }?.optString("key").orEmpty()
+                    if (activeStage.isNotBlank()) {
+                        val label = when (activeStage) {
+                            "function" -> "云函数"
+                            "trigger" -> "定时触发器"
+                            "test" -> "函数运行测试"
+                            else -> "测试输出结果"
+                        }
+                        AppMessageBus.setAccountStage(this, accountId, activeStage, label, "失败", reason)
+                    }
+                    logSklandDeployStep(if (deploymentReady)
+                        "森空岛函数代码已部署，但后续测试或定时触发器检查失败：$reason"
+                        else "森空岛部署流程中止：$reason", false)
+                    showSklandDeployMessage(accountId,
+                        if (deploymentReady) "森空岛已部署，后续检查失败" else "$title 失败",
+                        if (deploymentReady) "森空岛云函数代码已上传并确认就绪；失败仅发生在后续测试/触发器检查阶段。$reason"
+                        else reason, false)
+                }
+            }
+        }
+    }
+
+    /** Replace the current account's cloud token by its stable token hash; retain all other accounts. */
+    private fun replaceSklandToken(source: String, token: String, accountTokenHash: String?): String {
+        val targetHash = accountTokenHash?.takeIf { it.isNotBlank() }
+        val retained = source.split(Regex("\\r?\\n")).filter { line ->
+            val value = line.trim()
+            value.isNotBlank() && (
+                value.startsWith("#") ||
+                    (value != token && (targetHash == null || sha256(value) != targetHash))
+                )
+        }
+        val result = retained.toMutableList()
+        if (result.none { it.trim() == token }) result.add(token)
+        return result.joinToString("\\n") + "\\n"
     }
 
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
