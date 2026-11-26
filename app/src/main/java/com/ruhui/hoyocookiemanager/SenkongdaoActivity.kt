@@ -166,7 +166,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         DesktopWebView.configure(
             view,
             multiWindow = multi,
-            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT,
+            fitToScreen = false
         )
     }
 
@@ -270,8 +271,10 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页加载回调完成",
                     "地址：$url\n标题：${view.title.orEmpty()}\n此回调本身不代表页面业务内容一定正常。", true)
+                // Match HoYoLAB: use the shared native two-axis centering path.
+                // Keep token detection site-specific; only the presentation is shared.
+                DesktopWebView.centerDesktopContent(view)
                 if (isSklandHost(url)) {
-                    DesktopWebView.enableDesktopViewport(view)
                     scheduleCheck()
                 }
                 pushSklandUi()
