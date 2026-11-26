@@ -117,7 +117,13 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
- const previousMessageBox=page==="messages"?view.querySelector(".message-box"):null;
+ // Preserve independently scrollable raw-output panes across the 1.8s state-poll render.
+ const scrollSelectors=[".stage-detail",".account-update-message",".message-box:not(.all-message-box)"];
+ const preservedScroll=[];
+ scrollSelectors.forEach(selector=>view.querySelectorAll(selector).forEach((el,index)=>{
+  preservedScroll.push({selector,index,top:el.scrollTop});
+ }));
+ const previousMessageBox=page==="messages"?view.querySelector(".all-message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
  const wasAtMessageBottom=previousMessageBox
   ? previousMessageBox.scrollHeight-previousMessageBox.clientHeight-previousMessageBox.scrollTop<32
@@ -129,8 +135,12 @@ function render(){
  else if(page==="cloud")view.innerHTML=renderCloud();
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
+ preservedScroll.forEach(saved=>{
+  const current=view.querySelectorAll(saved.selector)[saved.index];
+  if(current)current.scrollTop=Math.min(saved.top,Math.max(0,current.scrollHeight-current.clientHeight));
+ });
  if(page==="messages"){
-  const currentMessageBox=view.querySelector(".message-box");
+  const currentMessageBox=view.querySelector(".all-message-box");
   if(currentMessageBox)currentMessageBox.scrollTop=wasAtMessageBottom
    ?currentMessageBox.scrollHeight:previousMessageScroll;
  }
