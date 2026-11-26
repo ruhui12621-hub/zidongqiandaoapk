@@ -263,7 +263,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                     "地址：$url\n标题：${view.title.orEmpty()}\n此回调本身不代表页面业务内容一定正常。", true)
                 // Match HoYoLAB: use the shared native two-axis centering path.
                 // Keep token detection site-specific; only the presentation is shared.
-                DesktopWebView.centerDesktopContent(view)
+                DesktopWebView.centerDesktopContent(view, centerVertical = false)
                 if (isSklandHost(url)) {
                     scheduleCheck()
                 }
