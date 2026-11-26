@@ -3,7 +3,7 @@
 const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
-let page="home",selectedId=null,cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
+let page="home",selectedId=null,selectedTodayGameKey=null,cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
 const gameSelections={};
 const hoyoGameOptions={cn:[["genshin","原神"],["honkai2","崩坏2"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]],os:[["genshin","原神"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]]};
 function selectedHoyoGames(a){if(!gameSelections[a.id])gameSelections[a.id]=new Set((a.games||[]).map(g=>g.key));return gameSelections[a.id]}
@@ -54,9 +54,9 @@ function renderDetail(a){
    const result=enabled?(gameStates[key]||"unknown"):"unconfigured";
    const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
    const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
-   return '<tr><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
+   return '<tr class="clickable-status-row" data-action="open-today-detail" data-game="'+esc(key)+'"><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
   }).join("");
-  html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
+  html+='<div class="card today-status-card" data-action="open-today-detail"><div class="card-title">今日签到信息 <span class="detail-hint">点击查看原因与原始消息 ›</span></div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
   html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Cookie 状态</span><strong style="color:'+(accountCookieReady?'var(--green)':'var(--amber)')+'">'+(accountCookieReady?'已获取最新 · '+serverLabel:'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
@@ -71,7 +71,7 @@ function renderDetail(a){
    const result=gameStates[key]||"unknown";
    const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
    const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
-   return '<tr><td>'+esc(g.label||key)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>';
+   return '<tr class="clickable-status-row" data-action="open-today-detail" data-game="'+esc(key)+'"><td>'+esc(g.label||key)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>';
   }).join("");
   html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="2" class="empty-cell">云端暂未配置签到游戏</td></tr>') +'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
@@ -84,6 +84,23 @@ function renderDetail(a){
  const stageRows=stages.map(s=>'<tr><td>'+esc(s.label||"执行阶段")+'</td><td><span class="stage-result '+(s.status==="成功"||s.status==="已存在"||s.status==="已创建"?"success":s.status==="失败"?"failed":s.status==="进行中"?"pending":"neutral")+'">'+esc(s.status||"未执行")+'</span><div class="stage-detail">'+esc(s.detail||"")+'</div></td></tr>').join("");
  html+='<div class="card cloud-update-card"><div class="card-title">云函数执行情况</div><div class="game-status-table-wrap"><table class="game-status-table deploy-stage-table"><thead><tr><th>执行阶段</th><th>执行情况</th></tr></thead><tbody>'+stageRows+'</tbody></table></div></div>';
  return html
+}
+function renderTodayDetail(a){
+ const data=(state.todayDetails||{})[a.id]||{};
+ const perGame=data.games||{};
+ const chosen=selectedTodayGameKey&&perGame[selectedTodayGameKey]?perGame[selectedTodayGameKey]:null;
+ const gameLabel=(a.games||[]).find(g=>(g.key||g.id||g.label)===selectedTodayGameKey)?.label;
+ const title=chosen?(gameLabel||selectedTodayGameKey):"账号签到详情";
+ const status=chosen?.status||data.status||a.todayStatus||"今日状态未知";
+ const reason=chosen?.reason||data.reason||"暂未获取到明确的失败原因。";
+ const raw=chosen?.rawMessages||data.rawMessages||[];
+ const rawText=Array.isArray(raw)?raw.join("\n"):String(raw||"");
+ const allRaw=Array.isArray(data.allRawMessages)?data.allRawMessages.join("\n"):String(data.allRawMessages||"");
+ let out='<div class="detail-head"><button class="back-button" data-action="today-detail-back">‹</button><div class="detail-title"><h1>'+esc(title)+'</h1><p>'+esc(a.name)+' · '+esc(a.platformLabel)+' · 今日签到详情</p></div></div>';
+ out+='<div class="card"><div class="card-title">状态判定</div><div class="metric"><strong>'+esc(status)+'</strong><p class="hint">'+esc(reason)+'</p></div></div>';
+ out+='<div class="card"><div class="card-title">收到的原始消息</div><div class="message-box">'+esc(rawText||"没有找到与此游戏匹配的原始消息。")+'</div><button class="secondary" data-action="copy-today-detail" data-copy="game">复制原始消息</button></div>';
+ out+='<div class="card"><div class="card-title">云函数今日完整日志</div><div class="message-box">'+esc(allRaw||"没有读取到云函数日志。")+'</div><button class="secondary" data-action="copy-today-detail" data-copy="all">复制完整日志</button></div>';
+ return out
 }
 function renderCloud(){
  let html=pageTitle("华为云","管理华为云连接与凭据。");
@@ -107,7 +124,8 @@ function render(){
   : true;
  nav();
  const a=account();
- if(selectedId&&a)view.innerHTML=renderDetail(a);
+ if(selectedId&&a&&page==="today-detail")view.innerHTML=renderTodayDetail(a);
+ else if(selectedId&&a)view.innerHTML=renderDetail(a);
  else if(page==="cloud")view.innerHTML=renderCloud();
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
@@ -144,7 +162,10 @@ document.addEventListener("click",e=>{
    gameSelections[a.id]=chosen;closeGamePicker();render();toast("游戏选择已保存");
   }
  }
- if(action==="back"){selectedId=null;native("backToHome");render()}
+ if(action==="back"){selectedId=null;page="home";native("backToHome");render()}
+ if(action==="open-today-detail"){selectedTodayGameKey=e.target.closest("[data-game]")?.dataset.game||null;page="today-detail";render()}
+ if(action==="today-detail-back"){page="home";selectedTodayGameKey=null;render()}
+ if(action==="copy-today-detail"){const a=account();const d=(state.todayDetails||{})[a?.id]||{};const g=selectedTodayGameKey&&d.games?d.games[selectedTodayGameKey]:null;const value=e.target.dataset.copy==="all"?(Array.isArray(d.allRawMessages)?d.allRawMessages.join("\n"):String(d.allRawMessages||"")):(Array.isArray(g?.rawMessages)?g.rawMessages.join("\n"):String(g?.rawMessages||""));native("copyText",value);toast("原始消息已复制")}
  if(action==="hoyo-login"){const a=account();if(a)native("openLogin",a.id)}
  if(action==="open-game-picker"){showGamePicker()}
  if(action==="deploy-hoyo-account"){
@@ -189,7 +210,7 @@ document.addEventListener("input",e=>{
  if(e.target.id==="cloud-ak")cloudDraft.ak=e.target.value;
  if(e.target.id==="cloud-sk")cloudDraft.sk=e.target.value;
 });
-window.nativeBack=()=>{if(selectedId){selectedId=null;native("backToHome");render()}else if(page!=="home"){page="home";render()}else{toast("再按一次可退出应用")}};
+window.nativeBack=()=>{if(page==="today-detail"){page="home";selectedTodayGameKey=null;render()}else if(selectedId){selectedId=null;page="home";native("backToHome");render()}else if(page!=="home"){page="home";render()}else{toast("再按一次可退出应用")}};
 window.addEventListener("load",()=>{readState();render()});
 setInterval(()=>{try{const raw=native("getState");if(raw)applyState(JSON.parse(raw))}catch(e){}},1800);
 })();
