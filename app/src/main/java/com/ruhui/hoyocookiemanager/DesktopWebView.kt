@@ -334,7 +334,7 @@ object LoginWebSession {
     fun profileName(accountId: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(accountId.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
         return "login_" + digest.take(24)
     }
 }
