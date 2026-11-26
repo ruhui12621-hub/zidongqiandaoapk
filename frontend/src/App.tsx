@@ -165,8 +165,10 @@ export default function App() {
     if (!account) return;
     if (!account.tokenReady) { notify("请先打开本账号森空岛登录页面并成功获取 Token"); return; }
     if (!state.cloudConnected) { notify("请先连接华为云"); return; }
-    callNative("deploySklandAccount", account.id);
-    notify("正在合并森空岛 Token 并上传云函数");
+    const selectedGames = gameDraft ?? (account.games || []).map((g: AnyState) => g.key);
+    if (!selectedGames.length) { notify("至少选择一款森空岛游戏"); return; }
+    callNative("deploySklandAccount", account.id, JSON.stringify(selectedGames));
+    notify("正在同步森空岛账号、游戏选择并上传云函数");
   };
 
   const showGamePicker = () => {
@@ -302,7 +304,8 @@ export default function App() {
           <div className="inline-status">{pageCookieReady ? <><CheckCircle2 size={14}/> 本次登录页面已获取 Cookie</> : <><AlertCircle size={14}/> 等待本次登录页面获取 Cookie</>}</div>
         </> : <>
           <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>
-          <p className="helper-text">上传当前账号已加密保存的 Token；其他森空岛账号及云端配置保持不变。</p>
+          <button className="secondary-button full-button" onClick={showGamePicker}><Gamepad2 size={17}/> 选择要启用的游戏</button>
+          <p className="helper-text">选择会与当前账号 Token 一起同步到森空岛云函数；其他账号的游戏选择保持不变。</p>
           <button className="primary-button full-button" onClick={deploySkland}><Cloud size={17}/> 更新云函数并上传</button>
         </>}
       </section>
@@ -342,7 +345,13 @@ export default function App() {
     </section>
   </>;
 
-  const options = account && (account.platform === "miyoushe_cn" ? state.gameCatalog?.hoyolab_cn : state.gameCatalog?.hoyolab_os) || [];
+  const options = account
+    ? account.platform === "skland"
+      ? state.gameCatalog?.skland || []
+      : account.platform === "miyoushe_cn"
+        ? state.gameCatalog?.hoyolab_cn || []
+        : state.gameCatalog?.hoyolab_os || []
+    : [];
 
   return <div className="app-shell">
     <header className="topbar">

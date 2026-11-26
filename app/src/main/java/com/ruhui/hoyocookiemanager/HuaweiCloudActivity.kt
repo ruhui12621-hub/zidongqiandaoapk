@@ -327,29 +327,27 @@ open class HuaweiCloudActivity : Activity() {
                 }
 
                 if (sklandFunction != null) {
-                    val tokenText = readZipText(
-                        downloadZip(sklandFunction, "森空岛"),
-                        "code/INPUT_HYPERGRYPH_TOKEN.txt",
-                        "森空岛"
+                    val archive = downloadZip(sklandFunction, "森空岛")
+                    val accountConfig = readZipEntryTextOrNull(
+                        archive, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH
                     )
-                    val tokens = tokenText.lineSequence().map { it.trim() }
-                        .filter { it.isNotBlank() && !it.startsWith("#") }.distinct().toList()
-                    tokens.forEach { token ->
-                        val stableId = MessageDigest.getInstance("SHA-256")
-                            .digest(token.toByteArray(Charsets.UTF_8))
-                            .joinToString("") { "%02x".format(it) }
+                    val legacyTokens = readZipEntryTextOrNull(
+                        archive, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
+                    )
+                    if (accountConfig == null && legacyTokens == null) {
+                        error("森空岛函数包中既没有账号配置，也没有旧版 Token 文件；已停止同步。")
+                    }
+                    val cloudAccounts = SklandCloudConfigAdapter.readAccounts(accountConfig, legacyTokens)
+                    cloudAccounts.forEach { cloudAccount ->
                         val account = store.add(
                             AccountStore.SKLAND,
-                            platformUserId = stableId,
-                            games = setOf("endfield")
+                            platformUserId = cloudAccount.platformUserId,
+                            games = cloudAccount.games
                         )
-                        SklandTokenVault(this, account.id).save(token)
+                        SklandTokenVault(this, account.id).save(cloudAccount.token)
                         store.update(account.copy(
-                            // Endfield is an additional Skland game; keep any existing
-                            // game selections and ensure Endfield is checked as requested.
-                            games = account.games + "endfield",
-                            // Importing a cloud token does not count as a token freshly acquired
-                            // during this app session; preserve tokenReady as-is.
+                            platformUserId = cloudAccount.platformUserId,
+                            games = cloudAccount.games,
                             credentialReady = true
                         ))
                         imported++
@@ -388,8 +386,8 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { deployHoyolabAccount(accountId, selectedGamesJson) }
     }
 
-    protected fun htmlDeploySklandAccount(accountId: String) {
-        runOnUiThread { deploySklandAccount(accountId) }
+    protected fun htmlDeploySklandAccount(accountId: String, selectedGamesJson: String) {
+        runOnUiThread { deploySklandAccount(accountId, selectedGamesJson) }
     }
 
     protected fun htmlCloudBackendReady(): Boolean = true
@@ -816,7 +814,7 @@ open class HuaweiCloudActivity : Activity() {
      * stores one token per line in code/INPUT_HYPERGRYPH_TOKEN.txt; replace only
      * the token belonging to this account and preserve every other cloud token.
      */
-    private fun deploySklandAccount(accountId: String) {
+    private fun deploySklandAccount(accountId: String, selectedGamesJson: String) {
         AppMessageBus.resetAccountStages(this, accountId)
         val title = "森空岛更新"
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
@@ -827,6 +825,17 @@ open class HuaweiCloudActivity : Activity() {
             ?: run { showSklandDeployMessage(accountId, "$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
         if (account.platform != AccountStore.SKLAND) {
             showSklandDeployMessage(accountId, "$title 失败", "当前账号不是森空岛账号，已停止上传。", false)
+            return
+        }
+        val selectedGames = try {
+            val array = JSONArray(selectedGamesJson)
+            (0 until array.length()).map { array.getString(it) }.toSet()
+        } catch (e: Exception) {
+            showSklandDeployMessage(accountId, "$title 失败", "游戏选择数据无效，已停止上传。", false)
+            return
+        }
+        if (selectedGames.isEmpty() || !SklandCloudConfigAdapter.supportedGames.containsAll(selectedGames)) {
+            showSklandDeployMessage(accountId, "$title 失败", "至少选择一款森空岛支持的游戏。", false)
             return
         }
         val token = try {
@@ -841,21 +850,41 @@ open class HuaweiCloudActivity : Activity() {
         }
 
         AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端森空岛函数并准备上传。")
-        showSklandDeployMessage(accountId, "$title 进行中", "正在读取森空岛内置函数包，并仅更新当前账号对应的 Token；其他账号和云端配置保持不变。", null)
+        showSklandDeployMessage(accountId, "$title 进行中", "正在合并当前账号 Token 与启用游戏；其他账号配置保持不变。", null)
         worker.execute {
             var deploymentReady = false
             try {
                 logSklandDeployStep("正在读取 APK 内置函数包 cloud/skland.zip。")
                 val packaged = readPackagedZip("cloud/skland.zip")
                 logSklandDeployStep("森空岛内置函数包读取成功，大小：${packaged.size} 字节。", true)
-                val tokenPath = "code/INPUT_HYPERGRYPH_TOKEN.txt"
-                val cloudTokens = readZipEntryText(packaged, tokenPath)
-                logSklandDeployStep("已读取云函数 Token 列表；不会在消息中输出 Token 原文。", true)
-                val mergedTokens = replaceSklandToken(cloudTokens, token, account.platformUserId)
-                val tokenCount = mergedTokens.lineSequence().map { it.trim() }
-                    .count { it.isNotBlank() && !it.startsWith("#") }
-                logSklandDeployStep("已合并当前账号 Token，云端保留并整理后共 $tokenCount 个 Token。", true)
-                val archive = replaceZip(packaged, tokenPath, mergedTokens)
+                val configJson = readZipEntryTextOrNull(packaged, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH)
+                val legacyTokens = readZipEntryTextOrNull(packaged, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH)
+                if (configJson == null && legacyTokens == null) {
+                    error("森空岛内置函数包缺少账号配置和旧版 Token 文件，已停止上传。")
+                }
+                val mergedConfig = SklandCloudConfigAdapter.mergeAccount(
+                    configJson,
+                    legacyTokens,
+                    token,
+                    account.platformUserId,
+                    selectedGames
+                )
+                val mergedLegacyTokens = SklandCloudConfigAdapter.legacyTokenText(mergedConfig)
+                val tokenCount = SklandCloudConfigAdapter.readAccounts(mergedConfig, null).size
+                logSklandDeployStep("账号配置合并完成：共 $tokenCount 个账号；当前账号启用 ${selectedGames.size} 款游戏。未输出 Token 原文。", true)
+
+                var archive = replaceZip(
+                    packaged,
+                    SklandCloudConfigAdapter.LEGACY_TOKEN_PATH,
+                    mergedLegacyTokens,
+                    allowCreate = true
+                )
+                archive = replaceZip(
+                    archive,
+                    SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH,
+                    mergedConfig,
+                    allowCreate = true
+                )
                 logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
 
                 val created = createOrUpdateFunction(SKLAND_FUNCTION, SKLAND_HANDLER, archive) { detail, success ->
@@ -872,8 +901,15 @@ open class HuaweiCloudActivity : Activity() {
                     if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
                 deploymentReady = true
 
+                AccountStore(this).update(account.copy(
+                    platformUserId = sha256(token),
+                    games = selectedGames,
+                    credentialReady = true
+                ))
+                onCloudDeploymentProgress()
+
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用森空岛函数。")
-                logSklandDeployStep("正在使用华为云 TIMER 定时触发器事件格式测试森空岛函数。")
+                logSklandDeployStep("正在使用华为云 TIMER 事件格式测试森空岛函数。")
                 val testResult = invokeFunctionOnce(urn)
                 val testSummary = testResult.summary
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "森空岛函数调用成功。")
@@ -890,9 +926,10 @@ open class HuaweiCloudActivity : Activity() {
                 logSklandDeployStep("森空岛定时触发器检查完成：$timerSummary", true)
 
                 val action = if (created) "创建" else "更新"
+                val gameLabels = selectedGames.map { GameCatalog.label(it) }.joinToString("、")
                 runOnUiThread {
                     showSklandDeployMessage(accountId, "森空岛部署及检查完成",
-                        "最终结果：森空岛函数${action}成功。\n当前账号 Token 已写入函数包；其他森空岛账号 Token 均予以保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                        "最终结果：森空岛函数$action成功。\n当前账号启用游戏：$gameLabels。\n已保留其他森空岛账号配置。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -922,20 +959,6 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    /** Replace the current account's cloud token by its stable token hash; retain all other accounts. */
-    private fun replaceSklandToken(source: String, token: String, accountTokenHash: String?): String {
-        val targetHash = accountTokenHash?.takeIf { it.isNotBlank() }
-        val retained = source.split(Regex("\\r?\\n")).filter { line ->
-            val value = line.trim()
-            value.isNotBlank() && (
-                value.startsWith("#") ||
-                    (value != token && (targetHash == null || sha256(value) != targetHash))
-                )
-        }
-        val result = retained.toMutableList()
-        if (result.none { it.trim() == token }) result.add(token)
-        return result.joinToString("\n") + "\n"
-    }
 
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
         AppMessageBus.resetAccountStages(this, accountId)
@@ -1058,14 +1081,14 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun readZipEntryText(source: ByteArray, wanted: String): String {
+    private fun readZipEntryTextOrNull(source: ByteArray, wanted: String): String? {
         var found: String? = null
         ZipInputStream(ByteArrayInputStream(source)).use { input ->
             while (true) {
                 val entry = input.nextEntry ?: break
-                val path = entry.name.replace('\\', '/')
+                val path = entry.name.replace('\\\\', '/')
                 if (!entry.isDirectory && (path == wanted || path.endsWith("/$wanted"))) {
-                    if (found != null) error("APK 内置 ZIP 中存在多个 $wanted，已停止。")
+                    if (found != null) error("ZIP 中存在多个 $wanted，已停止。")
                     val out = ByteArrayOutputStream()
                     val buffer = ByteArray(8192)
                     var total = 0
@@ -1081,8 +1104,11 @@ open class HuaweiCloudActivity : Activity() {
                 input.closeEntry()
             }
         }
-        return found ?: error("APK 内置 ZIP 中不存在 $wanted。")
+        return found
     }
+
+    private fun readZipEntryText(source: ByteArray, wanted: String): String =
+        readZipEntryTextOrNull(source, wanted) ?: error("APK 内置 ZIP 中不存在 $wanted。")
 
     /** Replace only account.cookie (CN) or games.os.cookie (global); preserve every other YAML line. */
     private fun replaceCloudCookie(source: String, cookie: String, server: String): String {
@@ -1435,7 +1461,7 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun replaceZip(source: ByteArray, wanted: String, yaml: String): ByteArray {
+    private fun replaceZip(source: ByteArray, wanted: String, yaml: String, allowCreate: Boolean = false): ByteArray {
         if (!isZip(source)) error("原函数代码包不是有效 ZIP。")
         val entries = mutableListOf<Pair<ZipEntry, ByteArray>>()
         ZipInputStream(ByteArrayInputStream(source)).use { input ->
@@ -1457,8 +1483,10 @@ open class HuaweiCloudActivity : Activity() {
             val p = it.first.name.replace('\\', '/')
             p == wanted || p.endsWith("/" + wanted)
         }
-        if (hits.size != 1) error(if (hits.isEmpty()) "ZIP 中不存在 " + wanted + "，未执行替换。" else "ZIP 中存在多个目标配置文件，已停止。")
-        val target = hits.single().first
+        if (hits.size > 1 || (hits.isEmpty() && !allowCreate)) {
+            error(if (hits.isEmpty()) "ZIP 中不存在 " + wanted + "，未执行替换。" else "ZIP 中存在多个目标配置文件，已停止。")
+        }
+        val target = hits.singleOrNull()?.first
         val result = ByteArrayOutputStream()
         ZipOutputStream(result).use { zip ->
             for ((entry, bytes) in entries) {
@@ -1467,6 +1495,11 @@ open class HuaweiCloudActivity : Activity() {
                 if (entry.comment != null) copy.comment = entry.comment
                 zip.putNextEntry(copy)
                 if (!entry.isDirectory) zip.write(if (entry === target) yaml.toByteArray(Charsets.UTF_8) else bytes)
+                zip.closeEntry()
+            }
+            if (target == null) {
+                zip.putNextEntry(ZipEntry(wanted))
+                zip.write(yaml.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
             }
         }

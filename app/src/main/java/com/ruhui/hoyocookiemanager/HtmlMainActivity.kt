@@ -274,8 +274,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun deploySklandAccount(id: String) {
-            htmlDeploySklandAccount(id)
+        @JavascriptInterface fun deploySklandAccount(id: String, selectedGamesJson: String) {
+            htmlDeploySklandAccount(id, selectedGamesJson)
             pushState()
         }
 
