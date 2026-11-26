@@ -759,7 +759,6 @@ open class HuaweiCloudActivity : Activity() {
                 val testResult = invokeFunctionOnce(urn)
                 val testSummary = testResult.summary
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "森空岛函数调用成功。")
-                AppMessageBus.setAccountStage(this, accountId, "output", "测试输出结果", "成功", testSummary)
                 AppMessageBus.setAccountStage(this, accountId, "raw_output", "原始输出结果", "成功", testResult.rawOutput)
                 logSklandDeployStep("森空岛 TIMER 事件格式测试完成：$testSummary", true)
 
@@ -788,7 +787,7 @@ open class HuaweiCloudActivity : Activity() {
                             "function" -> "云函数"
                             "trigger" -> "定时触发器"
                             "test" -> "函数运行测试"
-                            else -> "测试输出结果"
+                            else -> "函数运行测试"
                         }
                         AppMessageBus.setAccountStage(this, accountId, activeStage, label, "失败", reason)
                     }
@@ -893,7 +892,6 @@ open class HuaweiCloudActivity : Activity() {
                 val testResult = invokeFunctionOnce(urn)
                 val testSummary = testResult.summary
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "函数调用成功。")
-                AppMessageBus.setAccountStage(this, accountId, "output", "测试输出结果", "成功", testSummary)
                 AppMessageBus.setAccountStage(this, accountId, "raw_output", "原始输出结果", "成功", testResult.rawOutput)
                 logAccountDeployStep(accountId, "TIMER 事件格式测试完成：$testSummary", true)
                 AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器", "进行中", "正在查询现有定时触发器。")
@@ -922,7 +920,7 @@ open class HuaweiCloudActivity : Activity() {
                             "function" -> "云函数"
                             "trigger" -> "定时触发器"
                             "test" -> "函数运行测试"
-                            else -> "测试输出结果"
+                            else -> "函数运行测试"
                         }
                         AppMessageBus.setAccountStage(this, accountId, activeStage, label, "失败", reason)
                     }
