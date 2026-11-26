@@ -124,13 +124,11 @@ function render(){
  // Keep unchanged log/output DOM nodes alive during state polling.
  // Only replace a pane when its actual text content has changed.
  const retained=[];
- // The scroll position belongs to the wrapper, not the text node. Keep the
- // entire cloud-log scroll container alive when its content has not changed.
- const logWrap=view.querySelector(".cloud-update-card .game-status-table-wrap");
- if(logWrap)retained.push({selector:".cloud-update-card .game-status-table-wrap",node:logWrap,html:logWrap.innerHTML,scrollTop:logWrap.scrollTop});
- view.querySelectorAll(".account-update-message,.message-box:not(.all-message-box)").forEach((el,index)=>{
-  retained.push({selector:el.classList.contains("account-update-message")?".account-update-message":".message-box:not(.all-message-box)",index,node:el,text:el.textContent});
- });
+ // Keep the complete deployment-log card (including each independently
+ // scrollable .stage-detail) mounted across polling renders. Recreate it only
+ // when the actual log content changes.
+ const logCard=view.querySelector(".cloud-update-card");
+ if(logCard)retained.push({selector:".cloud-update-card",node:logCard,html:logCard.innerHTML});
  const previousMessageBox=page==="messages"?view.querySelector(".all-message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
  const wasAtMessageBottom=previousMessageBox
@@ -144,16 +142,8 @@ function render(){
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
  retained.forEach(saved=>{
-  if(saved.html!==undefined){
-   const current=view.querySelector(saved.selector);
-   if(current&&current.innerHTML===saved.html){
-    current.replaceWith(saved.node);
-    saved.node.scrollTop=saved.scrollTop;
-   }
-   return;
-  }
-  const current=view.querySelectorAll(saved.selector)[saved.index];
-  if(current&&current.textContent===saved.text)current.replaceWith(saved.node);
+  const current=view.querySelector(saved.selector);
+  if(current&&current.innerHTML===saved.html)current.replaceWith(saved.node);
  });
  if(page==="messages"){
   const currentMessageBox=view.querySelector(".all-message-box");
