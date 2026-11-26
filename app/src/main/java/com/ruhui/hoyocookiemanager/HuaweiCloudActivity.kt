@@ -622,7 +622,6 @@ open class HuaweiCloudActivity : Activity() {
                             val lines = if (names.isEmpty()) emptyList() else matched.filter { line -> names.any { line.contains(it, true) } }
                             perGame[game] = when {
                                 lines.firstOrNull(::isOutcome) != null -> outcome(lines.first(::isOutcome))
-                                account.games.size == 1 && matched.firstOrNull(::isOutcome) != null -> outcome(matched.first(::isOutcome))
                                 else -> "unknown"
                             }
                         }
@@ -639,7 +638,6 @@ open class HuaweiCloudActivity : Activity() {
                             val names = aliases[game].orEmpty()
                             val lines = if (names.isEmpty()) emptyList() else matched.filter { line -> names.any { line.contains(it, true) } }
                             val outcomeLine = lines.firstOrNull(::isOutcome)
-                                ?: if (account.games.size == 1) matched.firstOrNull(::isOutcome) else null
                             gameDetails.put(game, JSONObject()
                                 .put("status", when (perGame[game]) { "success" -> "今日签到成功"; "failed" -> "今日签到失败"; else -> "未获取到明确结果" })
                                 .put("reason", outcomeLine ?: if (lines.isEmpty()) "没有找到包含此游戏名称的签到日志，不能据此认定签到失败。" else "已找到相关日志，但没有识别到明确的成功或失败标记。")
