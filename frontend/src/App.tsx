@@ -110,6 +110,7 @@ export default function App() {
     callNative("backToHome");
   };
 
+  // Return to the first (account list) tab without remounting the main content.
   const goToAccountList = useCallback(() => {
     setSelectedId(null);
     setTodayGame({ key: null, label: null });
