@@ -297,9 +297,9 @@ open class HuaweiCloudActivity : Activity() {
                         store.update(account.copy(
                             platformUserId = identity ?: account.platformUserId,
                             games = enabledCnGames,
-                            credentialReady = true,
-                            cookieReady = true,
-                            tokenReady = tokenReady
+                            // Cloud configuration import is not a fresh login-page acquisition.
+                            // Preserve the current app-session status (new accounts default to false).
+                            credentialReady = true
                         ))
                         imported++
                     }
@@ -326,9 +326,9 @@ open class HuaweiCloudActivity : Activity() {
                         store.update(account.copy(
                             platformUserId = identity ?: account.platformUserId,
                             games = enabledOsGames,
-                            credentialReady = true,
-                            cookieReady = true,
-                            tokenReady = tokenReady
+                            // Cloud configuration import is not a fresh login-page acquisition.
+                            // Preserve the current app-session status (new accounts default to false).
+                            credentialReady = true
                         ))
                         imported++
                     }
@@ -357,6 +357,8 @@ open class HuaweiCloudActivity : Activity() {
                             // Endfield is an additional Skland game; keep any existing
                             // game selections and ensure Endfield is checked as requested.
                             games = account.games + "endfield",
+                            // Importing a cloud token does not count as a token freshly acquired
+                            // during this app session; preserve tokenReady as-is.
                             credentialReady = true
                         ))
                         imported++
