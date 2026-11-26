@@ -226,7 +226,10 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             runOnUiThread { selectedAccountId = id; pushState() }
         }
         @JavascriptInterface fun backToHome() {
-            runOnUiThread { selectedAccountId = null; pushState() }
+            // This bridge only synchronizes native back-button state.
+            // Do not call pushState() here: it rebuilds the full account snapshot
+            // (including AccountStore reads) on the UI thread and can freeze WebView navigation.
+            runOnUiThread { selectedAccountId = null }
         }
 
         @JavascriptInterface fun refreshTodayStatuses() {
