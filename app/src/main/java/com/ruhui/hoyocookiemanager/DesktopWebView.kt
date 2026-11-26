@@ -79,8 +79,12 @@ object DesktopWebView {
                 meta.name = 'viewport';
                 head.appendChild(meta);
               }
-              meta.setAttribute('content',
-                'width=980, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes');
+              var desktopViewport = 'width=980, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes';
+              // Avoid rewriting the viewport meta on every same-site navigation:
+              // changing it forces Chromium to recalculate the page layout.
+              if (meta.getAttribute('content') !== desktopViewport) {
+                meta.setAttribute('content', desktopViewport);
+              }
             })();
         """.trimIndent()
         view.evaluateJavascript(script, null)
@@ -115,21 +119,8 @@ object DesktopWebView {
         view.isFocusable = true
         view.isFocusableInTouchMode = true
 
-        // Keep horizontal drags inside WebView when hosted by a scrolling parent.
-        // Returning false preserves WebView's own pinch-zoom and page gestures.
-        view.setOnTouchListener { touched, event ->
-            when (event.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN,
-                android.view.MotionEvent.ACTION_MOVE,
-                android.view.MotionEvent.ACTION_POINTER_DOWN ->
-                    touched.parent?.requestDisallowInterceptTouchEvent(true)
-                android.view.MotionEvent.ACTION_UP,
-                android.view.MotionEvent.ACTION_CANCEL ->
-                    touched.parent?.requestDisallowInterceptTouchEvent(false)
-            }
-            false
-        }
-
+        // Do not install a custom touch listener: let Chromium handle drag,
+        // fling and pinch gestures directly without an extra app-side event path.
         val cookies = CookieManager.getInstance()
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(view, true)
