@@ -77,7 +77,8 @@ function renderDetail(a){
   html+='<div class="card"><div class="card-title">更新上传</div>';
   html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Token 状态</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取最新':'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
-  html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
+  html+='<button class="primary" data-action="deploy-skland-account">更新云函数并上传</button>';
+  html+='<p class="hint">上传当前账号已加密保存的 Token；其他森空岛账号及云端配置保持不变。</p></div>';
  }
  const stages=Array.isArray(a.cloudUpdateStages)?a.cloudUpdateStages:[];
  const stageRows=stages.map(s=>'<tr><td>'+esc(s.label||"执行阶段")+'</td><td><span class="stage-result '+(s.status==="成功"||s.status==="已存在"||s.status==="已创建"?"success":s.status==="失败"?"failed":s.status==="进行中"?"pending":"neutral")+'">'+esc(s.status||"未执行")+'</span><div class="stage-detail">'+esc(s.detail||"")+'</div></td></tr>').join("");
@@ -156,6 +157,13 @@ document.addEventListener("click",e=>{
    toast("正在合并云端配置并上传")
   }
  if(action==="skland-login"){const a=account();if(a)native("openLogin",a.id)}
+ if(action==="deploy-skland-account"){
+  const a=account();if(!a)return;
+  if(!a.tokenReady){toast("请先打开本账号森空岛登录页面并成功获取 Token");return}
+  if(!state.cloudConnected){toast("请先连接华为云");return}
+  native("deploySklandAccount",a.id);
+  toast("正在合并森空岛 Token 并上传云函数")
+ }
  if(action==="cloud-login"){
   cloudDraft.region=$("#cloud-region").value;cloudDraft.ak=$("#cloud-ak").value;cloudDraft.sk=$("#cloud-sk").value;
   native("cloudLogin",cloudDraft.region,cloudDraft.ak,cloudDraft.sk);toast("正在验证华为云凭据")
