@@ -650,6 +650,7 @@ open class HuaweiCloudActivity : Activity() {
     }
 
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
+        AppMessageBus.resetAccountStages(this, accountId)
         val title = "HoYoLAB 更新"
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
             showAccountDeployMessage(accountId, "$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
@@ -674,7 +675,6 @@ open class HuaweiCloudActivity : Activity() {
             return
         }
 
-        AppMessageBus.resetAccountStages(this, accountId)
         AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端函数并准备上传。")
         showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
         worker.execute {
