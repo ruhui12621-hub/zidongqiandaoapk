@@ -272,10 +272,9 @@ class MainActivity : HuaweiCloudActivity() {
                         // the site's login overlay/window behavior. Only relax zoom restrictions here.
                         if (activePlatform == AccountStore.HOYOLAB) {
                             DesktopWebView.enablePageZoom(view)
-                            // Do not force horizontal centering: it crops both page edges on narrow screens.
-                            // Keep the page at its natural left origin; WebView overview and native
-                            // horizontal scrolling preserve access to the complete desktop layout.
-                            view.scrollTo(0, 0)
+                            // Fit the desktop document before positioning it; never jump
+                            // into the middle of overflowing content where both edges are hidden.
+                            DesktopWebView.centerDesktopContent(view)
                         } else {
                             DesktopWebView.enableDesktopViewport(view)
                         }
