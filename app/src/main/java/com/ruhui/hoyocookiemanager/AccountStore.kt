@@ -30,6 +30,7 @@ class AccountStore(context: Context) {
     @Synchronized
     fun add(platform: String, name: String = "", platformUserId: String? = null, games: Set<String> = emptySet()): ManagedAccount {
         require(platform in PLATFORMS) { "不支持的账号平台" }
+        require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "所选游戏不属于当前平台" }
         val normalized = normalizeUserId(platformUserId)
         val existing = if (normalized != null) all().firstOrNull {
             it.platform == platform && it.platformUserId == normalized
@@ -49,6 +50,7 @@ class AccountStore(context: Context) {
     @Synchronized
     fun update(account: ManagedAccount) {
         require(account.platform in PLATFORMS) { "不支持的账号平台" }
+        require(account.games.all { GlobalModuleRegistry.isGameAllowed(account.platform, it) }) { "账号启用了不属于当前平台的游戏" }
         synchronized(cache) {
             val index = cache.indexOfFirst { it.id == account.id }
             require(index >= 0) { "账号不存在" }
