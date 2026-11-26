@@ -644,6 +644,11 @@ open class HuaweiCloudActivity : Activity() {
         AppMessageBus.postForAccount(this, accountId, title, detail, success)
     }
 
+    /** Record each deployment stage in both the account detail and app-wide logs. */
+    private fun logAccountDeployStep(accountId: String, detail: String, success: Boolean? = null) {
+        showAccountDeployMessage(accountId, "HoYoLAB 部署进度", detail, success)
+    }
+
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
         val title = "HoYoLAB 更新"
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
@@ -673,32 +678,51 @@ open class HuaweiCloudActivity : Activity() {
         worker.execute {
             try {
                 val functionName = HOYOLAB_FUNCTION
+                logAccountDeployStep(accountId, "正在读取 APK 内置函数包 cloud/hoyolab.zip。")
                 val packaged = readPackagedZip("cloud/hoyolab.zip")
+                logAccountDeployStep(accountId, "内置函数包读取成功，大小：${packaged.size} 字节。", true)
                 val cloudYaml = HuaweiCloudSession.lastConfigYaml
-                val baseYaml = if (cloudYaml.isNotBlank()) cloudYaml
-                    else readZipEntryText(packaged, "config/config.yaml")
+                val baseYaml = if (cloudYaml.isNotBlank()) {
+                    logAccountDeployStep(accountId, "已取得云端原配置，将在原配置上进行局部修改。", true)
+                    cloudYaml
+                } else {
+                    logAccountDeployStep(accountId, "尚无已读取的云端配置，改用 APK 内置默认配置。")
+                    readZipEntryText(packaged, "config/config.yaml")
+                }
                 val mergedCookieYaml = replaceCloudCookie(baseYaml, pendingCookie, pendingServer)
+                logAccountDeployStep(accountId, "Cookie 已定位并合并到 ${if (pendingServer == "cn") "account.cookie" else "games.os.cookie"}；未输出 Cookie 内容。", true)
                 val selectedGames = try {
                     val array = org.json.JSONArray(selectedGamesJson)
                     (0 until array.length()).map { array.getString(it) }.toSet()
                 } catch (e: Exception) { error("游戏选择数据无效，已停止上传。") }
                 val mergedYaml = replaceCloudGames(mergedCookieYaml, selectedGames, pendingServer)
+                logAccountDeployStep(accountId, "游戏签到选项已按当前选择更新，正在重新打包 ZIP。", true)
                 val archive = replaceZip(packaged, "config/config.yaml", mergedYaml)
-                val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive)
+                logAccountDeployStep(accountId, "函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
+                val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive) { detail, success ->
+                    logAccountDeployStep(accountId, detail, success)
+                }
+                logAccountDeployStep(accountId, "函数代码提交完成，正在等待 FunctionGraph 函数就绪。")
                 val function = waitForFunction(functionName)
+                logAccountDeployStep(accountId, "已查询到函数并取得函数 URN，函数已就绪。", true)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                logAccountDeployStep(accountId, "正在调用函数进行一次测试运行。")
                 val testSummary = invokeFunctionOnce(urn)
+                logAccountDeployStep(accountId, "测试运行成功：$testSummary", true)
+                logAccountDeployStep(accountId, "正在查询现有定时触发器。")
                 val timerSummary = ensureDailyTimerIfMissing(urn)
+                logAccountDeployStep(accountId, "定时触发器检查完成：$timerSummary", true)
                 val action = if (created) "创建" else "更新"
                 runOnUiThread {
                     HuaweiCloudSession.lastConfigYaml = mergedYaml
                     configYaml = mergedYaml
                     showAccountDeployMessage(accountId, "HoYoLAB 部署及检查完成",
-                        "函数" + action + "成功。\nCookie 已写入当前账号对应的配置位置。\n云端其余配置均保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                        "最终结果：函数${action}成功。\nCookie 已写入当前账号对应的配置位置。\n云端其余配置均保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
+                    logAccountDeployStep(accountId, "流程中止：${e.message ?: e.javaClass.simpleName}", false)
                     showAccountDeployMessage(accountId, "$title 失败", e.message ?: e.javaClass.simpleName, false)
                 }
             }
@@ -960,22 +984,34 @@ open class HuaweiCloudActivity : Activity() {
         return bytes
     }
 
-    private fun createOrUpdateFunction(name: String, handler: String, archive: ByteArray): Boolean {
+    private fun createOrUpdateFunction(
+        name: String,
+        handler: String,
+        archive: ByteArray,
+        onStep: (String, Boolean?) -> Unit = { _, _ -> }
+    ): Boolean {
         val base = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" +
             projectId + "/fgs/functions"
         fun findExact(): JSONObject? {
-            val rows = signedGet(base + "?func_name=" + enc(name) + "&precise_search=true&maxitems=10")
-                .optJSONArray("functions") ?: return null
+            val response = signedGet(base + "?func_name=" + enc(name) + "&precise_search=true&maxitems=10")
+            val rows = response.optJSONArray("functions")
+                ?: error("FunctionGraph 函数查询未返回 functions 列表，无法判断函数是否存在；已停止上传。")
             val matches = (0 until rows.length()).map { rows.getJSONObject(it) }
                 .filter { it.optString("func_name") == name }
             if (matches.size > 1) error("固定目标函数出现重名，已停止部署。")
             return matches.singleOrNull()
         }
+        onStep("正在向华为云查询目标函数「$name」是否存在。", null)
+        val existing = findExact()
+        onStep(
+            if (existing == null) "查询成功：云端不存在目标函数「$name」，本次将新建函数。"
+            else "查询成功：云端已存在目标函数「$name」，本次将覆盖更新其代码（保留函数本身及其他设置）。",
+            true
+        )
         val encoded = Base64.encodeToString(archive, Base64.NO_WRAP)
         val code = JSONObject().put("code_filename", "index.zip")
             .put("code_type", "zip")
             .put("func_code", JSONObject().put("file", encoded))
-        val existing = findExact()
         if (existing == null) {
             val body = JSONObject()
                 .put("func_name", name)
@@ -987,13 +1023,22 @@ open class HuaweiCloudActivity : Activity() {
                 .put("code_filename", "index.zip")
                 .put("code_type", "zip")
                 .put("func_code", JSONObject().put("file", encoded))
+            onStep("正在提交新建函数请求。", null)
             val response = signedRequest("POST", base, body.toString())
-            if (response.first in 200..299) return true
+            if (response.first in 200..299) {
+                onStep("新建函数请求成功（HTTP ${response.first}）。", true)
+                return true
+            }
+            onStep("新建请求返回 HTTP ${response.first}，正在重新查询函数，确认是否发生并发创建。", null)
             val raced = findExact() ?: error("创建函数失败（HTTP ${response.first}）：" + response.second.take(1600))
+            onStep("重新查询确认函数已由其他请求创建，改为更新该函数代码。", true)
             updateExistingCode(raced, code)
+            onStep("并发创建后的代码覆盖更新成功。", true)
             return false
         }
+        onStep("正在覆盖上传现有函数的代码包。", null)
         updateExistingCode(existing, code)
+        onStep("覆盖上传成功：FunctionGraph 已接受代码更新请求。", true)
         return false
     }
 
