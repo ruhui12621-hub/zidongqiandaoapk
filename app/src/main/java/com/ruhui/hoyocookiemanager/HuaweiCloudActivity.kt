@@ -1156,6 +1156,48 @@ open class HuaweiCloudActivity : Activity() {
         return lines.joinToString("\n")
     }
 
+    private fun ensureLtsIsolation(functionUrn: String, platform: String, onStep: (String, Boolean?) -> Unit = { _, _ -> }): String {
+        require(platform == "hoyolab" || platform == "skland") { "未知日志平台：$platform" }
+        val base = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId"
+        val groupName = "zidongqiandao-log"
+        onStep("正在检查 LTS 日志组 $groupName。", null)
+        val groups = signedGet("$base/groups").optJSONArray("log_groups") ?: error("LTS 未返回日志组列表；请检查 LTS 查询权限。")
+        val matches = (0 until groups.length()).mapNotNull { groups.optJSONObject(it) }.filter { it.optString("log_group_name") == groupName }
+        if (matches.size > 1) error("发现多个同名日志组 $groupName，已停止。")
+        val group = matches.singleOrNull() ?: run {
+            onStep("日志组不存在，正在创建 $groupName（保留 7 天）。", null)
+            val response = signedRequest("POST", "$base/groups", JSONObject().put("log_group_name", groupName).put("ttl_in_days", 7).toString())
+            if (response.first !in 200..299) error("创建日志组失败（HTTP ${response.first}）：${response.second.take(600)}")
+            val refreshed = signedGet("$base/groups").optJSONArray("log_groups") ?: error("日志组创建后无法重新查询。")
+            (0 until refreshed.length()).mapNotNull { refreshed.optJSONObject(it) }.singleOrNull { it.optString("log_group_name") == groupName } ?: error("日志组创建后回读失败。")
+        }
+        val groupId = group.optString("log_group_id").takeIf { it.isNotBlank() } ?: error("LTS 日志组缺少 ID。")
+        onStep("日志组检查成功：$groupName。", true)
+        val streamUrl = "$base/groups/${enc(groupId)}/streams"
+        val streamRows = signedGet(streamUrl).optJSONArray("log_streams") ?: error("LTS 未返回日志流列表。")
+        val streamMatches = (0 until streamRows.length()).mapNotNull { streamRows.optJSONObject(it) }.filter { it.optString("log_stream_name") == platform }
+        if (streamMatches.size > 1) error("日志组中存在多个同名日志流 $platform。")
+        val stream = streamMatches.singleOrNull() ?: run {
+            onStep("日志流 $platform 不存在，正在创建（保留 7 天）。", null)
+            val response = signedRequest("POST", streamUrl, JSONObject().put("log_stream_name", platform).put("ttl_in_days", 7).toString())
+            if (response.first !in 200..299) error("创建日志流 $platform 失败（HTTP ${response.first}）：${response.second.take(600)}")
+            val refreshed = signedGet(streamUrl).optJSONArray("log_streams") ?: error("日志流创建后无法重新查询。")
+            (0 until refreshed.length()).mapNotNull { refreshed.optJSONObject(it) }.singleOrNull { it.optString("log_stream_name") == platform } ?: error("日志流创建后回读失败。")
+        }
+        val streamId = stream.optString("log_stream_id").takeIf { it.isNotBlank() } ?: error("日志流 $platform 缺少 ID。")
+        if (stream.has("ttl_in_days") && stream.optInt("ttl_in_days", 7) != 7) error("日志流 $platform 保留期不是 7 天，请先在 LTS 控制台调整；未继续绑定。")
+        onStep("日志流检查成功：$platform（保留期 7 天）。", true)
+        val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/config"
+        onStep("正在读取函数配置并设置专属日志流。", null)
+        val config = signedGet(configUrl)
+        config.put("log_config", JSONObject().put("group_name", groupName).put("group_id", groupId).put("stream_name", platform).put("stream_id", streamId))
+        val update = signedRequest("PUT", configUrl, config.toString())
+        if (update.first !in 200..299) error("函数日志绑定失败（HTTP ${update.first}）：${update.second.take(800)}")
+        val verify = signedGet(configUrl).optJSONObject("log_config") ?: error("函数日志绑定后回读失败。")
+        if (verify.optString("group_id") != groupId || verify.optString("stream_id") != streamId) error("函数日志绑定回读不一致，已拒绝继续。")
+        onStep("函数日志绑定成功并已回读验证：$groupName/$platform。", true)
+        return "日志组：$groupName；日志流：$platform；保留期：7 天；函数绑定已验证。"
+    }
     private fun waitForFunction(name: String): JSONObject {
         val base = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions"
         var lastError = ""
