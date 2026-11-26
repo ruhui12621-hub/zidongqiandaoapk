@@ -8,7 +8,7 @@
     const acquired = state.tokenSaved === true;
     const status = byId("status");
     if (!status) return;
-    status.textContent = acquired ? "Cookie已获取" : "Cookie未获取";
+    status.textContent = acquired ? "Token已获取" : "Token未获取";
     status.classList.toggle("ok", acquired);
     status.classList.toggle("bad", false);
   };
