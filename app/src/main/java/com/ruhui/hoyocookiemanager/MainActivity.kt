@@ -185,7 +185,8 @@ class MainActivity : HuaweiCloudActivity() {
             webView = DesktopWebView.create(
                 this,
                 multiWindow = true,
-                cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE,
+                fitToScreen = activePlatform != AccountStore.HOYOLAB
             ).apply {
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -271,7 +272,9 @@ class MainActivity : HuaweiCloudActivity() {
                         // Use the shared Chromium/WebView viewport and overview-mode
                         // configuration. Avoid post-load DOM viewport rewrites or manual
                         // scroll/zoom loops, which can fight the site's own layout and crop content.
-                        if (activePlatform != AccountStore.HOYOLAB) {
+                        if (activePlatform == AccountStore.HOYOLAB) {
+                            DesktopWebView.centerDesktopContent(view)
+                        } else {
                             DesktopWebView.enableDesktopViewport(view)
                         }
                         requestCookieRefresh()
@@ -306,7 +309,8 @@ class MainActivity : HuaweiCloudActivity() {
         return DesktopWebView.create(
             this,
             multiWindow = false,
-            cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE,
+            fitToScreen = activePlatform != AccountStore.HOYOLAB
         ).apply {
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -335,6 +339,9 @@ class MainActivity : HuaweiCloudActivity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
+                    if (activePlatform == AccountStore.HOYOLAB) {
+                        DesktopWebView.centerDesktopContent(view)
+                    }
                     // Popup inherits the shared native WebView zoom and viewport settings.
                     requestCookieRefresh()
                     view.postDelayed({ requestCookieRefresh() }, 900L)
