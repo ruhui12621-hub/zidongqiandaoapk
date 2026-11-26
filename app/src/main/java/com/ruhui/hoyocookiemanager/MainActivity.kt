@@ -335,8 +335,7 @@ class MainActivity : HuaweiCloudActivity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
-                    // Preserve the authentication popup's native viewport and window sizing.
-                    DesktopWebView.enablePageZoom(view)
+                    // Popup inherits the shared native WebView zoom and viewport settings.
                     requestCookieRefresh()
                     view.postDelayed({ requestCookieRefresh() }, 900L)
                     view.postDelayed({ requestCookieRefresh() }, 2200L)
