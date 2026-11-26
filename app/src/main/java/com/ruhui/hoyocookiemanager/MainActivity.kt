@@ -340,8 +340,8 @@ class MainActivity : HuaweiCloudActivity() {
         if (activePlatform != null && activePlatform != cachedPlatform) return
         cookieValue = cached
         detectedGameServer = server
-        activeAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId.ifBlank { activeAccountId.orEmpty() }
-            .ifBlank { null }
+        HuaweiCloudSession.pendingHoyoCookieAccountId
+            .takeIf { it.isNotBlank() }?.let { activeAccountId = it }
         yamlValue = makeYaml(cached, server)
         statusText = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
         detailsText = "已保留本次应用运行期间最新获取的 Cookie。"
@@ -386,7 +386,6 @@ class MainActivity : HuaweiCloudActivity() {
             if (requested != null && requested.platform != platform) {
                 statusText = "账号平台不匹配"
                 detailsText = "当前登录凭据识别为${AccountStore.platformLabel(platform)}，但正在编辑的是${AccountStore.platformLabel(requested.platform)}。请返回并选择正确的平台账号。"
-                HuaweiCloudSession.clearPendingHoyoCookie()
                 pushLoginChrome()
                 return
             }
@@ -398,7 +397,6 @@ class MainActivity : HuaweiCloudActivity() {
             if (identity != null && account.platformUserId != null && account.platformUserId != identity) {
                 statusText = "检测到不同账号"
                 detailsText = "当前登录身份与此账号已绑定的 ID 不同。为避免覆盖其他账号，请新建一个账号后再登录。"
-                HuaweiCloudSession.clearPendingHoyoCookie()
                 return
             }
             val duplicate = identity?.let { uid ->
@@ -569,6 +567,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun clearSession() {
+        HuaweiCloudSession.clearPendingHoyoCookie()
         CookieManager.getInstance().removeAllCookies {
             CookieManager.getInstance().flush()
             cookieValue = ""
