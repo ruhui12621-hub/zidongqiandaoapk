@@ -18,7 +18,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(frontendRoot, "index.html"),
-        "skland-status": resolve(frontendRoot, "skland-status.html")
+        "skland-status": resolve(frontendRoot, "skland-status.html"),
+        "login-status": resolve(frontendRoot, "login-status.html")
       }
     }
   }
