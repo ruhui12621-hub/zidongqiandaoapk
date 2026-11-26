@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Build
 import android.view.View
 import android.view.ViewGroup
@@ -24,6 +26,20 @@ class MainActivity : HuaweiCloudActivity() {
     private var statusText = "登录状态：尚未检测"
     // True only when this login-page Activity has successfully acquired a Cookie.
     private var pageCookieAcquired = false
+    private var initialCookieSnapshot = ""
+    private var lastCookieSnapshot = ""
+    private val cookiePollHandler = Handler(Looper.getMainLooper())
+    private val cookiePollTask = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed || pageCookieAcquired) return
+            val current = readCookieSnapshot()
+            if (current != lastCookieSnapshot) {
+                lastCookieSnapshot = current
+                refreshFromWebView()
+            }
+            if (!pageCookieAcquired) cookiePollHandler.postDelayed(this, 1500L)
+        }
+    }
     private var detailsText = "登录后自动检测 Cookie。"
     private lateinit var webView: WebView
     private lateinit var loginChrome: WebView
@@ -54,6 +70,8 @@ class MainActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
         CookieManager.getInstance().setAcceptCookie(true)
+        initialCookieSnapshot = readCookieSnapshot()
+        lastCookieSnapshot = initialCookieSnapshot
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
@@ -65,6 +83,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         buildHome()
         showBrowser()
+        cookiePollHandler.postDelayed(cookiePollTask, 1200L)
     }
 
     override fun onDestroy() {
@@ -91,6 +110,7 @@ class MainActivity : HuaweiCloudActivity() {
         } catch (_: Exception) {
             // Ignore WebView teardown failures; no credential data is written by this Activity.
         }
+        cookiePollHandler.removeCallbacks(cookiePollTask)
         super.onDestroy()
     }
 
@@ -350,7 +370,7 @@ class MainActivity : HuaweiCloudActivity() {
         detailsText = "已保留本次应用运行期间最新获取的 Cookie。"
     }
 
-    private fun refreshFromWebView(showToast: Boolean = false) {
+    private fun readCookieSnapshot(): String {
         val manager = CookieManager.getInstance()
         val collected = linkedSetOf<String>()
         cookieUrls.forEach { url ->
@@ -359,7 +379,11 @@ class MainActivity : HuaweiCloudActivity() {
                 ?.filter { it.contains('=') }
                 ?.forEach { collected.add(it) }
         }
-        val found = collected.joinToString("; ")
+        return collected.sorted().joinToString("; ")
+    }
+
+    private fun refreshFromWebView(showToast: Boolean = false) {
+        val found = readCookieSnapshot()
         cookieValue = found
         val names = found.split(';')
             .mapNotNull { it.trim().substringBefore('=').takeIf { name -> name.isNotBlank() } }
@@ -426,7 +450,9 @@ class MainActivity : HuaweiCloudActivity() {
                 tokenReady = tokenKeys.any { !cookieFields[it].isNullOrBlank() }
             )
             store.update(account)
-            pageCookieAcquired = true
+            val normalizedInitial = initialCookieSnapshot.split(';').map { it.trim() }.filter { it.isNotBlank() }.sorted().joinToString("; ")
+            val normalizedCurrent = found.split(';').map { it.trim() }.filter { it.isNotBlank() }.sorted().joinToString("; ")
+            if (normalizedCurrent != normalizedInitial) pageCookieAcquired = true
             activeAccountId = account.id
 
             val server = detectedGameServer!!
