@@ -54,7 +54,7 @@ function renderDetail(a){
    const result=enabled?(gameStates[key]||"unknown"):"unconfigured";
    const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
    const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
-   return '<tr><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
+   return '<tr data-game="'+esc(key)+'" class="today-game-row"><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
   }).join("");
   html+='<div class="card today-status-card" data-action="open-today-detail"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
@@ -99,11 +99,11 @@ function renderTodayDetail(a){
  const reason=chosen?.reason||data.reason||"暂未获取到明确的失败原因。";
  const raw=chosen?.rawMessages||data.rawMessages||[];
  const rawText=Array.isArray(raw)?raw.join("\n"):String(raw||"");
- const allRaw=Array.isArray(data.allRawMessages)?data.allRawMessages.join("\n"):String(data.allRawMessages||"");
+ const allRaw=chosen?(Array.isArray(chosen.rawMessages)?chosen.rawMessages.join("\n"):String(chosen.rawMessages||"")):(Array.isArray(data.allRawMessages)?data.allRawMessages.join("\n"):String(data.allRawMessages||""));
  let out='<div class="detail-head"><button class="back-button" data-action="today-detail-back">‹</button><div class="detail-title"><h1>'+esc(title)+'</h1><p>'+esc(a.name)+' · '+esc(a.platformLabel)+' · 今日签到详情</p></div></div>';
  out+='<div class="card"><div class="card-title">状态判定</div><div class="metric"><strong>'+esc(status)+'</strong><p class="hint">'+esc(reason)+'</p></div></div>';
  out+='<div class="card"><div class="card-title">收到的原始消息</div><div class="message-box">'+esc(rawText||"没有找到与此游戏匹配的原始消息。")+'</div><button class="secondary" data-action="copy-today-detail" data-copy="game">复制原始消息</button></div>';
- out+='<div class="card"><div class="card-title">云函数今日完整日志</div><div class="message-box">'+esc(allRaw||"没有读取到云函数日志。")+'</div><button class="secondary" data-action="copy-today-detail" data-copy="all">复制完整日志</button></div>';
+ out+='<div class="card"><div class="card-title">云函数今日日志</div><div class="message-box">'+esc(allRaw||(chosen?"没有找到属于此游戏的云函数日志。":"没有读取到云函数日志。"))+'</div><button class="secondary" data-action="copy-today-detail" data-copy="all">复制云函数日志</button></div>';
  return out
 }
 function renderCloud(){
@@ -123,11 +123,14 @@ function renderMessages(){
 function render(){
  // Keep unchanged log/output DOM nodes alive during state polling.
  // Only replace a pane when its actual text content has changed.
- const persistentSelectors=[".stage-detail",".account-update-message",".message-box:not(.all-message-box)"];
  const retained=[];
- persistentSelectors.forEach(selector=>view.querySelectorAll(selector).forEach((el,index)=>{
-  retained.push({selector,index,node:el,text:el.textContent});
- }));
+ // The scroll position belongs to the wrapper, not the text node. Keep the
+ // entire cloud-log scroll container alive when its content has not changed.
+ const logWrap=view.querySelector(".cloud-update-card .game-status-table-wrap");
+ if(logWrap)retained.push({selector:".cloud-update-card .game-status-table-wrap",node:logWrap,html:logWrap.innerHTML,scrollTop:logWrap.scrollTop});
+ view.querySelectorAll(".account-update-message,.message-box:not(.all-message-box)").forEach((el,index)=>{
+  retained.push({selector:el.classList.contains("account-update-message")?".account-update-message":".message-box:not(.all-message-box)",index,node:el,text:el.textContent});
+ });
  const previousMessageBox=page==="messages"?view.querySelector(".all-message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
  const wasAtMessageBottom=previousMessageBox
@@ -141,10 +144,16 @@ function render(){
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
  retained.forEach(saved=>{
-  const current=view.querySelectorAll(saved.selector)[saved.index];
-  if(current&&current.textContent===saved.text){
-   current.replaceWith(saved.node);
+  if(saved.html!==undefined){
+   const current=view.querySelector(saved.selector);
+   if(current&&current.innerHTML===saved.html){
+    current.replaceWith(saved.node);
+    saved.node.scrollTop=saved.scrollTop;
+   }
+   return;
   }
+  const current=view.querySelectorAll(saved.selector)[saved.index];
+  if(current&&current.textContent===saved.text)current.replaceWith(saved.node);
  });
  if(page==="messages"){
   const currentMessageBox=view.querySelector(".all-message-box");
