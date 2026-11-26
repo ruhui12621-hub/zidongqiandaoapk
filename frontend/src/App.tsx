@@ -109,6 +109,14 @@ export default function App() {
     setPage("home"); setSelectedId(null); setTodayGame({key:null,label:null}); setGameDraft(null);
     callNative("backToHome");
   };
+
+  const goToAccountList = useCallback(() => {
+    setSelectedId(null);
+    setTodayGame({ key: null, label: null });
+    setGameDraft(null);
+    setPage("home");
+    window.scrollTo(0, 0);
+  }, []);
   const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
   const goBack = () => {
     if (modal) { closeModal(); return; }
@@ -335,8 +343,8 @@ export default function App() {
       <div className="brand-copy"><strong>游戏自动签到</strong></div>
       {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
-    <main className="main-content" key={page + ":" + (selectedId || "")}>
-      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={() => {setSelectedId(null);setPage("home");setTodayGame({key:null,label:null});setGameDraft(null);}} /> : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
+    <main className="main-content">
+      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={goToAccountList} /> : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
     </main>
     {!selectedId && <nav className="bottom-nav">
       <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
