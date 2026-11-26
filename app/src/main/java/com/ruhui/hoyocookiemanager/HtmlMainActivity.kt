@@ -6,16 +6,19 @@ import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.webkit.WebViewAssetLoader
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Single HTML-driven application shell. All visible app UI lives in assets/ui. */
+/** Single React-driven application shell. All visible app UI lives in bundled assets/ui. */
 class HtmlMainActivity : HuaweiCloudActivity() {
     private lateinit var shell: FrameLayout
     private lateinit var ui: WebView
+    private lateinit var assetLoader: WebViewAssetLoader
     private var selectedAccountId: String? = null
     private var todayStatuses: Map<String, String> = emptyMap()
     private var todayGameStatuses: Map<String, Map<String, String>> = emptyMap()
@@ -28,26 +31,30 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
         AccountStore.clearMemory()
-        shell = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }
+        assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+        shell = FrameLayout(this).apply { setBackgroundColor(Color.rgb(33, 33, 33)) }
         ui = WebView(this).apply {
-            setBackgroundColor(Color.rgb(5, 5, 5))
+            setBackgroundColor(Color.rgb(33, 33, 33))
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.allowFileAccess = true
+            settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.allowFileAccessFromFileURLs = false
-            settings.allowUniversalAccessFromFileURLs = false
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.loadsImagesAutomatically = true
             settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
             addJavascriptInterface(HtmlBridge(), "Android")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    return assetLoader.shouldInterceptRequest(request.url)
+                }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    return !request.url.toString().startsWith("file:///android_asset/ui/")
+                    return request.url.host != "appassets.androidplatform.net"
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (url == "file:///android_asset/ui/index.html") {
+                    if (url == "https://appassets.androidplatform.net/assets/ui/index.html") {
                         pageReady = true
                         pushState()
                     }
@@ -57,7 +64,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         shell.addView(ui, FrameLayout.LayoutParams(-1, -1))
         prepareHtmlCloudBackend(shell)
         setContentView(shell)
-        ui.loadUrl("file:///android_asset/ui/index.html")
+        ui.loadUrl("https://appassets.androidplatform.net/assets/ui/index.html")
 
         if (runCatching { AndroidCredentialVault(this).latest() }.getOrNull() != null) {
             synchronizeCloudAccounts { success, message ->
@@ -124,7 +131,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             todayQuerying = false
             val accountNames = AccountStore(this).all().associate { it.id to it.name }
             val resultLines = statuses.entries.joinToString("\n") { (id, status) ->
-                "${accountNames[id] ?: "账号"}：$status"
+                "\${accountNames[id] ?: "账号"}：\$status"
             }
             val downloadFailed = summary.contains("失败") || summary.contains("未配置华为云") ||
                 statuses.values.any { value ->
@@ -133,8 +140,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                         value.contains("未连接华为云") || value.contains("无法获取签到结果")
                 }
             val completed = !downloadFailed
-            AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息下载${if (completed) "完成" else "失败"}",
-                "日志读取结果：$summary" + if (resultLines.isNotBlank()) "\n账号状态：\n$resultLines" else "\n没有可展示的账号状态。", completed)
+            AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息下载\${if (completed) "完成" else "失败"}",
+                "日志读取结果：\$summary" + if (resultLines.isNotBlank()) "\n账号状态：\n\$resultLines" else "\n没有可展示的账号状态。", completed)
             pushState()
         }
     }
