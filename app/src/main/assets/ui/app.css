@@ -49,3 +49,10 @@
 .account-update-message.success{color:var(--green);border-color:rgba(139,199,160,.28)}
 .account-update-message.failed{color:var(--red);border-color:rgba(217,138,130,.3)}
 .account-update-message.pending{color:var(--amber);border-color:rgba(223,185,110,.25)}
+
+
+/* Compact opt-in incognito toggle beside the login-page action. */
+.login-action-row{display:flex;align-items:center;gap:12px;margin-top:10px;min-width:0}
+.login-action-row>.primary{flex:1;min-width:0;width:auto;max-width:none;margin:0;white-space:nowrap}
+.incognito-option{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;min-height:44px;padding:0 3px;color:#d5c7aa;font-size:12px;white-space:nowrap;cursor:pointer}
+.incognito-option input{width:17px;height:17px;margin:0;accent-color:#d6b36a}

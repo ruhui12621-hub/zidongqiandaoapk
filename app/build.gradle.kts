@@ -23,4 +23,5 @@ android {
 
 dependencies {
     implementation("com.huaweicloud:esdk-obs-android:3.24.3")
+    implementation("androidx.webkit:webkit:1.9.0")
 }

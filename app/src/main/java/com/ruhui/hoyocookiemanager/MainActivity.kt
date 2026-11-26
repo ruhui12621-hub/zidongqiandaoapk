@@ -20,8 +20,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 
 class MainActivity : HuaweiCloudActivity() {
+    companion object {
+        private const val INCOGNITO_PROFILE_NAME = "hoyolab_incognito_session"
+    }
     private lateinit var root: LinearLayout
     private var statusText = "登录状态：尚未检测"
     // True only when this login-page Activity has successfully acquired a Cookie.
@@ -49,6 +54,10 @@ class MainActivity : HuaweiCloudActivity() {
     private var lastLoggedCookieAccountId: String? = null
     private var lastLoggedCookieServer: String? = null
     private var returnToAccountDetail = false
+    private var incognitoMode = false
+    private var incognitoCookieManager: CookieManager? = null
+    private var incognitoWebStorage: WebStorage? = null
+    private var incognitoProfilePrepared = false
     private var browserVisible = false
     private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
@@ -66,11 +75,17 @@ class MainActivity : HuaweiCloudActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
-        CookieManager.getInstance().setAcceptCookie(true)
+        incognitoMode = intent.getBooleanExtra("incognito_login", false)
+        if (incognitoMode && !WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            Toast.makeText(this, "当前系统 WebView 不支持独立无痕空间，请更新 Android System WebView 后重试。", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        if (!incognitoMode) CookieManager.getInstance().setAcceptCookie(true)
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
-        restorePendingCookieSession()
+        if (!incognitoMode) restorePendingCookieSession()
         if (!returnToAccountDetail) AccountStore.clearMemory()
         if (activePlatform != AccountStore.HOYOLAB && activePlatform != AccountStore.MIYOUSHE_CN) {
             finish()
@@ -78,7 +93,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         buildHome()
         showBrowser()
-        cookieRefreshHandler.postDelayed(cookieFallbackTask, 8000L)
+        if (!incognitoMode) cookieRefreshHandler.postDelayed(cookieFallbackTask, 8000L)
     }
 
     override fun onDestroy() {
@@ -100,8 +115,15 @@ class MainActivity : HuaweiCloudActivity() {
                 loginChrome.removeJavascriptInterface("LoginUi")
                 loginChrome.destroy()
             }
-            // Activity recreation/navigation must not erase the process-wide login session.
-            // CookieManager and WebStorage are cleared only by the user's explicit clear action.
+            // Incognito browsing uses its own WebView profile. Wipe that profile's
+            // cookies and web storage after every login Activity session.
+            if (incognitoMode) {
+                incognitoCookieManager?.removeAllCookies {
+                    incognitoCookieManager?.flush()
+                }
+                incognitoWebStorage?.deleteAllData()
+            }
+            // Normal mode keeps the existing process-wide Cookie session behavior.
         } catch (_: Exception) {
             // Ignore WebView teardown failures; no credential data is written by this Activity.
         }
@@ -186,7 +208,8 @@ class MainActivity : HuaweiCloudActivity() {
                 this,
                 multiWindow = true,
                 cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE,
-                fitToScreen = activePlatform != AccountStore.HOYOLAB
+                fitToScreen = activePlatform != AccountStore.HOYOLAB,
+                profileName = if (incognitoMode) INCOGNITO_PROFILE_NAME else null
             ).apply {
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -285,6 +308,12 @@ class MainActivity : HuaweiCloudActivity() {
             }
         }
 
+        if (incognitoMode && incognitoCookieManager == null) {
+            val profile = WebViewCompat.getProfile(webView)
+            incognitoCookieManager = profile.cookieManager
+            incognitoWebStorage = profile.webStorage
+        }
+
         root.removeAllViews()
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -298,7 +327,17 @@ class MainActivity : HuaweiCloudActivity() {
         }
         webView.visibility = android.view.View.VISIBLE
         if (!browserVisible || webView.url.isNullOrBlank()) {
-            webView.loadUrl(if (activePlatform == AccountStore.MIYOUSHE_CN) "https://www.miyoushe.com/" else "https://www.hoyolab.com/")
+            val targetUrl = if (activePlatform == AccountStore.MIYOUSHE_CN) "https://www.miyoushe.com/" else "https://www.hoyolab.com/"
+            if (incognitoMode && !incognitoProfilePrepared) {
+                incognitoProfilePrepared = true
+                incognitoWebStorage?.deleteAllData()
+                incognitoCookieManager?.removeAllCookies {
+                    incognitoCookieManager?.flush()
+                    if (!isFinishing && !isDestroyed) webView.loadUrl(targetUrl)
+                }
+            } else {
+                webView.loadUrl(targetUrl)
+            }
         }
         browserVisible = true
     }
@@ -310,7 +349,8 @@ class MainActivity : HuaweiCloudActivity() {
             this,
             multiWindow = false,
             cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE,
-            fitToScreen = activePlatform != AccountStore.HOYOLAB
+            fitToScreen = activePlatform != AccountStore.HOYOLAB,
+            profileName = if (incognitoMode) INCOGNITO_PROFILE_NAME else null
         ).apply {
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -394,7 +434,7 @@ class MainActivity : HuaweiCloudActivity() {
 
     // Event-first Cookie detection: debounce bursts from navigation/progress/popup events.
     private fun requestCookieRefresh(delayMs: Long = 350L) {
-        if (isFinishing || isDestroyed || pageCookieAcquired) return
+        if (incognitoMode || isFinishing || isDestroyed || pageCookieAcquired) return
         cookieRefreshHandler.removeCallbacks(cookieRefreshTask)
         cookieRefreshHandler.postDelayed(cookieRefreshTask, delayMs)
     }
@@ -405,6 +445,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun readCookieSnapshot(): String {
+        if (incognitoMode) return ""
         val manager = CookieManager.getInstance()
         val collected = linkedSetOf<String>()
         cookieUrls.forEach { url ->
@@ -417,6 +458,12 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun refreshFromWebView(showToast: Boolean = false) {
+        if (incognitoMode) {
+            statusText = "无痕模式：Cookie 不会保存"
+            detailsText = "此登录窗口使用独立的临时浏览数据空间，不读取、提取或保存账号 Cookie。退出页面后会清理该空间的数据。"
+            pushLoginChrome()
+            return
+        }
         val found = readCookieSnapshot()
         cookieValue = found
         val names = found.split(';')
@@ -637,9 +684,10 @@ class MainActivity : HuaweiCloudActivity() {
 
     private fun clearSession() {
         pageCookieAcquired = false
-        HuaweiCloudSession.clearPendingHoyoCookie()
-        CookieManager.getInstance().removeAllCookies {
-            CookieManager.getInstance().flush()
+        if (!incognitoMode) HuaweiCloudSession.clearPendingHoyoCookie()
+        val manager = incognitoCookieManager ?: CookieManager.getInstance()
+        manager.removeAllCookies {
+            manager.flush()
             cookieValue = ""
             yamlValue = ""
             popupWebView?.let { popup ->
@@ -654,11 +702,11 @@ class MainActivity : HuaweiCloudActivity() {
                 webView.clearFormData()
                 webView.visibility = android.view.View.VISIBLE
             }
-            WebStorage.getInstance().deleteAllData()
+            (incognitoWebStorage ?: WebStorage.getInstance()).deleteAllData()
             browserVisible = false
             buildHome()
-            statusText = "登录状态：已清除本地 WebView Cookie"
-            detailsText = "登录会话已清除。"
+            statusText = if (incognitoMode) "无痕浏览数据已清除" else "登录状态：已清除本地 WebView Cookie"
+            detailsText = if (incognitoMode) "独立无痕空间中的 Cookie 和网页存储已清除。" else "登录会话已清除。"
             pushLoginChrome()
             toast("已清除登录会话")
         }

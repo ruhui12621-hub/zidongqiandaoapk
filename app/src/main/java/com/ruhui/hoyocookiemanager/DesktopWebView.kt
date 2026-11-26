@@ -4,6 +4,8 @@ import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 
 /**
  * Shared desktop-browser setup for HoYoLAB and Skland.
@@ -20,9 +22,10 @@ object DesktopWebView {
         context: Context,
         multiWindow: Boolean = true,
         cacheMode: Int = WebSettings.LOAD_DEFAULT,
-        fitToScreen: Boolean = true
+        fitToScreen: Boolean = true,
+        profileName: String? = null
     ): WebView = WebView(context).apply {
-        configure(this, multiWindow, cacheMode, fitToScreen)
+        configure(this, multiWindow, cacheMode, fitToScreen, profileName)
     }
 
     fun enableDesktopViewport(view: WebView) {
@@ -87,8 +90,15 @@ object DesktopWebView {
         view: WebView,
         multiWindow: Boolean = true,
         cacheMode: Int = WebSettings.LOAD_DEFAULT,
-        fitToScreen: Boolean = true
+        fitToScreen: Boolean = true,
+        profileName: String? = null
     ) {
+        if (profileName != null) {
+            check(WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                "当前系统 WebView 不支持多配置文件"
+            }
+            WebViewCompat.setProfile(view, profileName)
+        }
         view.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -125,7 +135,11 @@ object DesktopWebView {
 
         // Do not install a custom touch listener: let Chromium handle drag,
         // fling and pinch gestures directly without an extra app-side event path.
-        val cookies = CookieManager.getInstance()
+        val cookies = if (profileName == null) {
+            CookieManager.getInstance()
+        } else {
+            WebViewCompat.getProfile(view).cookieManager
+        }
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(view, true)
     }

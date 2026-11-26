@@ -4,6 +4,7 @@ const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
 let page="home",selectedId=null,cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
+let incognitoLoginEnabled=false;
 const gameSelections={};
 const hoyoGameOptions={cn:[["genshin","原神"],["honkai2","崩坏2"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]],os:[["genshin","原神"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]]};
 function selectedHoyoGames(a){if(!gameSelections[a.id])gameSelections[a.id]=new Set((a.games||[]).map(g=>g.key));return gameSelections[a.id]}
@@ -59,7 +60,7 @@ function renderDetail(a){
   html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
   html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Cookie 状态</span><strong style="color:'+(accountCookieReady?'var(--green)':'var(--amber)')+'">'+(accountCookieReady?'已获取最新 · '+serverLabel:'未获取')+'</strong></div>';
-  html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
+  html+='<div class="login-action-row"><button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button><label class="incognito-option"><input id="incognito-login" type="checkbox" '+(incognitoLoginEnabled?'checked':'')+'><span>无痕模式</span></label></div>';
   html+='<button class="secondary game-picker-trigger" data-action="open-game-picker">选择要启用的游戏</button>';
   html+='<button class="primary" data-action="deploy-hoyo-account" '+(!pageCookieReady||!state.cloudConnected?'disabled':'')+'>更新云函数并上传</button>';
   html+='<p class="hint">默认勾选云端当前启用的游戏。上传时会同时更新游戏选择和本次网页 Cookie；其他云端配置保持不变。</p></div>';
@@ -154,7 +155,7 @@ document.addEventListener("click",e=>{
   }
  }
  if(action==="back"){selectedId=null;native("backToHome");render()}
- if(action==="hoyo-login"){const a=account();if(a)native("openHoyoLogin",a.id)}
+ if(action==="hoyo-login"){const a=account();if(a){const useIncognito=incognitoLoginEnabled;incognitoLoginEnabled=false;native("openHoyoLogin",a.id,useIncognito)}}
  if(action==="open-game-picker"){showGamePicker()}
  if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id,JSON.stringify(Array.from(selectedHoyoGames(a))));toast("正在合并云端配置并上传")}
  if(action==="skland-login"){const a=account();if(a)native("openSklandLogin",a.id)}
@@ -177,6 +178,7 @@ function showGamePicker(){
 function closeGamePicker(){const root=$("#modal-root");if(root)root.innerHTML=""}
 document.addEventListener("change",e=>{
  if(e.target.matches("input[data-modal-game]"))e.target.dataset.changed="1";
+ if(e.target.id==="incognito-login")incognitoLoginEnabled=e.target.checked;
 });
 document.addEventListener("input",e=>{
  if(e.target.id==="cloud-region")cloudDraft.region=e.target.value;

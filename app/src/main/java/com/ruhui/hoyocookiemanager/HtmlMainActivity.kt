@@ -223,7 +223,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             runOnUiThread { this@HtmlMainActivity.refreshTodayStatuses(force = true) }
         }
 
-        @JavascriptInterface fun openHoyoLogin(id: String) {
+        @JavascriptInterface fun openHoyoLogin(id: String, incognito: Boolean) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
                 HuaweiCloudSession.clearPendingHoyoCookie()
@@ -233,6 +233,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                         .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
                         .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
                         .putExtra("return_to_account_detail", true)
+                        .putExtra("incognito_login", incognito)
                 )
             }
         }
