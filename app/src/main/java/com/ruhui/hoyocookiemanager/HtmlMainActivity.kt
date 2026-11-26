@@ -262,6 +262,11 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
+        @JavascriptInterface fun deploySklandAccount(id: String) {
+            htmlDeploySklandAccount(id)
+            pushState()
+        }
+
         @JavascriptInterface fun getSavedCloudCredentials(): String {
             val pair = runCatching { AndroidCredentialVault(this@HtmlMainActivity).latest() }.getOrNull()
                 ?: return JSONObject().toString()
