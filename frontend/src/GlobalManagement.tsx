@@ -4,7 +4,7 @@ import { Boxes, Braces, ChevronRight, CircleUserRound, Gamepad2, Layers3, Shield
 type Props = {
   accounts: any[];
   gameCatalog: Record<string, any[]>;
-  onOpenAccount: (id: string) => void;
+  onGoToAccountList: () => void;
 };
 
 const gameModules = [
@@ -13,7 +13,7 @@ const gameModules = [
   { id: "skland", label: "森空岛", credential: "Token", catalog: "skland", description: "独立 Token 提取、校验与加密保存" },
 ];
 
-export default function GlobalManagement({ accounts, gameCatalog, onOpenAccount }: Props) {
+export default function GlobalManagement({ accounts, gameCatalog, onGoToAccountList }: Props) {
   const [section, setSection] = useState<"template" | "games" | "accounts">("template");
   const tabs = [
     { id: "template" as const, label: "模板", icon: Layers3 },
@@ -87,7 +87,7 @@ export default function GlobalManagement({ accounts, gameCatalog, onOpenAccount 
         const module = gameModules.find(item => item.id === account.platform);
         const games = account.games || [];
         const labels = (gameCatalog?.[module?.catalog || ""] || []);
-        return <button className="surface-card managed-account-row" key={account.id} onClick={() => onOpenAccount(account.id)}>
+        return <button className="surface-card managed-account-row" key={account.id} onClick={onGoToAccountList}>
           <div className="managed-account-main">
             <strong>{account.name || module?.label || "账号"}</strong>
             <small>{module?.label || account.platform} · ID {String(account.id).slice(0, 8)}</small>
