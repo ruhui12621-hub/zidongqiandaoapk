@@ -3,6 +3,7 @@ package com.ruhui.hoyocookiemanager
 import android.app.Activity
 import android.os.Bundle
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
