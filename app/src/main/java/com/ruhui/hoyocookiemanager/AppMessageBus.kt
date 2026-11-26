@@ -83,6 +83,7 @@ object AppMessageBus {
         setAccountStage(context, accountId, "trigger", "定时触发器", "未执行", "")
         setAccountStage(context, accountId, "test", "函数运行测试", "未执行", "")
         setAccountStage(context, accountId, "output", "测试输出结果", "未执行", "")
+        setAccountStage(context, accountId, "raw_output", "原始输出结果", "未执行", "")
     }
 
     fun setAccountStage(context: Context, accountId: String, stage: String, label: String, status: String, detail: String) {
@@ -93,7 +94,7 @@ object AppMessageBus {
             val json = org.json.JSONObject(prefs.getString(key, "{}").orEmpty())
             json.put(stage, org.json.JSONObject()
                 .put("key", stage).put("label", label).put("status", status)
-                .put("detail", sanitize(detail).take(500)))
+                .put("detail", sanitize(detail).take(if (stage == "raw_output") 4000 else 500)))
             prefs.edit().putString(key, json.toString()).apply()
         }
     }
@@ -105,7 +106,7 @@ object AppMessageBus {
                 .getString(key, "{}").orEmpty()
         }.getOrDefault("{}")
         val json = runCatching { org.json.JSONObject(saved) }.getOrDefault(org.json.JSONObject())
-        val order = listOf("function", "trigger", "test", "output")
+        val order = listOf("function", "trigger", "test", "output", "raw_output")
         val rows = org.json.JSONArray()
         order.forEach { stage ->
             val item = json.optJSONObject(stage) ?: org.json.JSONObject()
@@ -114,7 +115,8 @@ object AppMessageBus {
                     "function" -> "云函数"
                     "trigger" -> "定时触发器"
                     "test" -> "函数运行测试"
-                    else -> "测试输出结果"
+                    "output" -> "测试输出结果"
+                    else -> "原始输出结果"
                 }).put("status", "未执行").put("detail", "")
             rows.put(item)
         }
