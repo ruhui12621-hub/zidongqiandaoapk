@@ -191,7 +191,7 @@ export default function App() {
       </button>
       <div className="section-heading">
         <div><span>{accounts.length} 个账号</span></div>
-        <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在重新获取今日签到情况");}} disabled={state.todayQuerying}>
+        <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在刷新今日签到状态");}} disabled={state.todayQuerying}>
           {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新签到状态
         </button>
       </div>
@@ -262,7 +262,7 @@ export default function App() {
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
         <div className="card-heading"><span>今日签到信息</span><span className="subtle-caption">点击游戏查看详情</span></div>
-        {isHoyo ? <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{allOptions.map((g: AnyState) => {
+        {account.platform === "miyoushe_cn" ? <p className="explanation">当前尚未接入米游社国服的云端签到结果查询；登录凭据和云函数配置仍可管理。</p> : isHoyo ? <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{allOptions.map((g: AnyState) => {
           const enabled = (account.games || []).some((x: AnyState) => x.key === g.key);
           const result = enabled ? (gameStates[g.key] || "unknown") : "unconfigured";
           return <tr key={g.key} onClick={() => {setTodayGame({key:g.key,label:g.label});setPage("today-detail");}}>
@@ -354,7 +354,7 @@ export default function App() {
 
     {modal === "games" && <div className="modal-backdrop" onClick={closeModal}>
       <section className="modal-sheet game-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-title"><div><h2>选择要启用的游戏</h2><p>勾选需要参与自动签到的游戏。</p></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div>
+        <div className="modal-title"><div><h2>选择要启用的游戏</h2><p>勾选需要参与自动签到的游戏。</p></div><button className="icon-button" onClick={closeModal} aria-label="关闭"><X size={18}/></button></div>
         <div className="game-options">{options.map((game: AnyState) => <label className="game-option" key={game.key}>
           <input type="checkbox" checked={(gameDraft || []).includes(game.key)} onChange={e => setGameDraft(old => e.target.checked ? [...(old || []),game.key] : (old || []).filter(x => x !== game.key))}/>
           <span>{game.label}</span><span className="checkmark"><Check size={14}/></span>
