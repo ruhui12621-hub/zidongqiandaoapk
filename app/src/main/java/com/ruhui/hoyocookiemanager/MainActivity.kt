@@ -414,11 +414,12 @@ class MainActivity : HuaweiCloudActivity() {
         val osMarkers = setOf("ltoken_v2", "cookie_token_v2", "account_id_v2", "ltuid_v2")
         val hasCnToken = names.any { it in cnMarkers }
         val hasOsToken = names.any { it in osMarkers }
+        val cookieManager = CookieManager.getInstance()
         val cnDomainHasToken = listOf(
             "https://www.miyoushe.com/", "https://bbs.mihoyo.com/",
             "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/"
         ).any { url ->
-            manager.getCookie(url).orEmpty().split(';').any { part ->
+            cookieManager.getCookie(url).orEmpty().split(';').any { part ->
                 part.trim().substringBefore('=') in cnMarkers
             }
         }
@@ -472,8 +473,6 @@ class MainActivity : HuaweiCloudActivity() {
                 tokenReady = tokenKeys.any { !cookieFields[it].isNullOrBlank() }
             )
             store.update(account)
-            val normalizedInitial = initialCookieSnapshot.split(';').map { it.trim() }.filter { it.isNotBlank() }.sorted().joinToString("; ")
-            val normalizedCurrent = found.split(';').map { it.trim() }.filter { it.isNotBlank() }.sorted().joinToString("; ")
             // This page session is successful once a valid Cookie has been identified and saved.
             // Do not compare against the Activity's initial Cookie snapshot: it may already exist
             // in CookieManager while the account detail and login footer still need synchronization.
