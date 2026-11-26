@@ -25,9 +25,10 @@ const callNative = (name: string, ...args: string[]) => {
 };
 const safe = (value: any) => String(value ?? "");
 const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取|无法获取/.test(value) ? "bad" : "muted";
-const accountSummary = (platform: string, games: AnyState[], statuses: Record<string, string>) => {
+const accountSummary = (platform: string, games: AnyState[], statuses: Record<string, string>, sourceStatus: string) => {
   if (platform === "miyoushe_cn") return "云端签到暂未接入";
   if (!games.length) return "未启用游戏";
+  if (/无法获取|查询失败|读取失败/.test(sourceStatus)) return "无法获取结果";
   const results = games.map(game => statuses[game.key || game.id] || "unknown");
   const success = results.filter(value => value === "success").length;
   const failed = results.filter(value => value === "failed").length;
@@ -184,12 +185,12 @@ export default function App() {
       {title("账号", "管理登录账号与今日签到结果。")}
       <button className="cloud-banner" onClick={() => setPage("cloud")}>
         <span className="banner-icon"><Cloud size={21}/></span>
-        <span className="banner-copy"><strong>华为云连接</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
+        <span className="banner-copy"><strong>华为云</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
         <span className={"status-pill " + (state.cloudConnected ? "good" : "muted")}>{state.cloudConnected ? "已连接" : state.cloudCredentialsSaved ? "凭据已保存" : "未连接"}</span>
         <ChevronRight size={18} className="subtle-icon"/>
       </button>
       <div className="section-heading">
-        <div><h2>账号</h2><span>{accounts.length} 个账号</span></div>
+        <div><span>{accounts.length} 个账号</span></div>
         <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在重新获取今日签到情况");}} disabled={state.todayQuerying}>
           {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新签到状态
         </button>
@@ -199,7 +200,7 @@ export default function App() {
         <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : state.syncState === "empty_confirmed" ? "云端尚无账号" : "等待读取云端账号"}</strong>
         <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "先连接华为云，读取现有账号配置后即可添加账号。"}</p>
       </div> : <div className="account-list">{accounts.map((a: AnyState) => {
-        const aggregate = accountSummary(a.platform, a.games || [], a.gameTodayStatuses || {});
+        const aggregate = accountSummary(a.platform, a.games || [], a.gameTodayStatuses || {}, a.todayStatus || "");
         return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");setGameDraft(null);}}>
           <span className="account-info"><strong>{a.name}</strong><small>{a.platformLabel}</small></span>
           <span className={"account-status " + statusTone(aggregate)}>{aggregate}</span>
@@ -320,7 +321,7 @@ export default function App() {
   const renderMessages = () => <>
     {title("运行消息", "查看操作记录与错误信息。")}
     <section className="surface-card">
-      <div className="card-heading"><span>运行记录</span><button className="icon-button small" onClick={() => copyText(state.allMessages || "", "全部运行消息已复制")}><Copy size={15}/></button></div>
+      <div className="card-heading"><span>消息内容</span><button className="icon-button small" onClick={() => copyText(state.allMessages || "", "全部运行消息已复制")}><Copy size={15}/></button></div>
       <pre className="log-view all-messages">{state.allMessages || "暂无运行消息"}</pre>
     </section>
   </>;
