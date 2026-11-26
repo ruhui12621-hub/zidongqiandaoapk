@@ -81,7 +81,11 @@ function renderDetail(a){
   html+='<p class="hint">上传当前账号已加密保存的 Token；其他森空岛账号及云端配置保持不变。</p></div>';
  }
  const stages=Array.isArray(a.cloudUpdateStages)?a.cloudUpdateStages:[];
- const stageRows=stages.filter(s=>s.key!=="output").map(s=>{\n  const rawOnly=s.key==="raw_output";\n  const statusClass=s.status==="成功"||s.status==="已存在"||s.status==="已创建"?"success":s.status==="失败"?"failed":s.status==="进行中"?"pending":"neutral";\n  return '<tr><td>'+esc(s.label||"执行阶段")+'</td><td>'+(rawOnly?'':'<span class="stage-result '+statusClass+'">'+esc(s.status||"未执行")+'</span>')+'<div class="stage-detail">'+esc(s.detail||"") + '</div></td></tr>';\n }).join("");
+ const stageRows=stages.filter(s=>s.key!=="output").map(s=>{
+  const rawOnly=s.key==="raw_output";
+  const statusClass=s.status==="成功"||s.status==="已存在"||s.status==="已创建"?"success":s.status==="失败"?"failed":s.status==="进行中"?"pending":"neutral";
+  return '<tr><td>'+esc(s.label||"执行阶段")+'</td><td>'+(rawOnly?'':'<span class="stage-result '+statusClass+'">'+esc(s.status||"未执行")+'</span>')+'<div class="stage-detail">'+esc(s.detail||"")+'</div></td></tr>';
+ }).join("");
  html+='<div class="card cloud-update-card"><div class="card-title">云函数执行情况</div><div class="game-status-table-wrap"><table class="game-status-table deploy-stage-table"><thead><tr><th>执行阶段</th><th>执行情况</th></tr></thead><tbody>'+stageRows+'</tbody></table></div></div>';
  return html
 }
