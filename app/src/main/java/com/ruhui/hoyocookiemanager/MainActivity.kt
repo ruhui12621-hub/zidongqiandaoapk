@@ -22,6 +22,7 @@ import android.widget.Toast
 class MainActivity : HuaweiCloudActivity() {
     private lateinit var root: LinearLayout
     private var statusText = "登录状态：尚未检测"
+    // True only when this login-page Activity has successfully acquired a Cookie.
     private var detailsText = "登录后自动检测 Cookie。"
     private lateinit var webView: WebView
     private lateinit var loginChrome: WebView
@@ -127,6 +128,7 @@ class MainActivity : HuaweiCloudActivity() {
         val payload = org.json.JSONObject()
             .put("title", if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录")
             .put("status", statusText)
+            .put("pageCookieAcquired", pageCookieAcquired)
             .put("detail", detailsText)
             .put("message", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
         loginChrome.post {
@@ -423,6 +425,7 @@ class MainActivity : HuaweiCloudActivity() {
                 tokenReady = tokenKeys.any { !cookieFields[it].isNullOrBlank() }
             )
             store.update(account)
+            pageCookieAcquired = true
             activeAccountId = account.id
 
             val server = detectedGameServer!!
@@ -567,6 +570,7 @@ class MainActivity : HuaweiCloudActivity() {
     }
 
     private fun clearSession() {
+        pageCookieAcquired = false
         HuaweiCloudSession.clearPendingHoyoCookie()
         CookieManager.getInstance().removeAllCookies {
             CookieManager.getInstance().flush()
