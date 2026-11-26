@@ -846,6 +846,9 @@ open class HuaweiCloudActivity : Activity() {
                 val function = waitForFunction(SKLAND_FUNCTION)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("森空岛函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
+                val ltsSummary = ensureLtsIsolation(urn, "skland") { detail, success -> logSklandDeployStep(detail, success) }
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
                 deploymentReady = true
@@ -882,6 +885,7 @@ open class HuaweiCloudActivity : Activity() {
                         val label = when (activeStage) {
                             "function" -> "云函数"
                             "trigger" -> "定时触发器"
+                            "lts" -> "LTS 日志隔离"
                             "test" -> "函数运行测试"
                             else -> "函数运行测试"
                         }
@@ -975,6 +979,9 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "已查询到函数并取得函数 URN，函数已就绪。", true)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
+                val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
+                AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
                 // From this point the function code is deployed and FunctionGraph reports it ready.
