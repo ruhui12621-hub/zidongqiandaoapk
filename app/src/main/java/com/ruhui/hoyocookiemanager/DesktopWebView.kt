@@ -90,6 +90,19 @@ object DesktopWebView {
         view.evaluateJavascript(script, null)
     }
 
+    /** Attach a popup in the same layout slot as its source WebView. */
+    fun attachPopup(
+        container: android.view.ViewGroup,
+        source: android.view.View,
+        popup: android.view.View,
+        layoutParams: android.view.ViewGroup.LayoutParams
+    ) {
+        val sourceIndex = container.indexOfChild(source).takeIf { it >= 0 } ?: container.childCount
+        (popup.parent as? android.view.ViewGroup)?.removeView(popup)
+        container.addView(popup, sourceIndex, layoutParams)
+        source.visibility = android.view.View.GONE
+    }
+
     fun configure(
         view: WebView,
         multiWindow: Boolean = true,
