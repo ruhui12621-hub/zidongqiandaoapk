@@ -14,8 +14,8 @@ header b,.brand b{font-size:12px;color:#f4e7ca;letter-spacing:.15px}
 .pill.bad{background:#301b19;color:var(--red);border-color:#63342f}
 .bottom-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;height:36px;flex:0 0 36px;margin-top:auto;padding:0 1px;border-top:0}
 .cookie-line{display:flex;align-items:center;justify-content:flex-start;gap:5px;min-width:0;min-height:0;padding:0;border:0;background:transparent;white-space:nowrap}
-.cookie-line .status-icon{font-size:10px;color:var(--gold)}
-.cookie-line .status-label{font-size:11px;color:#b9ad97}
+.cookie-line .status-icon{display:none!important}
+.cookie-line .status-label{display:none!important}
 .cookie-line strong{font-size:11px;color:#dfbd78;font-weight:650;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .cookie-line strong.ok{color:var(--green)}
 .cookie-line strong.bad{color:var(--red)}
