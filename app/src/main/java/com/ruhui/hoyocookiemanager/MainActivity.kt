@@ -191,8 +191,9 @@ class MainActivity : HuaweiCloudActivity() {
                         }
                         popupWebView = popup
                         (webView.parent as? ViewGroup)?.let { container ->
-                            container.addView(popup, LinearLayout.LayoutParams(-1, 0, 1f))
-                            webView.visibility = android.view.View.GONE
+                            DesktopWebView.attachPopup(
+                                container, webView, popup, LinearLayout.LayoutParams(-1, 0, 1f)
+                            )
                         }
                         val transport = resultMsg.obj as WebView.WebViewTransport
                         transport.webView = popup
