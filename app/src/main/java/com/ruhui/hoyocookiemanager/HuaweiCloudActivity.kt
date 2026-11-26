@@ -676,6 +676,7 @@ open class HuaweiCloudActivity : Activity() {
 
         showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
         worker.execute {
+            var deploymentReady = false
             try {
                 val functionName = HOYOLAB_FUNCTION
                 logAccountDeployStep(accountId, "正在读取 APK 内置函数包 cloud/hoyolab.zip。")
@@ -707,6 +708,12 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "已查询到函数并取得函数 URN，函数已就绪。", true)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                // From this point the function code is deployed and FunctionGraph reports it ready.
+                // Keep the local config in sync even if the later test/trigger check fails.
+                deploymentReady = true
+                HuaweiCloudSession.lastConfigYaml = mergedYaml
+                configYaml = mergedYaml
+                logAccountDeployStep(accountId, "部署阶段已完成：函数已存在且就绪，账号配置已同步；现在开始独立测试。", true)
                 logAccountDeployStep(accountId, "正在使用华为云 TIMER 定时触发器事件格式测试函数（不再发送空事件 {}）。")
                 val testSummary = invokeFunctionOnce(urn)
                 logAccountDeployStep(accountId, "TIMER 事件格式测试完成：$testSummary", true)
@@ -722,8 +729,14 @@ open class HuaweiCloudActivity : Activity() {
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    logAccountDeployStep(accountId, "流程中止：${e.message ?: e.javaClass.simpleName}", false)
-                    showAccountDeployMessage(accountId, "$title 失败", e.message ?: e.javaClass.simpleName, false)
+                    val reason = e.message ?: e.javaClass.simpleName
+                    logAccountDeployStep(accountId, if (deploymentReady)
+                        "部署已成功，但后续测试或定时触发器检查失败：$reason"
+                        else "部署流程中止：$reason", false)
+                    showAccountDeployMessage(accountId,
+                        if (deploymentReady) "HoYoLAB 已部署，后续检查失败" else "$title 失败",
+                        if (deploymentReady) "云函数代码已上传并确认就绪，账号配置已同步；失败仅发生在后续测试/触发器检查阶段。$reason"
+                        else reason, false)
                 }
             }
         }
