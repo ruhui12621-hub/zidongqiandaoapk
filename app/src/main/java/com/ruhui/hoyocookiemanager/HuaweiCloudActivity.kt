@@ -781,7 +781,7 @@ open class HuaweiCloudActivity : Activity() {
         }
         val result = retained.toMutableList()
         if (result.none { it.trim() == token }) result.add(token)
-        return result.joinToString("\\n") + "\\n"
+        return result.joinToString("\n") + "\n"
     }
 
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
