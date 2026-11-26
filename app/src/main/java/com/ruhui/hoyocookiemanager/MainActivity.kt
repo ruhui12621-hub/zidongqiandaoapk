@@ -88,7 +88,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         buildHome()
         showBrowser()
-        if (!incognitoMode) cookieRefreshHandler.postDelayed(cookieFallbackTask, 8000L)
+        cookieRefreshHandler.postDelayed(cookieFallbackTask, 8000L)
     }
 
     override fun onDestroy() {
@@ -110,8 +110,7 @@ class MainActivity : HuaweiCloudActivity() {
                 loginChrome.removeJavascriptInterface("LoginUi")
                 loginChrome.destroy()
             }
-            // Incognito browsing uses its own WebView profile. Wipe that profile's
-            // cookies and web storage after every login Activity session.
+            // Clear this account's temporary profile after the login Activity ends.
             sessionCookieManager?.removeAllCookies { sessionCookieManager?.flush() }
             sessionWebStorage?.deleteAllData()
         } catch (_: Exception) {
@@ -336,7 +335,7 @@ class MainActivity : HuaweiCloudActivity() {
             multiWindow = false,
             cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE,
             fitToScreen = activePlatform != AccountStore.HOYOLAB,
-            profileName = if (incognitoMode) INCOGNITO_PROFILE_NAME else null
+            profileName = loginProfileName
         ).apply {
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
