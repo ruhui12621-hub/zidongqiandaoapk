@@ -16,7 +16,8 @@ import java.security.MessageDigest
  * remain owned by each Activity.
  */
 object DesktopWebView {
-    private const val VERTICAL_SCROLL_CSS_PX = 600f
+    private const val DEFAULT_VERTICAL_SCROLL_CSS_PX = 600f
+    private const val SKLAND_VERTICAL_SCROLL_CSS_PX = 700f
 
     const val DESKTOP_USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -191,9 +192,15 @@ object DesktopWebView {
                     val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
                     val targetX = maxScrollX / 2
-                    // Keep horizontal centering and use a fixed 600 CSS-pixel
-                    // vertical offset, clamped to the page's available scroll range.
-                    val targetY = (VERTICAL_SCROLL_CSS_PX * scale)
+                    // Keep horizontal centering. Skland gets an additional
+                    // 100 CSS-pixel vertical offset; HoYoLAB keeps the original value.
+                    val host = runCatching { android.net.Uri.parse(view.url.orEmpty()).host.orEmpty().lowercase() }
+                        .getOrDefault("")
+                    val verticalOffset = if (
+                        host == "skland.com" || host.endsWith(".skland.com") ||
+                        host == "hypergryph.com" || host.endsWith(".hypergryph.com")
+                    ) SKLAND_VERTICAL_SCROLL_CSS_PX else DEFAULT_VERTICAL_SCROLL_CSS_PX
+                    val targetY = (verticalOffset * scale)
                         .toInt()
                         .coerceIn(0, maxScrollY)
                     view.scrollTo(targetX, targetY)
