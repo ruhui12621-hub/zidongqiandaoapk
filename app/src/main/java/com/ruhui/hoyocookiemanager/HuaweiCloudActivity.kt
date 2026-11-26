@@ -1092,14 +1092,12 @@ open class HuaweiCloudActivity : Activity() {
         if (response.first !in 200..299) error("定时触发器格式测试请求失败（HTTP ${response.first}）：" + response.second.take(1600))
         val raw = response.second.trim()
         val encodedPrintLog = responseHeaders.entries.firstOrNull { it.key.equals("x-cff-function-log", true) }?.value.orEmpty()
+        val bodyLog = runCatching { JSONObject(raw).optString("log").trim() }.getOrDefault("")
         val printLog = if (encodedPrintLog.isNotBlank()) runCatching {
             android.util.Base64.decode(encodedPrintLog, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
-        }.getOrDefault("函数日志 Base64 解码失败：${encodedPrintLog}") else ""
-        val fullRawOutput = buildString {
-            append("【函数自身打印日志（X-Cff-Function-Log）】\n")
-            append(printLog.ifBlank { "华为云未返回函数打印日志。" })
-            append("\n\n【函数调用原始响应正文】\n")
-            append(raw)
+        }.getOrDefault("函数日志 Base64 解码失败：${encodedPrintLog}") else bodyLog
+        val fullRawOutput = printLog.ifBlank {
+            "华为云未返回函数自身打印日志。\n函数调用响应正文：\n$raw"
         }.take(12000)
         if (raw.isBlank()) error("定时触发器格式测试响应体为空（HTTP ${response.first}），无法确认函数返回结果。")
         val result = runCatching { JSONObject(raw) }.getOrNull()
