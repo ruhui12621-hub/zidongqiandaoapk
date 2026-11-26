@@ -223,48 +223,22 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             runOnUiThread { this@HtmlMainActivity.refreshTodayStatuses(force = true) }
         }
 
-        @JavascriptInterface fun openHoyoLogin(id: String, incognito: Boolean) {
+        @JavascriptInterface fun openLogin(id: String) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
-                if (!incognito) HuaweiCloudSession.clearPendingHoyoCookie()
+                HuaweiCloudSession.clearPendingHoyoCookie()
                 pushState()
+                val target = when (account.platform) {
+                    AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN -> MainActivity::class.java
+                    AccountStore.SKLAND -> SenkongdaoActivity::class.java
+                    else -> return@runOnUiThread
+                }
                 startActivity(
-                    Intent(this@HtmlMainActivity, MainActivity::class.java)
+                    Intent(this@HtmlMainActivity, target)
                         .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
                         .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
                         .putExtra("return_to_account_detail", true)
-                        .putExtra("incognito_login", incognito)
                 )
-            }
-        }
-
-        @JavascriptInterface fun openSklandLogin(id: String) {
-            runOnUiThread {
-                AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.SKLAND, "收到打开森空岛请求",
-                    "账号 ID 已传入（${id.take(8)}…），正在查找账号并启动登录 Activity。", null)
-                val account = AccountStore(this@HtmlMainActivity).find(id)
-                if (account == null) {
-                    AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.SKLAND, "启动中止：账号不存在",
-                        "AccountStore.find 未找到当前账号。", false)
-                    pushState()
-                    return@runOnUiThread
-                }
-                AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.SKLAND, "正在启动森空岛 Activity",
-                    "目标 Activity：SenkongdaoActivity\n账号平台：${account.platform}", null)
-                runCatching {
-                    startActivity(
-                        Intent(this@HtmlMainActivity, SenkongdaoActivity::class.java)
-                            .putExtra(AccountStore.EXTRA_ACCOUNT_ID, account.id)
-                            .putExtra(AccountStore.EXTRA_PLATFORM, account.platform)
-                    )
-                    AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.SKLAND, "系统已接受启动请求",
-                        "startActivity() 已正常返回；接下来检查 Activity 的 onCreate 与 WebView 初始化。", true)
-                }.onFailure { error ->
-                    val stack = android.util.Log.getStackTraceString(error).lineSequence().take(10).joinToString("\n")
-                    AppMessageBus.post(this@HtmlMainActivity, AppMessageBus.SKLAND, "森空岛 Activity 启动失败",
-                        "异常类型：${error.javaClass.name}\n异常信息：${error.message ?: "无"}\n堆栈：\n$stack", false)
-                }
-                pushState()
             }
         }
 
