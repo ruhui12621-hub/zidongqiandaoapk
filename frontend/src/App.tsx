@@ -121,6 +121,7 @@ export default function App() {
   });
 
   const copyText = (value: string, label: string) => {
+    if (!value.trim()) { notify("没有可复制的内容"); return; }
     callNative("copyText", value);
     notify(label);
   };
@@ -329,7 +330,7 @@ export default function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand-mark"><CalendarCheck size={19}/></div>
-      <div className="brand-copy"><strong>自动签到</strong></div>
+      <div className="brand-copy"><strong>游戏自动签到</strong></div>
       {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content" key={page + ":" + (selectedId || "")}>
