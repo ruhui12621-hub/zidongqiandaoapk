@@ -67,12 +67,12 @@ object AppMessageBus {
         val safeDetail = sanitize(detail)
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         val prefix = when (success) { true -> "✓ "; false -> "✕ "; null -> "… " }
-        val message = "$prefix[$time] $safeTitle\\n$safeDetail"
+        val message = "$prefix[$time] $safeTitle\n$safeDetail"
         runCatching {
             val prefs = context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
             val previous = prefs.getString(key, "").orEmpty()
-            val combined = (if (previous.isBlank()) message else "$previous\\n\\n$message")
-                .split("\\n\\n").takeLast(30).joinToString("\\n\\n").takeLast(18000)
+            val combined = (if (previous.isBlank()) message else "$previous\n\n$message")
+                .split("\n\n").takeLast(30).joinToString("\n\n").takeLast(18000)
             prefs.edit().putString(key, combined).apply()
         }
     }
