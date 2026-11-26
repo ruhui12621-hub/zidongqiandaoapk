@@ -96,34 +96,38 @@ object DesktopWebView {
             (function() {
               if (window.__desktopHeaderPanSyncInstalled) return;
               window.__desktopHeaderPanSyncInstalled = true;
-              var headers = [];
+              var headers = new Set();
+              function isTopFixed(el) {
+                var s = getComputedStyle(el), r = el.getBoundingClientRect();
+                if (s.position !== 'fixed' ||
+                    r.top < -2 || r.top >= Math.min(window.innerHeight * 0.4, 260) ||
+                    r.height < 20 || r.width < window.innerWidth * 0.45) return false;
+                for (var p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                  if (getComputedStyle(p).position === 'fixed') return false;
+                }
+                return true;
+              }
               function scan() {
-                var x = window.scrollX || document.documentElement.scrollLeft || 0;
-                Array.from(document.querySelectorAll('body *')).forEach(function(el) {
-                  if (headers.indexOf(el) !== -1) return;
-                  var s = getComputedStyle(el), r = el.getBoundingClientRect();
-                  if (s.position !== 'fixed' ||
-                      r.top < -2 || r.top >= Math.min(window.innerHeight * 0.35, 220) ||
-                      r.height < 24 || r.width < window.innerWidth * 0.55) return;
-                  el.__desktopHeaderBaseLeft = r.left + x;
-                  headers.push(el);
+                document.querySelectorAll('body *').forEach(function(el) {
+                  if (!headers.has(el) && isTopFixed(el)) headers.add(el);
                 });
               }
               function sync() {
                 scan();
                 var x = window.scrollX || document.documentElement.scrollLeft || 0;
-                headers = headers.filter(function(el) {
-                  if (!el.isConnected) return false;
-                  el.style.setProperty('left', (el.__desktopHeaderBaseLeft - x) + 'px', 'important');
-                  el.style.setProperty('right', 'auto', 'important');
-                  return true;
+                headers.forEach(function(el) {
+                  if (!el.isConnected) { headers.delete(el); return; }
+                  // Use CSS individual translate so the site's own transform is preserved.
+                  // Unlike changing left/right, this does not alter the header's layout width.
+                  el.style.setProperty('translate', (-x) + 'px 0', 'important');
                 });
               }
               scan();
               window.addEventListener('scroll', sync, {passive:true});
-              window.addEventListener('resize', scan, {passive:true});
+              window.addEventListener('resize', sync, {passive:true});
               if (window.MutationObserver && document.body) {
-                new MutationObserver(scan).observe(document.body, {childList:true, subtree:true});
+                new MutationObserver(function() { scan(); sync(); })
+                  .observe(document.body, {childList:true, subtree:true});
               }
               sync();
             })();
