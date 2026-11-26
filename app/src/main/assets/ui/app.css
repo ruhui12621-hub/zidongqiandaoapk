@@ -45,7 +45,7 @@
 
 /* Compact per-account cloud-function deployment result at the bottom of details. */
 .cloud-update-card{margin-top:14px}
-.account-update-message{min-height:58px;max-height:26vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:12px;line-height:1.65;scrollbar-width:thin}
+.account-update-message{min-height:58px;max-height:38vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:12px;line-height:1.65;scrollbar-width:thin}
 .account-update-message.success{color:var(--green);border-color:rgba(139,199,160,.28)}
 .account-update-message.failed{color:var(--red);border-color:rgba(217,138,130,.3)}
 .account-update-message.pending{color:var(--amber);border-color:rgba(223,185,110,.25)}
