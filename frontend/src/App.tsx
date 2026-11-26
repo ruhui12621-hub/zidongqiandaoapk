@@ -81,14 +81,15 @@ export default function App() {
   }, [applyNativeState]);
 
   useEffect(() => {
-    readState();
-    const timer = window.setInterval(readState, 1800);
+    // Native state is pushed through onNativeState whenever it changes.
+    // Read once at startup; avoid synchronous JavaScript-bridge polling,
+    // which can block WebView interactions while AccountStore is being read.
     window.onNativeState = raw => {
       try { applyNativeState(typeof raw === "string" ? JSON.parse(raw) : raw); }
       catch (error) { console.error(error); }
     };
+    readState();
     return () => {
-      window.clearInterval(timer);
       window.onNativeState = undefined;
     };
   }, [readState, applyNativeState]);
@@ -112,13 +113,13 @@ export default function App() {
 
   // Return both the React screen and native account state to the account-list tab.
   const goToAccountList = useCallback(() => {
-    // Switch to the first bottom-navigation page and reset the previous page's scroll position.
+    // Explicitly return to the first bottom-navigation destination.
     setSelectedId(null);
     setTodayGame({ key: null, label: null });
     setGameDraft(null);
     setPage("home");
-    window.scrollTo(0, 0);
     callNative("backToHome");
+    window.scrollTo(0, 0);
   }, []);
   const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
   const goBack = () => {
