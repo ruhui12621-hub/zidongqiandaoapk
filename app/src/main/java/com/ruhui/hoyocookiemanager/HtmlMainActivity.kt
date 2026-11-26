@@ -226,7 +226,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         @JavascriptInterface fun openHoyoLogin(id: String, incognito: Boolean) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
-                HuaweiCloudSession.clearPendingHoyoCookie()
+                if (!incognito) HuaweiCloudSession.clearPendingHoyoCookie()
                 pushState()
                 startActivity(
                     Intent(this@HtmlMainActivity, MainActivity::class.java)

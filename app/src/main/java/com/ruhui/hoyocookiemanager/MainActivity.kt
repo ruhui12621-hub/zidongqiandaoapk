@@ -167,6 +167,7 @@ class MainActivity : HuaweiCloudActivity() {
             .put("title", if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录")
             .put("status", statusText)
             .put("pageCookieAcquired", pageCookieAcquired)
+            .put("incognitoMode", incognitoMode)
             .put("detail", detailsText)
             .put("message", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
         loginChrome.post {
