@@ -82,7 +82,7 @@ function renderDetail(a){
  const updateMessage=String(a.cloudUpdateMessage||"").trim();
  const latestUpdateMessage=updateMessage.split("\n\n").pop()||updateMessage;
  const updateTone=latestUpdateMessage.startsWith("✓")?"success":latestUpdateMessage.startsWith("✕")?"failed":"pending";
- html+='<div class="card cloud-update-card"><div class="card-title">云函数更新结果</div><div class="message-box account-update-message '+updateTone+'">'+esc(updateMessage||"暂无本账号的云函数更新记录")+'</div></div>';
+ html+='<div class="card cloud-update-card"><div class="cloud-update-heading"><div class="card-title">云函数更新结果</div><button class="refresh-button cloud-copy-button" data-action="copy-account-update" '+(!updateMessage?'disabled':'')+'><span aria-hidden="true">▣</span><span>复制</span></button></div><div class="message-box account-update-message '+updateTone+'">'+esc(updateMessage||"暂无本账号的云函数更新记录")+'</div></div>';
  return html
 }
 function renderCloud(){
@@ -165,6 +165,7 @@ document.addEventListener("click",e=>{
  }
  
  if(action==="copy-all-messages"){native("copyText",state.allMessages||"暂无运行消息");toast("全部运行消息已复制")}
+ if(action==="copy-account-update"){const a=account();const message=String(a&&a.cloudUpdateMessage||"").trim();if(message){native("copyText",message);toast("本账号云函数更新结果已复制")}else toast("暂无可复制的更新记录")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
 function showGamePicker(){
