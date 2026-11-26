@@ -20,10 +20,14 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 
 class MainActivity : HuaweiCloudActivity() {
+    private companion object {
+        const val LOGIN_STATUS_URL = "https://appassets.androidplatform.net/assets/ui/login-status.html"
+    }
     private lateinit var root: LinearLayout
     private var statusText = "登录状态：尚未检测"
     // True only when this login-page Activity has successfully acquired a Cookie.
@@ -42,6 +46,8 @@ class MainActivity : HuaweiCloudActivity() {
     private var detailsText = "登录后自动检测 Cookie。"
     private lateinit var webView: WebView
     private lateinit var loginChrome: WebView
+    private lateinit var loginAssetLoader: WebViewAssetLoader
+    private var loginStatusPageReady = false
     private var popupWebView: WebView? = null
     private var cookieValue = ""
     private var yamlValue = ""
@@ -106,6 +112,7 @@ class MainActivity : HuaweiCloudActivity() {
                 webView.destroy()
             }
             if (::loginChrome.isInitialized) {
+                loginStatusPageReady = false
                 loginChrome.stopLoading()
                 loginChrome.removeJavascriptInterface("LoginUi")
                 loginChrome.destroy()
@@ -128,20 +135,33 @@ class MainActivity : HuaweiCloudActivity() {
             setBackgroundColor(Color.rgb(5, 5, 5))
         }
         if (!::loginChrome.isInitialized) {
+            loginAssetLoader = WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+                .build()
             loginChrome = WebView(this).apply {
-                setBackgroundColor(Color.rgb(5, 5, 5))
+                setBackgroundColor(Color.rgb(8, 8, 7))
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
-                settings.allowFileAccess = true
+                settings.allowFileAccess = false
                 settings.allowContentAccess = false
+                settings.javaScriptCanOpenWindowsAutomatically = false
+                settings.loadsImagesAutomatically = false
+                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 addJavascriptInterface(LoginChromeBridge(), "LoginUi")
                 webChromeClient = WebChromeClient()
                 webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? =
+                        loginAssetLoader.shouldInterceptRequest(request.url)
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                        !request.url.toString().startsWith("file:///android_asset/ui/")
-                    override fun onPageFinished(view: WebView, url: String) { pushLoginChrome() }
+                        request.url.host != "appassets.androidplatform.net"
+                    override fun onPageFinished(view: WebView, url: String) {
+                        if (url == LOGIN_STATUS_URL) {
+                            loginStatusPageReady = true
+                            pushLoginChrome()
+                        }
+                    }
                 }
-                loadUrl("file:///android_asset/ui/login.html")
+                loadUrl(LOGIN_STATUS_URL)
             }
         }
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
@@ -152,15 +172,11 @@ class MainActivity : HuaweiCloudActivity() {
 
     private fun pushLoginChrome() {
         if (!::loginChrome.isInitialized) return
-        val payload = org.json.JSONObject()
-            .put("title", if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录")
-            .put("status", statusText)
-            .put("pageCookieAcquired", pageCookieAcquired)
-            .put("detail", detailsText)
-            .put("message", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
+        if (!loginStatusPageReady) return
+        val acquired = pageCookieAcquired
         loginChrome.post {
             loginChrome.evaluateJavascript(
-                "window.updateLoginState && window.updateLoginState(" + org.json.JSONObject.quote(payload.toString()) + ")",
+                "window.setLoginCookieState && window.setLoginCookieState($acquired)",
                 null
             )
         }
