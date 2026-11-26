@@ -288,12 +288,6 @@ open class HuaweiCloudActivity : Activity() {
                             platformUserId = identity,
                             games = enabledCnGames
                         )
-                        val fields = cnValue.split(';').mapNotNull { part ->
-                            val key = part.trim().substringBefore('=').trim().lowercase()
-                            val value = part.trim().substringAfter('=', "").trim()
-                            if (key.isBlank() || value.isBlank()) null else key to value
-                        }.toMap()
-                        val tokenReady = setOf("stoken", "stoken_v2", "cookie_token", "ltoken").any { !fields[it].isNullOrBlank() }
                         store.update(account.copy(
                             platformUserId = identity ?: account.platformUserId,
                             games = enabledCnGames,
@@ -317,12 +311,6 @@ open class HuaweiCloudActivity : Activity() {
                             platformUserId = identity,
                             games = enabledOsGames
                         )
-                        val cookieFields = cookie.split(';').mapNotNull { part ->
-                            val key = part.trim().substringBefore('=').trim().lowercase()
-                            val value = part.trim().substringAfter('=', "").trim()
-                            if (key.isBlank() || value.isBlank()) null else key to value
-                        }.toMap()
-                        val tokenReady = setOf("ltoken_v2", "cookie_token_v2").any { !cookieFields[it].isNullOrBlank() }
                         store.update(account.copy(
                             platformUserId = identity ?: account.platformUserId,
                             games = enabledOsGames,
