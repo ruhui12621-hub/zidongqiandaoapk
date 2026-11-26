@@ -116,6 +116,13 @@ object DesktopWebView {
             this.cacheMode = cacheMode
         }
 
+        // Keep the WebView on the window's hardware-accelerated render path.
+        // LAYER_TYPE_NONE avoids forcing an extra cached hardware layer over a
+        // frequently changing, scroll-heavy page.
+        view.setLayerType(android.view.View.LAYER_TYPE_NONE, null)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            view.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+        }
         view.isFocusable = true
         view.isFocusableInTouchMode = true
 
