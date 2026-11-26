@@ -649,7 +649,7 @@ open class HuaweiCloudActivity : Activity() {
                             gameDetails.put(game, JSONObject()
                                 .put("status", when (perGame[game]) { "success" -> "今日签到成功"; "failed" -> "今日签到失败"; else -> "未获取到明确结果" })
                                 .put("reason", outcomeLine ?: if (lines.isEmpty()) "没有找到包含此游戏名称的签到日志，不能据此认定签到失败。" else "已找到相关日志，但没有识别到明确的成功或失败标记。")
-                                .put("rawMessages", org.json.JSONArray((if (lines.isNotEmpty()) lines else matched).take(100))))
+                                .put("rawMessages", org.json.JSONArray(lines.take(100))))
                         }
                         details[account.id] = JSONObject()
                             .put("status", accountStatus)
