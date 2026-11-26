@@ -261,7 +261,7 @@ export default function App() {
     return <>
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
-        <div className="card-heading"><span>今日签到信息</span><span className="subtle-caption">点击游戏查看详情</span></div>
+        <div className="card-heading"><span>签到状态</span>{account.platform !== "miyoushe_cn" && <span className="subtle-caption">点击游戏查看详情</span>}</div>
         {account.platform === "miyoushe_cn" ? <p className="explanation">当前尚未接入米游社国服的云端签到结果查询；登录凭据和云函数配置仍可管理。</p> : isHoyo ? <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{allOptions.map((g: AnyState) => {
           const enabled = (account.games || []).some((x: AnyState) => x.key === g.key);
           const result = enabled ? (gameStates[g.key] || "unknown") : "unconfigured";
