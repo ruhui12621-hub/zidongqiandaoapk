@@ -24,8 +24,21 @@ const callNative = (name: string, ...args: string[]) => {
   return undefined;
 };
 const safe = (value: any) => String(value ?? "");
-const platformInitial = (platform: string) => platform === "skland" ? "森" : platform === "miyoushe_cn" ? "米" : "H";
-const statusTone = (value: string) => /成功|已连接|已获取|同步/.test(value) ? "good" : /失败|未获取/.test(value) ? "bad" : "muted";
+const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取/.test(value) ? "bad" : "muted";
+const accountSummary = (games: AnyState[], statuses: Record<string, string>) => {
+  if (!games.length) return "未启用游戏";
+  const results = games.map(game => statuses[game.key || game.id] || "unknown");
+  const success = results.filter(value => value === "success").length;
+  const failed = results.filter(value => value === "failed").length;
+  const pending = results.length - success - failed;
+  if (success === results.length) return "全部签到成功";
+  if (failed === results.length) return "全部签到失败";
+  if (failed && success) return "部分游戏失败";
+  if (failed && pending) return "有失败项，其他待确认";
+  if (success && pending) return "部分完成，其他待确认";
+  if (results.every(value => value === "unconfigured")) return "未配置";
+  return "签到结果待确认";
+};
 const gameStatusText = (value: string) => value === "success" ? "签到成功" : value === "failed" ? "签到失败" : value === "unconfigured" ? "未配置" : "未确认";
 const gameTone = (value: string) => value === "success" ? "good" : value === "failed" ? "bad" : "muted";
 
@@ -151,9 +164,9 @@ export default function App() {
     window.setTimeout(() => setBusy(false), 1200);
   };
 
-  const title = (heading: string, subtitle: string, eyebrow = "HOYO CHECK-IN") => (
+  const title = (heading: string, subtitle: string, eyebrow = "") => (
     <div className="page-heading">
-      <div className="eyebrow">{eyebrow}</div>
+      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
       <h1>{heading}</h1>
       <p>{subtitle}</p>
     </div>
@@ -169,7 +182,7 @@ export default function App() {
   const renderHome = () => {
     const accounts = state.accounts || [];
     return <>
-      {title("账号总览", "管理账号、签到状态与云端函数。")}
+      {title("账号", "管理登录账号与今日签到结果。")}
       <button className="cloud-banner" onClick={() => setPage("cloud")}>
         <span className="banner-icon"><Cloud size={21}/></span>
         <span className="banner-copy"><strong>华为云连接</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
@@ -179,17 +192,15 @@ export default function App() {
       <div className="section-heading">
         <div><h2>账号</h2><span>{accounts.length} 个账号</span></div>
         <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在重新获取今日签到情况");}} disabled={state.todayQuerying}>
-          {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新信息
+          {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新签到状态
         </button>
       </div>
       {accounts.length === 0 ? <div className="empty-state">
         <span className="empty-symbol"><ShieldCheck size={27}/></span>
-        <strong>云端暂未读取到账号</strong>
-        <p>连接华为云后将自动读取现有函数配置。账号信息不会保存到本机。</p>
+        <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : state.syncState === "empty_confirmed" ? "云端尚无账号" : "等待读取云端账号"}</strong>
+        <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "账号配置从华为云读取，读取完成后可添加账号。"}</p>
       </div> : <div className="account-list">{accounts.map((a: AnyState) => {
-        const statuses = Object.values(a.gameTodayStatuses || {});
-        const aggregate = statuses.some(x => x === "failed") ? "今日签到失败" : statuses.some(x => x === "success") ? "今日签到成功" :
-          ((a.games || []).length === 0 || statuses.length > 0 && statuses.every(x => x === "unconfigured")) ? "未配置" : a.todayStatus || "今日状态未知";
+        const aggregate = accountSummary(a.games || [], a.gameTodayStatuses || {});
         return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");}}>
           <span className="account-avatar">{platformInitial(a.platform)}</span>
           <span className="account-info"><strong>{a.name}</strong><small>{a.platformLabel}</small></span>
@@ -217,18 +228,18 @@ export default function App() {
     return <>
       {backHeader(todayGame.label || game?.label || todayGame.key || "账号签到详情", account.name + " · " + account.platformLabel + " · 今日签到详情")}
       <section className="surface-card">
-        <div className="card-heading"><span>状态判定</span><span className={"status-pill " + statusTone(status)}>{status}</span></div>
+        <div className="card-heading"><span>签到结果</span><span className={"status-pill " + statusTone(status)}>{status}</span></div>
         <p className="explanation">{reason}</p>
       </section>
       <section className="surface-card">
-        <div className="card-heading">日志配置</div>
+        <div className="card-heading">日志来源</div>
         <div className="info-line"><span>日志组</span><strong>{data.logGroupName || "未获取"}</strong></div>
         <div className="info-line"><span>日志流</span><strong>{data.logStreamName || "未获取"}</strong></div>
       </section>
       <section className="surface-card">
         <div className="card-heading">云函数今日日志</div>
         <pre className="log-view">{logs || "没有读取到云函数日志。"}</pre>
-        <button className="secondary-button full-button" onClick={() => copyText(logs, "云函数日志已复制")}><Copy size={16}/> 复制云函数日志</button>
+        <button className="secondary-button full-button" onClick={() => copyText(logs, "日志已复制")}><Copy size={16}/> 复制云函数日志</button>
       </section>
     </>;
   };
@@ -261,11 +272,11 @@ export default function App() {
         })}</tbody></table></div> : <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{gameRows.length ? gameRows : <tr><td colSpan={2} className="empty-cell">云端暂未配置签到游戏</td></tr>}</tbody></table></div>}
       </section>
       <section className="surface-card">
-        <div className="card-heading">更新上传</div>
+        <div className="card-heading">登录凭据与云函数</div>
         <div className="credential-status">
-          <span>{isHoyo ? "应用运行期间 Cookie 状态" : "应用运行期间 Token 状态"}</span>
+          <span>{isHoyo ? "Cookie 状态（本次运行）" : "Token 状态"}</span>
           <strong className={((isHoyo ? cookieReady : account.tokenReady) ? "text-good" : "text-warn")}>
-            {isHoyo ? (cookieReady ? "已获取最新" : "未获取") : (account.tokenReady ? "已获取最新" : "未获取")}
+            {isHoyo ? (cookieReady ? "已获取" : "未获取") : (account.tokenReady ? "已获取" : "未获取")}
           </strong>
         </div>
         {isHoyo ? <>
@@ -309,7 +320,7 @@ export default function App() {
   </>;
 
   const renderMessages = () => <>
-    {title("全部运行消息", "集中查看各服务的操作记录、运行结果与错误信息。")}
+    {title("运行消息", "查看操作记录与错误信息。")}
     <section className="surface-card">
       <div className="card-heading"><span>运行记录</span><button className="icon-button small" onClick={() => copyText(state.allMessages || "暂无运行消息", "全部运行消息已复制")}><Copy size={15}/></button></div>
       <pre className="log-view all-messages">{state.allMessages || "暂无运行消息"}</pre>
@@ -320,8 +331,8 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="topbar">
-      <div className="brand-mark"><Sparkles size={19}/></div>
-      <div className="brand-copy"><strong>Hoyo Check-in</strong><span>ACCOUNT & CLOUD CONTROL</span></div>
+      <div className="brand-mark"><ShieldCheck size={19}/></div>
+      <div className="brand-copy"><strong>自动签到</strong></div>
       {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content" key={page + ":" + (selectedId || "")}>
@@ -349,7 +360,7 @@ export default function App() {
           <input type="checkbox" checked={gameDraft.includes(game.key)} onChange={e => setGameDraft(old => e.target.checked ? [...old,game.key] : old.filter(x => x !== game.key))}/>
           <span>{game.label}</span><span className="checkmark"><Check size={14}/></span>
         </label>)}</div>
-        <div className="modal-actions"><button className="secondary-button" onClick={() => setModal(null)}>取消</button><button className="primary-button" onClick={() => {setModal(null);notify("游戏选择已保存");}}>保存选择</button></div>
+        <div className="modal-actions"><button className="secondary-button" onClick={() => setModal(null)}>取消</button><button className="primary-button" onClick={() => {setModal(null);notify("已选择；将在上传云函数时生效");}}>完成</button></div>
       </section>
     </div>}
 
