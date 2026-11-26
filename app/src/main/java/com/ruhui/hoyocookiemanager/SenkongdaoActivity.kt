@@ -46,6 +46,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var saved = false
     private var tokenSavedCached = false
     private var lastUiPayload: String? = null
+    private var chromePageReady = false
     private var lastCheck = 0L
     private var loginProfileName = ""
     private var sessionCookieManager: CookieManager? = null
@@ -137,10 +138,13 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             }
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    chromePageReady = false
                     AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "状态栏页面开始加载", "本地界面：$url", null)
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "状态栏页面加载完成", "本地界面资源已加载：$url", true)
+                    chromePageReady = true
+                    lastUiPayload = null
+                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "状态栏页面加载完成", "本地状态栏页面已加载，准备推送最新 Token 状态。", true)
                     pushSklandUi()
                 }
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -175,7 +179,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private fun pushSklandUi() {
-        if (!::chromeView.isInitialized) return
+        if (!::chromeView.isInitialized || !chromePageReady) return
         val payload = JSONObject().put("loginMode", loginMode)
             .put("status", statusText)
             .put("tokenSaved", tokenSavedCached)
