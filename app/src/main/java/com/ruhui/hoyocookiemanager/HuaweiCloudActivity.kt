@@ -887,7 +887,7 @@ open class HuaweiCloudActivity : Activity() {
         // Match Huawei FunctionGraph's documented TIMER event shape instead of sending an empty object.
         val timerEvent = JSONObject()
             .put("version", "v2.0")
-            .put("time", java.time.OffsetDateTime.now(java.time.ZoneOffset.ofHours(8)).toString())
+            .put("time", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'+08:00'", Locale.US).apply { timeZone = TimeZone.getTimeZone("GMT+08:00") }.format(Date()))
             .put("trigger_type", "TIMER")
             .put("trigger_name", "APK_Timer_Test")
             .put("user_event", "APK 部署后的定时触发器格式测试")
