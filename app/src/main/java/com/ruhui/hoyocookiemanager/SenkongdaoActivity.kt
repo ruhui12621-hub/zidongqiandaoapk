@@ -515,8 +515,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     companion object {
-        private const val SklandLoginAdapter.HOME_URL = "https://www.skland.com/"
-        private const val SklandLoginAdapter.TOKEN_URL = "https://web-api.skland.com/account/info/hg"
         private const val SKLAND_STATUS_URL = "https://appassets.androidplatform.net/assets/ui/skland-status.html"
     }
 }
