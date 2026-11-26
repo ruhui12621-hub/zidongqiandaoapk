@@ -58,42 +58,6 @@ object SklandCloudConfigAdapter {
         return result
     }
 
-    fun mergeAccount(
-        configJson: String?,
-        legacyTokenText: String?,
-        token: String,
-        previousPlatformUserId: String?,
-        selectedGames: Set<String>
-    ): String {
-        require(token.isNotBlank() && !token.any(Char::isWhitespace)) { "森空岛 Token 无效。" }
-        require(selectedGames.isNotEmpty()) { "至少选择一款森空岛游戏。" }
-        require(supportedGames.containsAll(selectedGames)) { "游戏选择包含森空岛不支持的项目。" }
-
-        val current = readAccounts(configJson, legacyTokenText)
-        val newId = sha256(token)
-        val previousId = previousPlatformUserId?.takeIf(String::isNotBlank)
-        val merged = current.filterNot { account ->
-            account.platformUserId == previousId ||
-                account.platformUserId == newId ||
-                account.token == token
-        }.toMutableList()
-        merged += CloudAccount(newId, token, selectedGames)
-
-        val rows = JSONArray()
-        merged.forEach { account ->
-            rows.put(
-                JSONObject()
-                    .put("platformUserId", account.platformUserId)
-                    .put("token", account.token)
-                    .put("games", JSONArray(account.games.sorted()))
-            )
-        }
-        return JSONObject()
-            .put("version", 1)
-            .put("accounts", rows)
-            .toString(2)
-    }
-
     fun legacyTokenText(configJson: String): String =
         readAccounts(configJson, null).joinToString("\n") { it.token }.let {
             if (it.isBlank()) "" else "$it\n"
