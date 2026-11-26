@@ -130,7 +130,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                 statuses.values.any { value ->
                     value.contains("日志查询失败") || value.contains("函数不存在") ||
                         value.contains("无法唯一识别") || value.contains("未启用日志") ||
-                        value.contains("未连接华为云")
+                        value.contains("未连接华为云") || value.contains("无法获取签到结果")
                 }
             val completed = !downloadFailed
             AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息下载${if (completed) "完成" else "失败"}",
