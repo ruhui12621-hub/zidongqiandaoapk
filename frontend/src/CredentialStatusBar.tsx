@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import "./credential-status-bar.css";
 
 type CredentialStatusBarProps = {
   acquired: boolean;
