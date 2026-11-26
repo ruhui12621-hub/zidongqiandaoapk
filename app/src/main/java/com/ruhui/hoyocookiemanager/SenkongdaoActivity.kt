@@ -426,7 +426,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             }
             val token = json.optJSONObject("data")?.optString("content").orEmpty()
                 .ifBlank { json.optString("content").orEmpty() }
-            if (token.isBlank() || token.any(Char::isWhitespace)) {
+            if (!GlobalModuleRegistry.isValidCredential(AccountStore.SKLAND, token)) {
                 checking = false
                 statusText = "等待登录"
                 AppMessageBus.post(this, AppMessageBus.SKLAND, "Token 接口未返回可用凭据",
