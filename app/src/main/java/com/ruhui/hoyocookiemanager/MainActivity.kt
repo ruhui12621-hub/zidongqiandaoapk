@@ -248,8 +248,9 @@ class MainActivity : HuaweiCloudActivity() {
         root.removeAllViews()
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
         (webView.parent as? ViewGroup)?.removeView(webView)
+        root.addView(View(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }, LinearLayout.LayoutParams(-1, dp(24)))
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(112)))
+        root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(42)))
         popupWebView?.let { popup ->
             (popup.parent as? ViewGroup)?.removeView(popup)
             popup.destroy()
