@@ -14,7 +14,7 @@ interface PlatformCredentialAdapter {
     fun resolveIdentity(cookie: String): String?
 }
 
-private abstract class CookiePlatformCredentialAdapter(
+abstract class CookiePlatformCredentialAdapter(
     final override val platformId: String,
     private val identityPriority: List<String>
 ) : PlatformCredentialAdapter {

@@ -30,7 +30,7 @@ class SklandTokenVault(context: Context, accountId: String? = null) {
     @Synchronized
     fun save(value: String) {
         val token = value.trim()
-        require(GlobalModuleRegistry.isValidCredential(AccountStore.SKLAND, token)) {
+        require(SklandCredentialAdapter.isValidToken(token)) {
             "森空岛 Token 格式无效。"
         }
         val clear = token.toByteArray(Charsets.UTF_8)
