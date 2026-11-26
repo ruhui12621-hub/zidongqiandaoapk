@@ -117,11 +117,12 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
- // Preserve independently scrollable raw-output panes across the 1.8s state-poll render.
- const scrollSelectors=[".stage-detail",".account-update-message",".message-box:not(.all-message-box)"];
- const preservedScroll=[];
- scrollSelectors.forEach(selector=>view.querySelectorAll(selector).forEach((el,index)=>{
-  preservedScroll.push({selector,index,top:el.scrollTop});
+ // Keep unchanged log/output DOM nodes alive during state polling.
+ // Only replace a pane when its actual text content has changed.
+ const persistentSelectors=[".stage-detail",".account-update-message",".message-box:not(.all-message-box)"];
+ const retained=[];
+ persistentSelectors.forEach(selector=>view.querySelectorAll(selector).forEach((el,index)=>{
+  retained.push({selector,index,node:el,text:el.textContent});
  }));
  const previousMessageBox=page==="messages"?view.querySelector(".all-message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
@@ -135,9 +136,11 @@ function render(){
  else if(page==="cloud")view.innerHTML=renderCloud();
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
- preservedScroll.forEach(saved=>{
+ retained.forEach(saved=>{
   const current=view.querySelectorAll(saved.selector)[saved.index];
-  if(current)current.scrollTop=Math.min(saved.top,Math.max(0,current.scrollHeight-current.clientHeight));
+  if(current&&current.textContent===saved.text){
+   current.replaceWith(saved.node);
+  }
  });
  if(page==="messages"){
   const currentMessageBox=view.querySelector(".all-message-box");
