@@ -258,7 +258,6 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             runOnUiThread {
                 val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("错误消息", value))
-                android.widget.Toast.makeText(this@HtmlMainActivity, "报错消息已复制", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
