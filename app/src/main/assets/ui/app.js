@@ -84,7 +84,7 @@ function renderDetail(a){
  const stageRows=stages.filter(s=>s.key!=="output").map(s=>{
   const rawOnly=s.key==="raw_output";
   const statusClass=s.status==="成功"||s.status==="已存在"||s.status==="已创建"?"success":s.status==="失败"?"failed":s.status==="进行中"?"pending":"neutral";
-  return '<tr><td>'+esc(s.label||"执行阶段")+'</td><td>'+(rawOnly?'':'<span class="stage-result '+statusClass+'">'+esc(s.status||"未执行")+'</span>')+'<div class="stage-detail">'+esc(s.detail||"")+'</div></td></tr>';
+  return '<tr data-stage-key="'+esc(s.key||s.label||"stage")+'"><td>'+esc(s.label||"执行阶段")+'</td><td>'+(rawOnly?'':'<span class="stage-result '+statusClass+'">'+esc(s.status||"未执行")+'</span>')+'<div class="stage-detail">'+esc(s.detail||"")+'</div></td></tr>';
  }).join("");
  html+='<div class="card cloud-update-card"><div class="card-title">云函数执行情况</div><div class="game-status-table-wrap"><table class="game-status-table deploy-stage-table"><thead><tr><th>执行阶段</th><th>执行情况</th></tr></thead><tbody>'+stageRows+'</tbody></table></div></div>';
  return html
@@ -121,14 +121,18 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
- // Keep unchanged log/output DOM nodes alive during state polling.
- // Only replace a pane when its actual text content has changed.
- const retained=[];
- // Keep the complete deployment-log card (including each independently
- // scrollable .stage-detail) mounted across polling renders. Recreate it only
- // when the actual log content changes.
- const logCard=view.querySelector(".cloud-update-card");
- if(logCard)retained.push({selector:".cloud-update-card",node:logCard,html:logCard.innerHTML});
+ // Preserve each execution-stage detail pane independently. Other
+ // stage/status updates must never reset the raw-output pane's scroll.
+ const retainedStages=[];
+ view.querySelectorAll(".cloud-update-card tr[data-stage-key]").forEach(row=>{
+  const pane=row.querySelector(".stage-detail");
+  if(pane)retainedStages.push({
+   key:row.dataset.stageKey,
+   node:pane,
+   text:pane.textContent,
+   scrollTop:pane.scrollTop
+  });
+ });
  const previousMessageBox=page==="messages"?view.querySelector(".all-message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
  const wasAtMessageBottom=previousMessageBox
@@ -141,9 +145,14 @@ function render(){
  else if(page==="cloud")view.innerHTML=renderCloud();
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
- retained.forEach(saved=>{
-  const current=view.querySelector(saved.selector);
-  if(current&&current.innerHTML===saved.html)current.replaceWith(saved.node);
+ retainedStages.forEach(saved=>{
+  const row=Array.from(view.querySelectorAll(".cloud-update-card tr[data-stage-key]"))
+   .find(item=>item.dataset.stageKey===saved.key);
+  const current=row?.querySelector(".stage-detail");
+  if(current&&current.textContent===saved.text){
+   current.replaceWith(saved.node);
+   saved.node.scrollTop=saved.scrollTop;
+  }
  });
  if(page==="messages"){
   const currentMessageBox=view.querySelector(".all-message-box");
