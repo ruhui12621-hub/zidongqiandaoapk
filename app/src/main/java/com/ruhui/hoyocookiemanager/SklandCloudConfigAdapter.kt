@@ -99,6 +99,30 @@ object SklandCloudConfigAdapter {
             if (it.isBlank()) "" else "$it\n"
         }
 
+    fun encodeAccounts(accounts: List<CloudAccount>): String {
+        val rows = JSONArray()
+        val seenTokens = mutableSetOf<String>()
+        val seenIds = mutableSetOf<String>()
+        accounts.forEach { account ->
+            require(account.token.isNotBlank() && !account.token.any(Char::isWhitespace)) {
+                "森空岛账号配置包含无效 Token。"
+            }
+            require(account.games.isNotEmpty() && supportedGames.containsAll(account.games)) {
+                "森空岛账号配置包含空游戏列表或不支持的游戏。"
+            }
+            require(seenTokens.add(account.token) && seenIds.add(account.platformUserId)) {
+                "森空岛账号配置存在重复账号。"
+            }
+            rows.put(
+                JSONObject()
+                    .put("platformUserId", account.platformUserId)
+                    .put("token", account.token)
+                    .put("games", JSONArray(account.games.sorted()))
+            )
+        }
+        return JSONObject().put("version", 1).put("accounts", rows).toString(2)
+    }
+
     private fun readLegacyAccounts(source: String): List<CloudAccount> {
         val tokens = source.lineSequence().map { it.trim() }
             .filter { it.isNotBlank() && !it.startsWith("#") }
