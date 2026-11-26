@@ -42,6 +42,7 @@ function renderDetail(a){
  let html='<div class="detail-head"><button class="back-button" data-action="back">‹</button><div class="detail-title"><h1>'+esc(a.name)+'</h1><p>'+esc(a.platformLabel)+' · 账号详情</p></div></div>';
  if(a.platform==="hoyolab"||a.platform==="miyoushe_cn"){
   const pageCookieReady=!!(state.hoyoPageCookieReady&&state.hoyoPageCookieAccountId===a.id);
+  const accountCookieReady=!!a.cookieReady;
   const server=a.platform==="miyoushe_cn"?"cn":"os";
   const serverLabel=server==="cn"?"国服":"国际服";
   const selected=selectedHoyoGames(a);
@@ -57,7 +58,7 @@ function renderDetail(a){
   }).join("");
   html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
-  html+='<div class="metric" style="margin-bottom:12px"><span>网页 Cookie 获取状态</span><strong style="color:'+(pageCookieReady?'var(--green)':'var(--amber)')+'">'+(pageCookieReady?'已获取 · '+serverLabel:'未获取')+'</strong></div>';
+  html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Cookie 状态</span><strong style="color:'+(accountCookieReady?'var(--green)':'var(--amber)')+'">'+(accountCookieReady?'已获取最新 · '+serverLabel:'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
   html+='<button class="secondary game-picker-trigger" data-action="open-game-picker">选择要启用的游戏</button>';
   html+='<button class="primary" data-action="deploy-hoyo-account" '+(!pageCookieReady||!state.cloudConnected?'disabled':'')+'>更新云函数并上传</button>';
@@ -74,7 +75,7 @@ function renderDetail(a){
   }).join("");
   html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="2" class="empty-cell">云端暂未配置签到游戏</td></tr>') +'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
-  html+='<div class="metric" style="margin-bottom:12px"><span>森空岛 Token 获取状态</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取':'未获取')+'</strong></div>';
+  html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Token 状态</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取最新':'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
   html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
  }
