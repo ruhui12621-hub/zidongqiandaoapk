@@ -17,7 +17,7 @@ export default defineConfig({
     minify: "esbuild",
     rollupOptions: {
       input: {
-        main: resolve(frontendRoot, "index.html"),
+        index: resolve(frontendRoot, "index.html"),
         "skland-status": resolve(frontendRoot, "skland-status.html")
       }
     }
