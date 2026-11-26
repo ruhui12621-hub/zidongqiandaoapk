@@ -336,7 +336,7 @@ export default function App() {
       {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content" key={page + ":" + (selectedId || "")}>
-      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onOpenAccount={id => {setSelectedId(id);setPage("home");}} /> : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
+      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={() => {setSelectedId(null);setPage("home");setTodayGame({key:null,label:null});setGameDraft(null);}} /> : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
     </main>
     {!selectedId && <nav className="bottom-nav">
       <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
