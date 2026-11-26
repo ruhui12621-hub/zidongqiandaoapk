@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import CredentialStatusBar from "./CredentialStatusBar";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft } from "lucide-react";
 import "./login-status.css";
@@ -29,16 +30,13 @@ function LoginStatus() {
   }, []);
 
   return (
-    <main className="login-status" aria-label="登录状态">
-      <div className={`login-status__label ${acquired ? "is-ready" : ""}`} role="status" aria-live="polite">
-        <span className="login-status__dot" />
-        {acquired ? "Cookie 已获取" : "Cookie 未获取"}
-      </div>
-      <button className="login-status__back" type="button" onClick={() => window.LoginUi?.back()}>
-        <ArrowLeft size={16} aria-hidden="true" />
-        返回
-      </button>
-    </main>
+    <CredentialStatusBar
+      acquired={acquired}
+      label={acquired ? "Cookie 已获取" : "Cookie 未获取"}
+      ariaLabel="HoYoLAB 登录状态"
+      layout="login"
+      onBack={() => window.LoginUi?.back()}
+    />
   );
 }
 
