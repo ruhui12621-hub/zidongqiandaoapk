@@ -235,8 +235,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                     configureLogin(child, true)
                     popupView?.let { destroy(it) }
                     popupView = child
-                    mainView?.visibility = View.GONE
-                    browserFrame.addView(child, FrameLayout.LayoutParams(-1, -1))
+                    mainView?.let { source ->
+                        DesktopWebView.attachPopup(
+                            browserFrame, source, child, FrameLayout.LayoutParams(-1, -1)
+                        )
+                    }
                     (resultMsg.obj as WebView.WebViewTransport).webView = child
                     resultMsg.sendToTarget()
                     AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛验证窗口", "网站弹出的新窗口已在应用内成功创建。", true)
