@@ -53,6 +53,11 @@ object GlobalModuleRegistry {
             credentialType = "Cookie",
             parserDescription = "识别国际服登录凭据，并按国际服规则提取账号身份",
             credentialMarkers = setOf("ltoken_v2", "cookie_token_v2"),
+            credentialDomains = listOf(
+                "https://www.hoyolab.com/",
+                "https://act.hoyolab.com/",
+                "https://bbs-api-os.hoyolab.com/"
+            ),
             games = GameCatalog.hoyolabOs
         ),
         GameModule(

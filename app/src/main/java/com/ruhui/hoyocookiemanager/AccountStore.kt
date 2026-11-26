@@ -152,29 +152,3 @@ object CloudAccountSyncState {
     fun allowsAccountChanges(context: Context): Boolean =
         get(context) == SYNCED || get(context) == EMPTY_CONFIRMED
 }
-
-/**
- * Extracts only stable account identifiers from a Cookie header. Never returns token values.
- * Priority is explicit user/account IDs, not stoken/ltoken/cookie_token credentials.
- */
-object HoYoAccountIdentity {
-    private val priority = listOf(
-        "ltuid_v2", "ltuid", "account_id_v2", "account_id",
-        "stuid_v2", "stuid", "login_uid"
-    )
-
-    fun fromCookie(cookie: String, platform: String): String? {
-        if (platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)) return null
-        val fields = cookie.split(';').mapNotNull { part ->
-            val key = part.trim().substringBefore('=').trim().lowercase()
-            val value = part.trim().substringAfter('=', "").trim()
-            if (key.isBlank() || value.isBlank()) null else key to value
-        }.toMap()
-        val preferred = if (platform == AccountStore.MIYOUSHE_CN) {
-            listOf("stuid_v2", "stuid", "ltuid_v2", "ltuid", "account_id_v2", "account_id", "login_uid")
-        } else priority
-        return preferred.firstNotNullOfOrNull { key ->
-            fields[key]?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
-        }
-    }
-}

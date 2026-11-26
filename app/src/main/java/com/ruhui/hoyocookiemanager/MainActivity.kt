@@ -65,16 +65,6 @@ class MainActivity : HuaweiCloudActivity() {
     private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
 
-    private val cookieUrls = listOf(
-        "https://www.hoyolab.com/",
-        "https://act.hoyolab.com/",
-        "https://bbs-api-os.hoyolab.com/",
-        "https://www.miyoushe.com/",
-        "https://bbs.mihoyo.com/",
-        "https://user.mihoyo.com/",
-        "https://bbs-api.mihoyo.com/"
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
@@ -446,7 +436,7 @@ class MainActivity : HuaweiCloudActivity() {
     private fun readCookieSnapshot(): String {
         val manager = sessionCookieManager ?: return ""
         val collected = linkedSetOf<String>()
-        cookieUrls.forEach { url ->
+        PlatformCredentialAdapters.cookieDomains().forEach { url ->
             manager.getCookie(url)?.split(';')
                 ?.map { it.trim() }
                 ?.filter { it.contains('=') }
@@ -458,22 +448,14 @@ class MainActivity : HuaweiCloudActivity() {
     private fun refreshFromWebView(showToast: Boolean = false) {
         val found = readCookieSnapshot()
         cookieValue = found
-        val names = found.split(';')
-            .mapNotNull { it.trim().substringBefore('=').takeIf { name -> name.isNotBlank() } }
-            .toSet()
-        // Account identifiers (stuid / ltuid / account_id) are not authentication tokens.
-        // Only real credential fields may mark the login session as acquired.
-        val cnModule = requireNotNull(GlobalModuleRegistry.gameModule(AccountStore.MIYOUSHE_CN))
-        val osModule = requireNotNull(GlobalModuleRegistry.gameModule(AccountStore.HOYOLAB))
-        val cnMarkers = cnModule.credentialMarkers
-        val osMarkers = osModule.credentialMarkers
-        val hasCnToken = names.any { it in cnMarkers }
-        val hasOsToken = names.any { it in osMarkers }
+        // Platform adapters distinguish authentication credentials from ordinary account IDs.
+        val cnAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(AccountStore.MIYOUSHE_CN))
+        val osAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(AccountStore.HOYOLAB))
+        val hasCnToken = cnAdapter.hasAuthenticationCredential(found)
+        val hasOsToken = osAdapter.hasAuthenticationCredential(found)
         val cookieManager = sessionCookieManager ?: return
-        val cnDomainHasToken = cnModule.credentialDomains.any { url ->
-            cookieManager.getCookie(url).orEmpty().split(';').any { part ->
-                part.trim().substringBefore('=') in cnMarkers
-            }
+        val cnDomainHasToken = cnAdapter.credentialDomains.any { url ->
+            cnAdapter.hasAuthenticationCredential(cookieManager.getCookie(url).orEmpty())
         }
         detectedGameServer = when {
             hasCnToken && !hasOsToken -> "cn"
@@ -510,17 +492,12 @@ class MainActivity : HuaweiCloudActivity() {
                 HuaweiCloudSession.clearPendingHoyoCookie()
                 return
             }
-            val cookieFields = found.split(';').mapNotNull { part ->
-                val key = part.trim().substringBefore('=').trim().lowercase()
-                val value = part.trim().substringAfter('=', "").trim()
-                if (key.isBlank() || value.isBlank()) null else key to value
-            }.toMap()
-            val tokenKeys = requireNotNull(GlobalModuleRegistry.gameModule(platform)).credentialMarkers
+            val platformAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(platform))
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
                 credentialReady = true,
                 cookieReady = true,
-                tokenReady = tokenKeys.any { !cookieFields[it].isNullOrBlank() }
+                tokenReady = platformAdapter.hasAuthenticationCredential(found)
             )
             store.update(account)
             // This page session is successful once a valid Cookie has been identified and saved.
