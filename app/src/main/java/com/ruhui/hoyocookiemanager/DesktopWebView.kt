@@ -53,10 +53,18 @@ object DesktopWebView {
      */
     fun centerDesktopContent(view: WebView) {
         fun center() {
-            if (view.width <= 0) return
-            val contentWidthPx = (view.contentWidth * view.scale).toInt()
-            val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
-            view.scrollTo(maxScrollX / 2, view.scrollY)
+            if (view.width <= 0 || view.height <= 0) return
+            view.evaluateJavascript(
+                "(function(){var d=document.documentElement,b=document.body;return Math.max(d?d.scrollWidth:0,b?b.scrollWidth:0);})()"
+            ) { result ->
+                val cssWidth = result?.trim()?.trim('"')?.toFloatOrNull() ?: return@evaluateJavascript
+                view.post {
+                    if (view.width <= 0) return@post
+                    val contentWidthPx = (cssWidth * view.scale).toInt()
+                    val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
+                    view.scrollTo(maxScrollX / 2, view.scrollY)
+                }
+            }
         }
         view.post { center() }
         view.postDelayed({ center() }, 650L)
