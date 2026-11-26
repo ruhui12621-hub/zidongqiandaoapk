@@ -37,7 +37,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private lateinit var root: LinearLayout
     private var statusText = "登录状态：等待检测"
     private lateinit var browserFrame: FrameLayout
-    private lateinit var chromeView: WebView
     private var mainView: WebView? = null
     private var popupView: WebView? = null
     private val tokenExecutor = Executors.newSingleThreadExecutor()
@@ -45,8 +44,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var checking = false
     private var saved = false
     private var tokenSavedCached = false
-    private var lastUiPayload: String? = null
-    private var chromePageReady = false
+    private lateinit var statusBar: LinearLayout
+    private lateinit var statusLabel: TextView
     private var lastCheck = 0L
     private var loginProfileName = ""
     private var sessionCookieManager: CookieManager? = null
@@ -75,7 +74,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         tokenSavedCached = false
         AppMessageBus.beginSession(this, AppMessageBus.SKLAND, "森空岛启动", "已进入森空岛登录 Activity，开始初始化 WebView。")
         try {
-            initializeChromeView()
+            initializeStatusBar()
             AppMessageBus.post(this, AppMessageBus.SKLAND, "状态栏初始化", "状态栏 WebView 已创建，正在加载本地界面资源。", null)
             showLogin()
         } catch (e: Throwable) {
@@ -113,49 +112,49 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         super.onStop()
     }
 
-    private fun initializeChromeView() {
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "初始化状态栏 WebView", "正在创建承载森空岛窗口状态和操作按钮的本地 WebView。", null)
-        chromeView = WebView(this).apply {
-            setBackgroundColor(Color.rgb(5, 5, 5))
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.allowFileAccess = true
-            settings.allowContentAccess = false
-            settings.allowFileAccessFromFileURLs = false
-            settings.allowUniversalAccessFromFileURLs = false
-            addJavascriptInterface(SklandChromeBridge(), "SklandUi")
-            webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-                    if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
-                        AppMessageBus.post(
-                            this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛界面 JavaScript 错误",
-                            "${message.message()}\n来源：${message.sourceId()}\n行号：${message.lineNumber()}", false
-                        )
-                        // Avoid pushing state from the JS error callback; that repeated the failing script.
-                    }
-                    return true
-                }
-            }
-            webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                    chromePageReady = false
-                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "状态栏页面开始加载", "本地界面：$url", null)
-                }
-                override fun onPageFinished(view: WebView, url: String) {
-                    chromePageReady = true
-                    lastUiPayload = null
-                    AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "状态栏页面加载完成", "本地状态栏页面已加载，准备推送最新 Token 状态。", true)
-                    pushSklandUi()
-                }
-                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                    if (request.isForMainFrame) {
-                        AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "状态栏页面加载失败",
-                            "错误码：${error.errorCode}\n原因：${error.description}\n地址：${request.url}", false)
-                    }
-                }
-            }
-            loadUrl("file:///android_asset/ui/skland.html")
+    private fun initializeStatusBar() {
+        statusLabel = TextView(this).apply {
+            text = "Token未获取"
+            textSize = 12f
+            setTextColor(Color.rgb(163, 155, 140))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(2), 0, dp(8), 0)
         }
+        val backButton = android.widget.Button(this).apply {
+            text = "返回"
+            textSize = 13f
+            isAllCaps = false
+            setTextColor(Color.rgb(225, 209, 175))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(23, 21, 17))
+                setCornerRadius(dp(7).toFloat())
+                setStroke(dp(1), Color.rgb(69, 57, 35))
+            }
+            setOnClickListener { leaveLogin() }
+        }
+        statusBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(9), 0, dp(9), 0)
+            setBackgroundColor(Color.rgb(8, 8, 7))
+            addView(statusLabel, LinearLayout.LayoutParams(0, -1, 1f))
+            addView(backButton, LinearLayout.LayoutParams(dp(112), dp(30)))
+        }
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "原生状态栏初始化",
+            "底部状态栏已改为 Android 原生控件，不再依赖状态栏 WebView。", true)
+        updateNativeStatusBar()
+    }
+
+    private fun updateNativeStatusBar() {
+        if (!::statusLabel.isInitialized) return
+        val acquired = tokenSavedCached
+        statusLabel.text = if (acquired) "Token已获取" else "Token未获取"
+        statusLabel.setTextColor(
+            if (acquired) Color.rgb(145, 198, 160) else Color.rgb(163, 155, 140)
+        )
     }
 
     private fun recordException(title: String, error: Throwable) {
@@ -179,26 +178,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private fun pushSklandUi() {
-        if (!::chromeView.isInitialized || !chromePageReady) return
-        val payload = JSONObject().put("loginMode", loginMode)
-            .put("status", statusText)
-            .put("tokenSaved", tokenSavedCached)
-            .put("message", AppMessageBus.current(this, AppMessageBus.SKLAND))
-            .toString()
-        if (payload == lastUiPayload) return
-        lastUiPayload = payload
-        chromeView.post {
-            if (!isFinishing && !isDestroyed && ::chromeView.isInitialized) {
-                chromeView.evaluateJavascript(
-                    "window.updateSklandState && window.updateSklandState(" + JSONObject.quote(payload) + ")", null
-                )
-            }
-        }
-    }
-
-    private inner class SklandChromeBridge {
-        @android.webkit.JavascriptInterface fun back() { runOnUiThread { leaveLogin() } }
-        @android.webkit.JavascriptInterface fun refresh() { runOnUiThread { if (loginMode) scheduleCheck(); pushSklandUi() } }
+        runOnUiThread { updateNativeStatusBar() }
     }
 
     private fun showLogin() {
@@ -207,11 +187,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(5, 5, 5)) }
         setContentView(root)
-        (chromeView.parent as? ViewGroup)?.removeView(chromeView)
+        (statusBar.parent as? ViewGroup)?.removeView(statusBar)
         browserFrame = FrameLayout(this)
         root.addView(View(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }, LinearLayout.LayoutParams(-1, dp(36)))
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(42)))
+        root.addView(statusBar, LinearLayout.LayoutParams(-1, dp(42)))
         val main = DesktopWebView.create(this, multiWindow = true, fitToScreen = false, profileName = loginProfileName)
         mainView = main
         configureLogin(main, false)
@@ -519,7 +499,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         pollHandler.removeCallbacks(pollTask)
         destroyAll()
         tokenExecutor.shutdownNow()
-        if (::chromeView.isInitialized) { chromeView.stopLoading(); chromeView.removeJavascriptInterface("SklandUi"); chromeView.destroy() }
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         super.onDestroy()
     }
