@@ -25,7 +25,8 @@ const callNative = (name: string, ...args: string[]) => {
 };
 const safe = (value: any) => String(value ?? "");
 const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取/.test(value) ? "bad" : "muted";
-const accountSummary = (games: AnyState[], statuses: Record<string, string>) => {
+const accountSummary = (platform: string, games: AnyState[], statuses: Record<string, string>) => {
+  if (platform === "miyoushe_cn") return "云端签到暂未接入";
   if (!games.length) return "未启用游戏";
   const results = games.map(game => statuses[game.key || game.id] || "unknown");
   const success = results.filter(value => value === "success").length;
@@ -49,7 +50,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [todayGame, setTodayGame] = useState<{key: string | null; label: string | null}>({key:null,label:null});
   const [modal, setModal] = useState<"add" | "games" | null>(null);
-  const [gameDraft, setGameDraft] = useState<string[]>([]);
+  const [gameDraft, setGameDraft] = useState<string[] | null>(null);
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [toast, setToast] = useState("");
@@ -103,11 +104,12 @@ export default function App() {
   }, [page, cloudLoaded]);
 
   const goHome = () => {
-    setPage("home"); setSelectedId(null); setTodayGame({key:null,label:null});
+    setPage("home"); setSelectedId(null); setTodayGame({key:null,label:null}); setGameDraft(null);
     callNative("backToHome");
   };
+  const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
   const goBack = () => {
-    if (modal) { setModal(null); return; }
+    if (modal) { closeModal(); return; }
     if (page === "today-detail") { setPage("home"); setTodayGame({key:null,label:null}); return; }
     if (selectedId) { goHome(); return; }
     if (page !== "home") { setPage("home"); return; }
@@ -137,7 +139,7 @@ export default function App() {
     const pageCookieReady = !!(state.hoyoPageCookieReady && state.hoyoPageCookieAccountId === account.id);
     if (!pageCookieReady) { notify("请先打开本账号登录页面并成功获取 Cookie"); return; }
     if (!state.cloudConnected) { notify("请先连接华为云"); return; }
-    callNative("deployHoyoAccount", account.id, JSON.stringify(gameDraft.length ? gameDraft : (account.games || []).map((g: AnyState) => g.key)));
+    callNative("deployHoyoAccount", account.id, JSON.stringify(gameDraft ?? (account.games || []).map((g: AnyState) => g.key)));
     notify("正在合并云端配置并上传");
   };
 
@@ -197,8 +199,8 @@ export default function App() {
         <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : state.syncState === "empty_confirmed" ? "云端尚无账号" : "等待读取云端账号"}</strong>
         <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "账号配置从华为云读取，读取完成后可添加账号。"}</p>
       </div> : <div className="account-list">{accounts.map((a: AnyState) => {
-        const aggregate = accountSummary(a.games || [], a.gameTodayStatuses || {});
-        return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");}}>
+        const aggregate = accountSummary(a.platform, a.games || [], a.gameTodayStatuses || {});
+        return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");setGameDraft(null);}}>
           <span className="account-info"><strong>{a.name}</strong><small>{a.platformLabel}</small></span>
           <span className={"account-status " + statusTone(aggregate)}>{aggregate}</span>
           <ChevronRight size={17} className="subtle-icon"/>
@@ -340,23 +342,23 @@ export default function App() {
       <button className={page === "messages" ? "active" : ""} onClick={() => setPage("messages")}><FileText size={19}/><span>运行消息</span></button>
     </nav>}
 
-    {modal === "add" && <div className="modal-backdrop" onClick={() => setModal(null)}>
+    {modal === "add" && <div className="modal-backdrop" onClick={closeModal}>
       <section className="modal-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-title"><div><h2>添加账号</h2><p>选择需要添加的平台。</p></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div>
+        <div className="modal-title"><div><h2>添加账号</h2><p>选择需要添加的平台。</p></div><button className="icon-button" onClick={closeModal} aria-label="关闭"><X size={18}/></button></div>
         <button className="choice-row" onClick={() => addAccount("hoyolab")}><span><strong>HoYoLAB（国际服）</strong><small>国际服游戏账号</small></span><ChevronRight size={17}/></button>
         <button className="choice-row" onClick={() => addAccount("miyoushe_cn")}><span><strong>米游社（国服）</strong><small>国服游戏账号</small></span><ChevronRight size={17}/></button>
         <button className="choice-row" onClick={() => addAccount("skland")}><span><strong>森空岛</strong><small>明日方舟 / 终末地</small></span><ChevronRight size={17}/></button>
       </section>
     </div>}
 
-    {modal === "games" && <div className="modal-backdrop" onClick={() => setModal(null)}>
+    {modal === "games" && <div className="modal-backdrop" onClick={closeModal}>
       <section className="modal-sheet game-sheet" onClick={e => e.stopPropagation()}>
         <div className="modal-title"><div><h2>选择要启用的游戏</h2><p>勾选需要参与自动签到的游戏。</p></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div>
         <div className="game-options">{options.map((game: AnyState) => <label className="game-option" key={game.key}>
           <input type="checkbox" checked={gameDraft.includes(game.key)} onChange={e => setGameDraft(old => e.target.checked ? [...old,game.key] : old.filter(x => x !== game.key))}/>
           <span>{game.label}</span><span className="checkmark"><Check size={14}/></span>
         </label>)}</div>
-        <div className="modal-actions"><button className="secondary-button" onClick={() => setModal(null)}>取消</button><button className="primary-button" onClick={() => {setModal(null);notify("已选择；将在上传云函数时生效");}}>完成</button></div>
+        <div className="modal-actions"><button className="secondary-button" onClick={closeModal}>取消</button><button className="primary-button" onClick={() => {setModal(null);notify("已选择；将在上传云函数时生效");}}>完成</button></div>
       </section>
     </div>}
 
