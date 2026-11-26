@@ -574,11 +574,13 @@ open class HuaweiCloudActivity : Activity() {
                     return "OK" to logs
                 }
                 fun isOutcome(line: String): Boolean =
-                    line.contains("签到成功") || line.contains("签到完成") || line.contains("签到失败") ||
+                    line.contains("签到成功") || line.contains("签到完成") || line.contains("今日已签到") ||
+                    line.contains("无需重复签到") || line.contains("签到失败") ||
                     line.contains("check-in success", true) || line.contains("checkin success", true) ||
                     line.contains("check-in failed", true) || line.contains("checkin failed", true)
                 fun outcome(line: String): String = when {
-                    line.contains("签到成功") || line.contains("签到完成") || line.contains("check-in success", true) || line.contains("checkin success", true) -> "success"
+                    line.contains("签到成功") || line.contains("签到完成") || line.contains("今日已签到") ||
+                        line.contains("无需重复签到") || line.contains("check-in success", true) || line.contains("checkin success", true) -> "success"
                     line.contains("签到失败") || line.contains("check-in failed", true) || line.contains("checkin failed", true) -> "failed"
                     else -> "unknown"
                 }
@@ -1061,9 +1063,24 @@ open class HuaweiCloudActivity : Activity() {
             .put("trigger_type", "TIMER")
             .put("trigger_name", "APK_Timer_Test")
             .put("user_event", "APK 部署后的定时触发器格式测试")
-        val response = signedRequest("POST", url, timerEvent.toString())
+        val responseHeaders = linkedMapOf<String, String>()
+        val response = signedRequest(
+            "POST", url, timerEvent.toString(),
+            mapOf("x-cff-log-type" to "tail", "x-cff-request-version" to "v1"),
+            responseHeaders
+        )
         if (response.first !in 200..299) error("定时触发器格式测试请求失败（HTTP ${response.first}）：" + response.second.take(1600))
         val raw = response.second.trim()
+        val encodedPrintLog = responseHeaders.entries.firstOrNull { it.key.equals("x-cff-function-log", true) }?.value.orEmpty()
+        val printLog = if (encodedPrintLog.isNotBlank()) runCatching {
+            android.util.Base64.decode(encodedPrintLog, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+        }.getOrDefault("函数日志 Base64 解码失败：${encodedPrintLog}") else ""
+        val fullRawOutput = buildString {
+            append("【函数自身打印日志（X-Cff-Function-Log）】\n")
+            append(printLog.ifBlank { "华为云未返回函数打印日志。" })
+            append("\n\n【函数调用原始响应正文】\n")
+            append(raw)
+        }.take(12000)
         if (raw.isBlank()) error("定时触发器格式测试响应体为空（HTTP ${response.first}），无法确认函数返回结果。")
         val result = runCatching { JSONObject(raw) }.getOrNull()
         if (result != null) {
@@ -1082,13 +1099,13 @@ open class HuaweiCloudActivity : Activity() {
             val requestId = result.optString("request_id")
             val summary = "已使用 TIMER 事件格式调用成功（HTTP ${response.first}" +
                 if (requestId.isNotBlank()) "，请求 ID：$requestId）" else "）"
-            return FunctionInvokeResult(summary, raw)
+            return FunctionInvokeResult(summary, fullRawOutput)
         }
         if (raw.contains("Traceback", true) || raw.contains("Exception", true) ||
             raw.contains("FileNotFoundError", true) || raw.contains("error", true))
             error("定时触发器格式测试返回异常内容：" + raw.take(1200))
         // A raw scalar such as 0 is a function return value, not malformed JSON.
-        return FunctionInvokeResult("已使用 TIMER 事件格式调用（HTTP ${response.first}）", raw)
+        return FunctionInvokeResult("已使用 TIMER 事件格式调用（HTTP ${response.first}）", fullRawOutput)
     }
 
     private fun listFunctionTriggers(functionUrn: String): org.json.JSONArray {
@@ -1277,11 +1294,18 @@ open class HuaweiCloudActivity : Activity() {
         return JSONObject(body)
     }
 
-    private fun signedRequest(method: String, urlText: String, body: String): Pair<Int, String> {
+    private fun signedRequest(
+        method: String,
+        urlText: String,
+        body: String,
+        extraHeaders: Map<String, String> = emptyMap(),
+        responseHeaders: MutableMap<String, String>? = null
+    ): Pair<Int, String> {
         val url = URL(urlText)
         val date = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
         val headers = sortedMapOf("host" to url.host, "x-sdk-date" to date)
         if (method != "GET") headers["content-type"] = if (method == "POST") "application/json;charset=utf8" else "application/json"
+        extraHeaders.forEach { (key, value) -> headers[key.lowercase(Locale.ROOT)] = value }
         val names = headers.keys.toList()
         val canonicalHeaders = names.joinToString("") { it + ":" + headers[it] + "\n" }
         val signedHeaders = names.joinToString(";")
@@ -1301,10 +1325,15 @@ open class HuaweiCloudActivity : Activity() {
             setRequestProperty("X-Sdk-Date", date); setRequestProperty("Authorization", authorization)
             setRequestProperty("Accept", "application/json")
             if (method != "GET") { doOutput = true; setRequestProperty("Content-Type", headers["content-type"]) }
+            extraHeaders.forEach { (key, value) -> setRequestProperty(key, value) }
         }
         try {
             if (method != "GET") conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
+            responseHeaders?.clear()
+            conn.headerFields.forEach { (key, values) ->
+                if (key != null && !values.isNullOrEmpty()) responseHeaders?.put(key.lowercase(Locale.ROOT), values.joinToString(","))
+            }
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             return code to (stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty())
         } finally { conn.disconnect() }
