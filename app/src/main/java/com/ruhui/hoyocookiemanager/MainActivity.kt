@@ -293,14 +293,8 @@ class MainActivity : HuaweiCloudActivity() {
                         }
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
-                        // Use the shared Chromium/WebView viewport and overview-mode
-                        // configuration. Avoid post-load DOM viewport rewrites or manual
-                        // scroll/zoom loops, which can fight the site's own layout and crop content.
-                        if (activePlatform == AccountStore.HOYOLAB) {
-                            DesktopWebView.centerDesktopContent(view)
-                        } else {
-                            DesktopWebView.enableDesktopViewport(view)
-                        }
+                        // Both services use exactly the same page presentation pipeline.
+                        DesktopWebView.prepareDesktopPage(view, centerVertical = true)
                         requestCookieRefresh()
                         view.postDelayed({ requestCookieRefresh() }, 900L)
                         view.postDelayed({ requestCookieRefresh() }, 2200L)
@@ -381,7 +375,7 @@ class MainActivity : HuaweiCloudActivity() {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
                     if (activePlatform == AccountStore.HOYOLAB) {
-                        DesktopWebView.centerDesktopContent(view)
+                        DesktopWebView.prepareDesktopPage(view, centerVertical = true)
                     }
                     // Popup inherits the shared native WebView zoom and viewport settings.
                     requestCookieRefresh()
