@@ -80,7 +80,8 @@ function renderDetail(a){
   html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
  }
  const updateMessage=String(a.cloudUpdateMessage||"").trim();
- const updateTone=updateMessage.startsWith("✓")?"success":updateMessage.startsWith("✕")?"failed":"pending";
+ const latestUpdateMessage=updateMessage.split("\n\n").pop()||updateMessage;
+ const updateTone=latestUpdateMessage.startsWith("✓")?"success":latestUpdateMessage.startsWith("✕")?"failed":"pending";
  html+='<div class="card cloud-update-card"><div class="card-title">云函数更新结果</div><div class="message-box account-update-message '+updateTone+'">'+esc(updateMessage||"暂无本账号的云函数更新记录")+'</div></div>';
  return html
 }
