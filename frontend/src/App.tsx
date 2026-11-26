@@ -197,7 +197,7 @@ export default function App() {
       {accounts.length === 0 ? <div className="empty-state">
         <span className="empty-symbol"><ShieldCheck size={27}/></span>
         <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : state.syncState === "empty_confirmed" ? "云端尚无账号" : "等待读取云端账号"}</strong>
-        <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "账号配置从华为云读取，读取完成后可添加账号。"}</p>
+        <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "先连接华为云，读取现有账号配置后即可添加账号。"}</p>
       </div> : <div className="account-list">{accounts.map((a: AnyState) => {
         const aggregate = accountSummary(a.platform, a.games || [], a.gameTodayStatuses || {});
         return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");setGameDraft(null);}}>
@@ -320,7 +320,7 @@ export default function App() {
   const renderMessages = () => <>
     {title("运行消息", "查看操作记录与错误信息。")}
     <section className="surface-card">
-      <div className="card-heading"><span>运行记录</span><button className="icon-button small" onClick={() => copyText(state.allMessages || "暂无运行消息", "全部运行消息已复制")}><Copy size={15}/></button></div>
+      <div className="card-heading"><span>运行记录</span><button className="icon-button small" onClick={() => copyText(state.allMessages || "", "全部运行消息已复制")}><Copy size={15}/></button></div>
       <pre className="log-view all-messages">{state.allMessages || "暂无运行消息"}</pre>
     </section>
   </>;
