@@ -51,6 +51,17 @@ object DesktopWebView {
     }
 
     /**
+     * Single page-ready entry point shared by HoYoLAB and Skland.
+     * It applies the desktop viewport, keeps wide fixed headers synchronized
+     * with document panning, then positions the page using the shared centering logic.
+     */
+    fun prepareDesktopPage(view: WebView, centerVertical: Boolean = true) {
+        enableDesktopViewport(view)
+        makeTopFixedHeadersFollowHorizontalScroll(view)
+        centerDesktopContent(view, centerVertical)
+    }
+
+    /**
      * Center the full desktop document in both axes using WebView's native scroll.
      * The JavaScript result is a simple comma-separated string so Android can
      * parse it reliably (evaluateJavascript JSON-escapes returned JS strings).
