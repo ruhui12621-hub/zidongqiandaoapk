@@ -15,6 +15,8 @@ import androidx.webkit.WebViewFeature
  * remain owned by each Activity.
  */
 object DesktopWebView {
+    private const val LOGIN_WINDOW_SCROLL_OFFSET_CSS_PX = 300f
+
     const val DESKTOP_USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
@@ -188,7 +190,12 @@ object DesktopWebView {
                     val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
                     val targetX = maxScrollX / 2
-                    val targetY = maxScrollY / 2
+                    // Keep the horizontal axis centered, but use a fixed vertical
+                    // offset so the initial view lands near the login dialog rather
+                    // than halfway through pages of different heights.
+                    val targetY = (LOGIN_WINDOW_SCROLL_OFFSET_CSS_PX * scale)
+                        .toInt()
+                        .coerceIn(0, maxScrollY)
                     view.scrollTo(targetX, targetY)
                 }
             }
