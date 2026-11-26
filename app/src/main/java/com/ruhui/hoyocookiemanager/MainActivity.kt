@@ -55,6 +55,7 @@ class MainActivity : HuaweiCloudActivity() {
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
+        restorePendingCookieSession()
         if (!returnToAccountDetail) AccountStore.clearMemory()
         if (activePlatform != AccountStore.HOYOLAB && activePlatform != AccountStore.MIYOUSHE_CN) {
             finish()
@@ -83,8 +84,8 @@ class MainActivity : HuaweiCloudActivity() {
                 loginChrome.removeJavascriptInterface("LoginUi")
                 loginChrome.destroy()
             }
-            CookieManager.getInstance().removeAllCookies { CookieManager.getInstance().flush() }
-            WebStorage.getInstance().deleteAllData()
+            // Activity recreation/navigation must not erase the process-wide login session.
+            // CookieManager and WebStorage are cleared only by the user's explicit clear action.
         } catch (_: Exception) {
             // Ignore WebView teardown failures; no credential data is written by this Activity.
         }
@@ -237,7 +238,11 @@ class MainActivity : HuaweiCloudActivity() {
                     }
                     override fun onPageFinished(view: WebView, url: String) {
                         super.onPageFinished(view, url)
-                        statusText = "页面已加载，正在检查 Cookie…"
+                        if (HuaweiCloudSession.pendingHoyoCookie.isBlank()) {
+                            statusText = "登录状态：等待检测"
+                        } else {
+                            restorePendingCookieSession()
+                        }
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         DesktopWebView.enableDesktopViewport(view)
@@ -325,6 +330,21 @@ class MainActivity : HuaweiCloudActivity() {
                 }
             }
         }
+    }
+
+    private fun restorePendingCookieSession() {
+        val cached = HuaweiCloudSession.pendingHoyoCookie
+        if (cached.isBlank()) return
+        val server = HuaweiCloudSession.pendingHoyoCookieServer
+        val cachedPlatform = if (server == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
+        if (activePlatform != null && activePlatform != cachedPlatform) return
+        cookieValue = cached
+        detectedGameServer = server
+        activeAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId.ifBlank { activeAccountId.orEmpty() }
+            .ifBlank { null }
+        yamlValue = makeYaml(cached, server)
+        statusText = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
+        detailsText = "已保留本次应用运行期间最新获取的 Cookie。"
     }
 
     private fun refreshFromWebView(showToast: Boolean = false) {
@@ -426,16 +446,24 @@ class MainActivity : HuaweiCloudActivity() {
             }
             if (showToast) toast("已获取 Cookie，识别为${if (server == "cn") "国服" else "国际服"}")
         } else {
-            yamlValue = ""
-            detectedGameServer = null
-            statusText = "Cookie 状态：未获取"
-            detailsText = if (found.isBlank()) {
-                "请登录 HoYoLAB 或米游社，登录后自动检测 Cookie 和服务器。"
+            // A transient empty scan (for example, while a login page is opening) is not
+            // evidence that the user logged out. Keep the last valid process-session Cookie.
+            if (HuaweiCloudSession.pendingHoyoCookie.isNotBlank()) {
+                restorePendingCookieSession()
             } else {
-                "已读取到 Cookie，但无法可靠判断服务器。请确认登录的是国服或国际服账号后重试。"
+                cookieValue = ""
+                yamlValue = ""
+                detectedGameServer = null
+                statusText = "Cookie 状态：未获取"
+                detailsText = if (found.isBlank()) {
+                    "请登录 HoYoLAB 或米游社，登录后自动检测 Cookie 和服务器。"
+                } else {
+                    "已读取到 Cookie，但无法可靠判断服务器。请确认登录的是国服或国际服账号后重试。"
+                }
             }
-            HuaweiCloudSession.clearPendingHoyoCookie()
-            if (showToast) toast("未发现可识别的登录凭据")
+            if (showToast && HuaweiCloudSession.pendingHoyoCookie.isBlank()) {
+                toast("未发现可识别的登录凭据")
+            }
         }
         pushLoginChrome()
     }
