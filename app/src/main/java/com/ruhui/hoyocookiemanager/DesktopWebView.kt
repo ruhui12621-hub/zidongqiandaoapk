@@ -71,7 +71,6 @@ object DesktopWebView {
                 view.post {
                     if (view.width <= 0 || view.height <= 0) return@post
                     val scale = view.scale
-                    val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
                     // Never center by scrolling into a wide document: that cuts off its
                     // left-side navigation/header (as seen on Skland). Keep the document's
