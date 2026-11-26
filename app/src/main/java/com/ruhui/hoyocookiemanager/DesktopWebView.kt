@@ -55,7 +55,7 @@ object DesktopWebView {
      * The JavaScript result is a simple comma-separated string so Android can
      * parse it reliably (evaluateJavascript JSON-escapes returned JS strings).
      */
-    fun centerDesktopContent(view: WebView) {
+    fun centerDesktopContent(view: WebView, centerVertical: Boolean = true) {
         fun center() {
             if (view.width <= 0 || view.height <= 0) return
             view.evaluateJavascript(
@@ -73,7 +73,10 @@ object DesktopWebView {
                     val scale = view.scale
                     val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
-                    view.scrollTo(maxScrollX / 2, maxScrollY / 2)
+                    // Some sites place their navigation/title bar at the document top.
+                    // Keep that header fully visible while still centering the desktop canvas horizontally.
+                    val targetY = if (centerVertical) maxScrollY / 2 else 0
+                    view.scrollTo(maxScrollX / 2, targetY)
                 }
             }
         }
