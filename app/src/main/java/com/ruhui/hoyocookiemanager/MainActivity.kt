@@ -268,14 +268,10 @@ class MainActivity : HuaweiCloudActivity() {
                         }
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
-                        // HoYoLAB must keep its own desktop viewport: forcing width=980 can alter
-                        // the site's login overlay/window behavior. Only relax zoom restrictions here.
-                        if (activePlatform == AccountStore.HOYOLAB) {
-                            DesktopWebView.enablePageZoom(view)
-                            // Fit the desktop document before positioning it; never jump
-                            // into the middle of overflowing content where both edges are hidden.
-                            DesktopWebView.centerDesktopContent(view)
-                        } else {
+                        // Use the shared Chromium/WebView viewport and overview-mode
+                        // configuration. Avoid post-load DOM viewport rewrites or manual
+                        // scroll/zoom loops, which can fight the site's own layout and crop content.
+                        if (activePlatform != AccountStore.HOYOLAB) {
                             DesktopWebView.enableDesktopViewport(view)
                         }
                         requestCookieRefresh()
