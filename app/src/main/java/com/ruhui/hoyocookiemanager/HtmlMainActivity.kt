@@ -101,6 +101,10 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         pushState()
     }
 
+    override fun onCloudDeploymentProgress() {
+        runOnUiThread { pushState() }
+    }
+
     private fun refreshTodayStatuses(force: Boolean = true) {
         if (todayQuerying) return
         if (!force && todayStatuses.isNotEmpty()) return
