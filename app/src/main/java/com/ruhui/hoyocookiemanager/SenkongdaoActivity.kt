@@ -277,7 +277,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页加载回调完成",
                     "地址：$url\n标题：${view.title.orEmpty()}\n此回调本身不代表页面业务内容一定正常。", true)
                 // HoYoLAB and Skland use the same unconditional two-axis centering pipeline.
-                DesktopWebView.prepareDesktopPage(view)
+                DesktopWebView.prepareDesktopPage(view, AccountStore.SKLAND)
+                SklandLoginAdapter.onPageReady(view)
                 AppMessageBus.post(
                     this@SenkongdaoActivity,
                     AppMessageBus.SKLAND,
