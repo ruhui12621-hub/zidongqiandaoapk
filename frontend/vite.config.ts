@@ -14,6 +14,12 @@ export default defineConfig({
     emptyOutDir: true,
     assetsDir: "static",
     sourcemap: false,
-    minify: "esbuild"
+    minify: "esbuild",
+    rollupOptions: {
+      input: {
+        main: resolve(frontendRoot, "index.html"),
+        "skland-status": resolve(frontendRoot, "skland-status.html")
+      }
+    }
   }
 });
