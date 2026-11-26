@@ -191,7 +191,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         (chromeView.parent as? ViewGroup)?.removeView(chromeView)
         browserFrame = FrameLayout(this)
         root.addView(browserFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(112)))
+        root.addView(chromeView, LinearLayout.LayoutParams(-1, dp(62)))
         val main = DesktopWebView.create(this, multiWindow = true)
         mainView = main
         configureLogin(main, false)
