@@ -58,7 +58,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AppMessageBus.setActiveChannel(AppMessageBus.SKLAND)
         CookieManager.getInstance().setAcceptCookie(true)
-        tokenSavedCached = hasToken()
+        // The bottom status belongs to this login-page session, not an older saved token.
+        tokenSavedCached = false
         AppMessageBus.beginSession(this, AppMessageBus.SKLAND, "森空岛启动", "已进入森空岛登录 Activity，开始初始化 WebView。")
         try {
             initializeChromeView()
@@ -424,7 +425,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             selectedAccountId?.let { id ->
                 val store = AccountStore(this)
                 store.find(id)?.let { account ->
-                    store.update(account.copy(credentialReady = true, tokenReady = true))
+                    store.update(account.copy(credentialReady = true, cookieReady = true, tokenReady = true))
                 }
             }
             saved = true
