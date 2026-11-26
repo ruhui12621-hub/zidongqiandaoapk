@@ -209,15 +209,15 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         sessionCookieManager?.setAcceptThirdPartyCookies(main, true)
         browserFrame.addView(main, FrameLayout.LayoutParams(-1, -1))
         AppMessageBus.post(this, AppMessageBus.SKLAND, "主 WebView 已创建", "桌面 UA：${main.settings.userAgentString}\n多窗口：${main.settings.supportMultipleWindows()}\nJavaScript：${main.settings.javaScriptEnabled}\nDOM Storage：${main.settings.domStorageEnabled}\nWebView 内核：${runCatching { if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage()?.versionName ?: "未知" else "系统版本未提供" }.getOrDefault("读取失败")}", true)
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "请求加载森空岛首页", "即将调用 WebView.loadUrl。\n目标地址：$HOME_URL", null)
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "请求加载森空岛首页", "即将调用 WebView.loadUrl。\n目标地址：$SklandLoginAdapter.HOME_URL", null)
         if (!profilePrepared) {
             profilePrepared = true
             sessionWebStorage?.deleteAllData()
             sessionCookieManager?.removeAllCookies {
                 sessionCookieManager?.flush()
-                if (!isFinishing && !isDestroyed) main.loadUrl(HOME_URL)
+                if (!isFinishing && !isDestroyed) main.loadUrl(SklandLoginAdapter.HOME_URL)
             }
-        } else main.loadUrl(HOME_URL)
+        } else main.loadUrl(SklandLoginAdapter.HOME_URL)
         AppMessageBus.post(this, AppMessageBus.SKLAND, "已调用首页加载", "WebView.loadUrl 已执行；是否真正加载成功，以后续页面回调为准。", null)
         pushSklandUi()
         pollHandler.removeCallbacks(pollTask)
@@ -361,7 +361,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
 
         // Read WebView cookies on the UI thread; do the HTTP request in the background.
         // This replaces the hidden third WebView, leaving the login page free to render.
-        val cookie = sessionCookieManager?.getCookie(TOKEN_URL).orEmpty()
+        val cookie = sessionCookieManager?.getCookie(SklandLoginAdapter.TOKEN_URL).orEmpty()
         if (cookie.isBlank()) {
             checking = false
             statusText = "等待登录"
@@ -371,14 +371,14 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         tokenExecutor.execute {
             var connection: HttpURLConnection? = null
             try {
-                val request = (URL(TOKEN_URL).openConnection() as HttpURLConnection).apply {
+                val request = (URL(SklandLoginAdapter.TOKEN_URL).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = 10000
                     readTimeout = 10000
                     useCaches = true
                     setRequestProperty("Cookie", cookie)
                     setRequestProperty("User-Agent", DesktopWebView.DESKTOP_USER_AGENT)
-                    setRequestProperty("Referer", HOME_URL)
+                    setRequestProperty("Referer", SklandLoginAdapter.HOME_URL)
                     setRequestProperty("Accept", "application/json, text/plain, */*")
                 }
                 connection = request
@@ -416,18 +416,17 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
 
     private fun parseResponse(body: String) {
         try {
-            val json = JSONObject(body)
-            if (json.optInt("code", -1) != 0) {
+            val parsed = SklandLoginAdapter.parseTokenResponse(body)
+            if (parsed.businessCode != 0) {
                 checking = false
                 statusText = "未登录"
                 AppMessageBus.post(this, AppMessageBus.SKLAND, "Token 接口返回未登录",
-                    "业务状态码：${json.optInt("code", -1)}\n服务端消息：${json.optString("msg", json.optString("message", "未提供消息"))}", false)
+                    "业务状态码：${parsed.businessCode}\n服务端消息：${parsed.message}", false)
                 pushSklandUi()
                 return
             }
-            val token = json.optJSONObject("data")?.optString("content").orEmpty()
-                .ifBlank { json.optString("content").orEmpty() }
-            if (!SklandCredentialAdapter.isValidToken(token)) {
+            val token = parsed.token.orEmpty()
+            if (!SklandLoginAdapter.isValidToken(token)) {
                 checking = false
                 statusText = "等待登录"
                 AppMessageBus.post(this, AppMessageBus.SKLAND, "Token 接口未返回可用凭据",
@@ -516,8 +515,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     companion object {
-        private const val HOME_URL = "https://www.skland.com/"
-        private const val TOKEN_URL = "https://web-api.skland.com/account/info/hg"
+        private const val SklandLoginAdapter.HOME_URL = "https://www.skland.com/"
+        private const val SklandLoginAdapter.TOKEN_URL = "https://web-api.skland.com/account/info/hg"
         private const val SKLAND_STATUS_URL = "https://appassets.androidplatform.net/assets/ui/skland-status.html"
     }
 }

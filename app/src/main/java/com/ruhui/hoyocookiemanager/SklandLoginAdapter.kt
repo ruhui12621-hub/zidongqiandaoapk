@@ -1,6 +1,7 @@
 package com.ruhui.hoyocookiemanager
 
 import android.webkit.WebView
+import org.json.JSONObject
 
 /**
  * Skland-only login entry behavior.
@@ -9,6 +10,27 @@ import android.webkit.WebView
  * own generic WebView presentation or account/session storage.
  */
 object SklandLoginAdapter {
+    const val HOME_URL = "https://www.skland.com/"
+    const val TOKEN_URL = "https://web-api.skland.com/account/info/hg"
+
+    data class TokenResponse(
+        val businessCode: Int,
+        val message: String,
+        val token: String?
+    )
+
+    fun parseTokenResponse(body: String): TokenResponse {
+        val json = JSONObject(body)
+        return TokenResponse(
+            businessCode = json.optInt("code", -1),
+            message = json.optString("msg", json.optString("message", "未提供消息")),
+            token = json.optJSONObject("data")?.optString("content").orEmpty()
+                .ifBlank { json.optString("content").orEmpty() }
+        )
+    }
+
+    fun isValidToken(value: String): Boolean = SklandCredentialAdapter.isValidToken(value)
+
     fun onPageReady(view: WebView) {
         val script = """
             (function() {
