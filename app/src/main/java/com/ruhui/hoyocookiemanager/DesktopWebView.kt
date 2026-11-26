@@ -19,9 +19,10 @@ object DesktopWebView {
     fun create(
         context: Context,
         multiWindow: Boolean = true,
-        cacheMode: Int = WebSettings.LOAD_DEFAULT
+        cacheMode: Int = WebSettings.LOAD_DEFAULT,
+        fitToScreen: Boolean = true
     ): WebView = WebView(context).apply {
-        configure(this, multiWindow, cacheMode)
+        configure(this, multiWindow, cacheMode, fitToScreen)
     }
 
     fun enableDesktopViewport(view: WebView) {
@@ -46,6 +47,21 @@ object DesktopWebView {
         view.evaluateJavascript(script, null)
     }
 
+    /**
+     * Horizontally center an oversized desktop page using WebView's native scroll
+     * position. This does not rewrite the site's DOM or viewport metadata.
+     */
+    fun centerDesktopContent(view: WebView) {
+        fun center() {
+            if (view.width <= 0) return
+            val contentWidthPx = (view.contentWidth * view.scale).toInt()
+            val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
+            view.scrollTo(maxScrollX / 2, view.scrollY)
+        }
+        view.post { center() }
+        view.postDelayed({ center() }, 650L)
+    }
+
     /** Attach a popup in the same layout slot as its source WebView. */
     fun attachPopup(
         container: android.view.ViewGroup,
@@ -62,7 +78,8 @@ object DesktopWebView {
     fun configure(
         view: WebView,
         multiWindow: Boolean = true,
-        cacheMode: Int = WebSettings.LOAD_DEFAULT
+        cacheMode: Int = WebSettings.LOAD_DEFAULT,
+        fitToScreen: Boolean = true
     ) {
         view.settings.apply {
             javaScriptEnabled = true
@@ -76,7 +93,7 @@ object DesktopWebView {
             // Match Chromium's documented browser-style WebView configuration:
             // wide desktop viewport + overview fit + text autosizing.
             useWideViewPort = true
-            loadWithOverviewMode = true
+            loadWithOverviewMode = fitToScreen
             layoutAlgorithm = WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
 
             // Allow pinch zoom without placing intrusive +/- controls over the page.
