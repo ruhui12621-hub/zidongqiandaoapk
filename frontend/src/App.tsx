@@ -110,13 +110,13 @@ export default function App() {
     callNative("backToHome");
   };
 
-  // Return to the first (account list) tab without remounting the main content.
+  // Return both the React screen and native account state to the account-list tab.
   const goToAccountList = useCallback(() => {
     setSelectedId(null);
     setTodayGame({ key: null, label: null });
     setGameDraft(null);
     setPage("home");
-    window.scrollTo(0, 0);
+    callNative("backToHome");
   }, []);
   const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
   const goBack = () => {
