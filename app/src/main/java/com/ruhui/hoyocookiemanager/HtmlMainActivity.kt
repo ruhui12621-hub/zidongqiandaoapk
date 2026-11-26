@@ -162,7 +162,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                     .put("games", games)
                     .put("cookieReady", account.cookieReady)
                     .put("tokenReady", account.tokenReady)
-                    .put("cloudUpdateMessage", AppMessageBus.currentForAccount(this, account.id))
+                    .put("cloudUpdateStages", AppMessageBus.currentAccountStages(this, account.id))
                     .put("todayStatus", todayStatuses[account.id] ?: "今日签到状态未知")
                     .put("gameTodayStatuses", JSONObject().apply { todayGameStatuses[account.id].orEmpty().forEach { (key, value) -> put(key, value) } })
             )
