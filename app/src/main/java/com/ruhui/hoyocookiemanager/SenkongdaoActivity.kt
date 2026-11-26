@@ -261,8 +261,16 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页加载回调完成",
                     "地址：$url\n标题：${view.title.orEmpty()}\n此回调本身不代表页面业务内容一定正常。", true)
-                // Same shared desktop-page pipeline as HoYoLAB; only token handling differs.
+                // Same shared desktop-page pipeline as HoYoLAB; keep Skland's top edge
+                // aligned while centering the desktop page horizontally.
                 DesktopWebView.prepareDesktopPage(view, centerVertical = false)
+                AppMessageBus.post(
+                    this@SenkongdaoActivity,
+                    AppMessageBus.SKLAND,
+                    "已触发网页横向居中",
+                    "森空岛页面已调用 DesktopWebView.prepareDesktopPage；横向居中已启用，纵向保持顶部对齐。页面尺寸稳定后会再次校正位置。",
+                    true
+                )
                 if (isSklandHost(url)) {
                     scheduleCheck()
                 }
