@@ -77,6 +77,50 @@ object AppMessageBus {
         }
     }
 
+    /** Compact structured deployment stages shown in account details. */
+    fun resetAccountStages(context: Context, accountId: String) {
+        setAccountStage(context, accountId, "function", "云函数", "未执行", "")
+        setAccountStage(context, accountId, "trigger", "定时触发器", "未执行", "")
+        setAccountStage(context, accountId, "test", "函数运行测试", "未执行", "")
+        setAccountStage(context, accountId, "output", "测试输出结果", "未执行", "")
+    }
+
+    fun setAccountStage(context: Context, accountId: String, stage: String, label: String, status: String, detail: String) {
+        if (accountId.isBlank()) return
+        val key = "account_stages_" + accountId.take(120)
+        runCatching {
+            val prefs = context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
+            val json = org.json.JSONObject(prefs.getString(key, "{}").orEmpty())
+            json.put(stage, org.json.JSONObject()
+                .put("key", stage).put("label", label).put("status", status)
+                .put("detail", sanitize(detail).take(500)))
+            prefs.edit().putString(key, json.toString()).apply()
+        }
+    }
+
+    fun currentAccountStages(context: Context, accountId: String): org.json.JSONArray {
+        val key = "account_stages_" + accountId.take(120)
+        val saved = runCatching {
+            context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
+                .getString(key, "{}").orEmpty()
+        }.getOrDefault("{}")
+        val json = runCatching { org.json.JSONObject(saved) }.getOrDefault(org.json.JSONObject())
+        val order = listOf("function", "trigger", "test", "output")
+        val rows = org.json.JSONArray()
+        order.forEach { stage ->
+            val item = json.optJSONObject(stage) ?: org.json.JSONObject()
+                .put("key", stage)
+                .put("label", when(stage) {
+                    "function" -> "云函数"
+                    "trigger" -> "定时触发器"
+                    "test" -> "函数运行测试"
+                    else -> "测试输出结果"
+                }).put("status", "未执行").put("detail", "")
+            rows.put(item)
+        }
+        return rows
+    }
+
     fun currentForAccount(context: Context, accountId: String): String {
         if (accountId.isBlank()) return "暂无云函数更新结果"
         val key = "latest_account_" + accountId.take(120)
