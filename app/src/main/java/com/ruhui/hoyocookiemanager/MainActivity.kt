@@ -238,7 +238,7 @@ class MainActivity : HuaweiCloudActivity() {
                         statusText = "页面已加载，正在检查 Cookie…"
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
-                        DesktopWebView.enablePageZoom(view)
+                        DesktopWebView.enableDesktopViewport(view)
                         view.postDelayed({ refreshFromWebView() }, 900)
                     }
                 }
@@ -292,7 +292,7 @@ class MainActivity : HuaweiCloudActivity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
-                    DesktopWebView.enablePageZoom(view)
+                    DesktopWebView.enableDesktopViewport(view)
                 }
 
                 override fun onReceivedError(
