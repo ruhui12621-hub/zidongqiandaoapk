@@ -23,6 +23,7 @@ class MainActivity : HuaweiCloudActivity() {
     private lateinit var root: LinearLayout
     private var statusText = "登录状态：尚未检测"
     // True only when this login-page Activity has successfully acquired a Cookie.
+    private var pageCookieAcquired = false
     private var detailsText = "登录后自动检测 Cookie。"
     private lateinit var webView: WebView
     private lateinit var loginChrome: WebView
