@@ -94,4 +94,17 @@ object GlobalModuleRegistry {
 
     fun isGameAllowed(platformId: String, gameId: String): Boolean =
         gamesFor(platformId).any { it.key == gameId }
+
+    fun isValidCredential(platformId: String, value: String): Boolean {
+        val module = gameModule(platformId) ?: return false
+        return when (module.credentialType) {
+            "Token" -> value.isNotBlank() && value.length <= 65536 && !value.any(Char::isWhitespace)
+            "Cookie" -> value.split(';').any { part ->
+                val key = part.trim().substringBefore('=').trim().lowercase()
+                val fieldValue = part.trim().substringAfter('=', "").trim()
+                key in module.credentialMarkers && fieldValue.isNotBlank()
+            }
+            else -> false
+        }
+    }
 }
