@@ -54,7 +54,7 @@ function renderDetail(a){
    const result=enabled?(gameStates[key]||"unknown"):"unconfigured";
    const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
    const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
-   return '<tr '+esc(key)+'"><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
+   return '<tr><td>'+esc(label)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>'
   }).join("");
   html+='<div class="card today-status-card" data-action="open-today-detail"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+gameRows+'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
@@ -71,7 +71,7 @@ function renderDetail(a){
    const result=gameStates[key]||"unknown";
    const resultText=result==="success"?"今日签到成功":result==="failed"?"失败":result==="unconfigured"?"未配置":"未确认";
    const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
-   return '<tr '+esc(key)+'"><td>'+esc(g.label||key)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>';
+   return '<tr><td>'+esc(g.label||key)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>';
   }).join("");
   html+='<div class="card today-status-card" data-action="open-today-detail"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="2" class="empty-cell">云端暂未配置签到游戏</td></tr>') +'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
