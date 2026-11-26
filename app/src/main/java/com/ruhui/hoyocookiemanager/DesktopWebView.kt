@@ -85,6 +85,43 @@ object DesktopWebView {
         view.postDelayed({ center() }, 650L)
     }
 
+    /**
+     * Keep desktop-site top navigation bars in the same horizontal coordinate space
+     * as the document. Some sites use position:fixed for their top header; that
+     * makes the header stay pinned to the WebView while the wide desktop page pans.
+     * For wide, top-level fixed bars only, compensate their left edge by scrollX.
+     */
+    fun makeTopFixedHeadersFollowHorizontalScroll(view: WebView) {
+        val script = """
+            (function() {
+              if (window.__desktopHeaderPanSyncInstalled) return;
+              window.__desktopHeaderPanSyncInstalled = true;
+              var headers = Array.from(document.querySelectorAll('body *')).filter(function(el) {
+                var s = getComputedStyle(el), r = el.getBoundingClientRect();
+                return s.position === 'fixed' &&
+                  r.top >= -2 && r.top < Math.min(window.innerHeight * 0.35, 220) &&
+                  r.height >= 24 && r.width >= window.innerWidth * 0.55;
+              });
+              headers.forEach(function(el) {
+                var r = el.getBoundingClientRect();
+                var baseLeft = r.left;
+                el.__desktopHeaderBaseLeft = baseLeft;
+              });
+              function sync() {
+                var x = window.scrollX || document.documentElement.scrollLeft || 0;
+                headers.forEach(function(el) {
+                  if (!el.isConnected) return;
+                  el.style.setProperty('left', (el.__desktopHeaderBaseLeft - x) + 'px', 'important');
+                  el.style.setProperty('right', 'auto', 'important');
+                });
+              }
+              window.addEventListener('scroll', sync, {passive:true});
+              sync();
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
+    }
+
     /** Attach a popup in the same layout slot as its source WebView. */
     fun attachPopup(
         container: android.view.ViewGroup,
