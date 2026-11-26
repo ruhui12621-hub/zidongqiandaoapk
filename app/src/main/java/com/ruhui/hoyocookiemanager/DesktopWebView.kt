@@ -6,6 +6,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import java.security.MessageDigest
 
 /**
  * Shared desktop-browser setup for HoYoLAB and Skland.
@@ -324,5 +325,16 @@ object DesktopWebView {
         }
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(view, true)
+    }
+}
+
+
+/** One isolated, temporary WebView profile per managed account login session. */
+object LoginWebSession {
+    fun profileName(accountId: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(accountId.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return "login_" + digest.take(24)
     }
 }
