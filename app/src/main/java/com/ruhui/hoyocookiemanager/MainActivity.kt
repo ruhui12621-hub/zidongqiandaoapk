@@ -269,6 +269,7 @@ class MainActivity : HuaweiCloudActivity() {
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         DesktopWebView.enableDesktopViewport(view)
+                        if (activePlatform == AccountStore.HOYOLAB) DesktopWebView.centerDesktopContent(view)
                         requestCookieRefresh()
                         view.postDelayed({ requestCookieRefresh() }, 900L)
                         view.postDelayed({ requestCookieRefresh() }, 2200L)
