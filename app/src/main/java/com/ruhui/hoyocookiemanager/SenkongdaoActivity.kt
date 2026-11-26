@@ -8,6 +8,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import android.webkit.ConsoleMessage
@@ -44,8 +46,9 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var checking = false
     private var saved = false
     private var tokenSavedCached = false
-    private lateinit var statusBar: LinearLayout
-    private lateinit var statusLabel: TextView
+    private lateinit var statusBar: WebView
+    private lateinit var statusAssetLoader: WebViewAssetLoader
+    private var statusPageReady = false
     private var lastCheck = 0L
     private var loginProfileName = ""
     private var sessionCookieManager: CookieManager? = null
@@ -75,7 +78,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         AppMessageBus.beginSession(this, AppMessageBus.SKLAND, "森空岛启动", "已进入森空岛登录 Activity，开始初始化 WebView。")
         try {
             initializeStatusBar()
-            AppMessageBus.post(this, AppMessageBus.SKLAND, "状态栏初始化", "状态栏 WebView 已创建，正在加载本地界面资源。", null)
+            AppMessageBus.post(this, AppMessageBus.SKLAND, "状态栏初始化", "React 状态栏 WebView 已创建，正在加载本地 React 页面。", null)
             showLogin()
         } catch (e: Throwable) {
             recordException("森空岛页面初始化失败", e)
@@ -113,48 +116,52 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private fun initializeStatusBar() {
-        statusLabel = TextView(this).apply {
-            text = "Token未获取"
-            textSize = 12f
-            setTextColor(Color.rgb(163, 155, 140))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(dp(2), 0, dp(8), 0)
-        }
-        val backButton = android.widget.Button(this).apply {
-            text = "返回"
-            textSize = 13f
-            isAllCaps = false
-            setTextColor(Color.rgb(225, 209, 175))
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.rgb(23, 21, 17))
-                setCornerRadius(dp(7).toFloat())
-                setStroke(dp(1), Color.rgb(69, 57, 35))
-            }
-            setOnClickListener { leaveLogin() }
-        }
-        statusBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(dp(9), 0, dp(9), 0)
+        statusAssetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+        statusBar = WebView(this).apply {
             setBackgroundColor(Color.rgb(8, 8, 7))
-            addView(statusLabel, LinearLayout.LayoutParams(0, -1, 1f))
-            addView(backButton, LinearLayout.LayoutParams(dp(112), dp(30)))
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = false
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.loadsImagesAutomatically = false
+            settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            addJavascriptInterface(SklandStatusBridge(), "AndroidSkland")
+            webChromeClient = android.webkit.WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    return statusAssetLoader.shouldInterceptRequest(request.url)
+                }
+                override fun onPageFinished(view: WebView, url: String) {
+                    if (url == SKLAND_STATUS_URL) {
+                        statusPageReady = true
+                        updateReactStatusBar()
+                    }
+                }
+            }
         }
-        AppMessageBus.post(this, AppMessageBus.SKLAND, "原生状态栏初始化",
-            "底部状态栏已改为 Android 原生控件，不再依赖状态栏 WebView。", true)
-        updateNativeStatusBar()
+        statusBar.loadUrl(SKLAND_STATUS_URL)
+        AppMessageBus.post(this, AppMessageBus.SKLAND, "React 状态栏初始化",
+            "底部状态栏使用独立 React 页面渲染，返回操作通过 AndroidSkland 桥接。", true)
     }
 
-    private fun updateNativeStatusBar() {
-        if (!::statusLabel.isInitialized) return
+    private fun updateReactStatusBar() {
+        if (!::statusBar.isInitialized || !statusPageReady) return
         val acquired = tokenSavedCached
-        statusLabel.text = if (acquired) "Token已获取" else "Token未获取"
-        statusLabel.setTextColor(
-            if (acquired) Color.rgb(145, 198, 160) else Color.rgb(163, 155, 140)
-        )
+        statusBar.post {
+            statusBar.evaluateJavascript(
+                "window.setSklandTokenState && window.setSklandTokenState($acquired)", null
+            )
+        }
+    }
+
+    private inner class SklandStatusBridge {
+        @JavascriptInterface
+        fun back() {
+            runOnUiThread { leaveLogin() }
+        }
     }
 
     private fun recordException(title: String, error: Throwable) {
@@ -178,7 +185,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     }
 
     private fun pushSklandUi() {
-        runOnUiThread { updateNativeStatusBar() }
+        runOnUiThread { updateReactStatusBar() }
     }
 
     private fun showLogin() {
@@ -479,6 +486,10 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
 
     private fun destroyAll() {
         listOfNotNull(popupView, mainView).distinct().forEach { destroy(it) }
+        if (::statusBar.isInitialized) {
+            statusPageReady = false
+            runCatching { statusBar.stopLoading(); statusBar.removeJavascriptInterface("AndroidSkland"); statusBar.destroy() }
+        }
         popupView = null
         mainView = null
         checking = false
@@ -506,5 +517,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     companion object {
         private const val HOME_URL = "https://www.skland.com/"
         private const val TOKEN_URL = "https://web-api.skland.com/account/info/hg"
+        private const val SKLAND_STATUS_URL = "https://appassets.androidplatform.net/assets/ui/skland-status.html"
     }
 }
