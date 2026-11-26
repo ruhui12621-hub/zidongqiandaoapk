@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import CredentialStatusBar from "./CredentialStatusBar";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft } from "lucide-react";
 import "./login-status.css";
 
 declare global {
