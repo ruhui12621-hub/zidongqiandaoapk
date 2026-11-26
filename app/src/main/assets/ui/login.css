@@ -17,7 +17,7 @@ header b,.brand b{font-size:13px;color:#f4e7ca;letter-spacing:.2px}
 .cookie-line strong.ok{color:var(--green)}
 .cookie-line strong.bad{color:var(--red)}
 .status p,.message{display:none!important}
-.bottom-actions,.actions{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin-top:auto;padding:0}
-.bottom-actions button,.actions button{box-sizing:border-box;flex:1 1 auto;width:100%;min-width:0;height:44px;margin:0;padding:0;border:1px solid rgba(214,179,106,.38);border-radius:8px;background:#17130d;color:#f0d69d;font-size:14px;font-weight:650;letter-spacing:.1px}
+.bottom-actions,.actions{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin-top:auto;padding:0;min-height:34px}
+.bottom-actions button,.actions button{box-sizing:border-box;flex:0 0 176px;width:176px;max-width:58vw;min-width:0;height:34px;margin:0;padding:0 12px;border:1px solid rgba(214,179,106,.38);border-radius:7px;background:#17130d;color:#f0d69d;font-size:12px;font-weight:650;letter-spacing:.1px}
 .bottom-actions .back,.actions .secondary{display:inline-flex;align-items:center;justify-content:center}
 .hidden{display:none!important}
