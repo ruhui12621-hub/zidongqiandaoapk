@@ -4,7 +4,6 @@ const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
 let page="home",selectedId=null,cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
-let incognitoLoginEnabled=false;
 const gameSelections={};
 const hoyoGameOptions={cn:[["genshin","原神"],["honkai2","崩坏2"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]],os:[["genshin","原神"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]]};
 function selectedHoyoGames(a){if(!gameSelections[a.id])gameSelections[a.id]=new Set((a.games||[]).map(g=>g.key));return gameSelections[a.id]}
@@ -178,7 +177,6 @@ function showGamePicker(){
 function closeGamePicker(){const root=$("#modal-root");if(root)root.innerHTML=""}
 document.addEventListener("change",e=>{
  if(e.target.matches("input[data-modal-game]"))e.target.dataset.changed="1";
- if(e.target.id==="incognito-login")incognitoLoginEnabled=e.target.checked;
 });
 document.addEventListener("input",e=>{
  if(e.target.id==="cloud-region")cloudDraft.region=e.target.value;
