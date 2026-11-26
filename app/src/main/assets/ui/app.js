@@ -79,10 +79,9 @@ function renderDetail(a){
   html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
   html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
  }
- const updateMessage=String(a.cloudUpdateMessage||"").trim();
- const latestUpdateMessage=updateMessage.split("\n\n").pop()||updateMessage;
- const updateTone=latestUpdateMessage.startsWith("✓")?"success":latestUpdateMessage.startsWith("✕")?"failed":"pending";
- html+='<div class="card cloud-update-card"><div class="cloud-update-heading"><div class="card-title">云函数更新结果</div><button class="refresh-button cloud-copy-button" data-action="copy-account-update" '+(!updateMessage?'disabled':'')+'><span aria-hidden="true">▣</span><span>复制</span></button></div><div class="message-box account-update-message '+updateTone+'">'+esc(updateMessage||"暂无本账号的云函数更新记录")+'</div></div>';
+ const stages=Array.isArray(a.cloudUpdateStages)?a.cloudUpdateStages:[];
+ const stageRows=stages.map(s=>'<tr><td>'+esc(s.label||"执行阶段")+'</td><td><span class="stage-result '+(s.status==="成功"||s.status==="已存在"||s.status==="已创建"?"success":s.status==="失败"?"failed":s.status==="进行中"?"pending":"neutral")+'">'+esc(s.status||"未执行")+'</span><div class="stage-detail">'+esc(s.detail||"")+'</div></td></tr>').join("");
+ html+='<div class="card cloud-update-card"><div class="card-title">云函数执行情况</div><div class="game-status-table-wrap"><table class="game-status-table deploy-stage-table"><thead><tr><th>执行阶段</th><th>执行情况</th></tr></thead><tbody>'+stageRows+'</tbody></table></div></div>';
  return html
 }
 function renderCloud(){
@@ -100,11 +99,6 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
- const previousAccountUpdateBox=selectedId?view.querySelector(".account-update-message"):null;
- const previousAccountUpdateScroll=previousAccountUpdateBox?previousAccountUpdateBox.scrollTop:0;
- const wasAtAccountUpdateBottom=previousAccountUpdateBox
-  ?previousAccountUpdateBox.scrollHeight-previousAccountUpdateBox.clientHeight-previousAccountUpdateBox.scrollTop<24
-  :true;
  const previousMessageBox=page==="messages"?view.querySelector(".message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
  const wasAtMessageBottom=previousMessageBox
@@ -120,11 +114,6 @@ function render(){
   const currentMessageBox=view.querySelector(".message-box");
   if(currentMessageBox)currentMessageBox.scrollTop=wasAtMessageBottom
    ?currentMessageBox.scrollHeight:previousMessageScroll;
- }
- if(selectedId){
-  const currentAccountUpdateBox=view.querySelector(".account-update-message");
-  if(currentAccountUpdateBox)currentAccountUpdateBox.scrollTop=wasAtAccountUpdateBottom
-   ?currentAccountUpdateBox.scrollHeight:previousAccountUpdateScroll;
  }
  if(page==="cloud"){
   if(!cloudVaultLoaded){try{const saved=native("getSavedCloudCredentials");if(saved){const pair=JSON.parse(saved);cloudDraft.ak=pair.ak||"";cloudDraft.sk=pair.sk||"";}cloudVaultLoaded=true;}catch(e){}}
@@ -165,7 +154,6 @@ document.addEventListener("click",e=>{
  }
  
  if(action==="copy-all-messages"){native("copyText",state.allMessages||"暂无运行消息");toast("全部运行消息已复制")}
- if(action==="copy-account-update"){const a=account();const message=String(a&&a.cloudUpdateMessage||"").trim();if(message){native("copyText",message);toast("本账号云函数更新结果已复制")}else toast("暂无可复制的更新记录")}
 });
 document.addEventListener("focusout",()=>setTimeout(()=>{if(!(document.activeElement&&document.activeElement.matches("input,select,textarea")))render()},0));
 function showGamePicker(){
