@@ -53,7 +53,6 @@ export default function App() {
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [toast, setToast] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const account = useMemo(() => (state.accounts || []).find((item: AnyState) => item.id === selectedId), [state.accounts, selectedId]);
 
@@ -158,10 +157,8 @@ export default function App() {
 
   const submitCloudLogin = () => {
     if (!cloudDraft.ak.trim() || !cloudDraft.sk.trim()) { notify("请填写 AK 和 SK"); return; }
-    setBusy(true);
     callNative("cloudLogin", cloudDraft.region, cloudDraft.ak, cloudDraft.sk);
-    notify("正在验证华为云凭据");
-    window.setTimeout(() => setBusy(false), 1200);
+    notify("已提交连接请求，请查看连接状态");
   };
 
   const title = (heading: string, subtitle: string, eyebrow = "") => (
@@ -186,7 +183,7 @@ export default function App() {
       <button className="cloud-banner" onClick={() => setPage("cloud")}>
         <span className="banner-icon"><Cloud size={21}/></span>
         <span className="banner-copy"><strong>华为云连接</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
-        <span className={"status-pill " + (state.cloudConnected ? "good" : "muted")}>{state.cloudConnected ? "已连接" : state.cloudCredentialsSaved ? "凭据已保存" : "未登录"}</span>
+        <span className={"status-pill " + (state.cloudConnected ? "good" : "muted")}>{state.cloudConnected ? "已连接" : state.cloudCredentialsSaved ? "凭据已保存" : "未连接"}</span>
         <ChevronRight size={18} className="subtle-icon"/>
       </button>
       <div className="section-heading">
@@ -210,7 +207,7 @@ export default function App() {
       <button className="primary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}>
         <Plus size={18}/> 添加账号
       </button>
-      <p className="footnote">账号与游戏配置以华为云为准。此设备不保存 HoYoLAB Cookie。</p>
+      <p className="footnote">账号与游戏配置以华为云为准。</p>
     </>;
   };
 
@@ -313,7 +310,7 @@ export default function App() {
       <label className="field-label" htmlFor="cloud-sk">SK</label>
       <input id="cloud-sk" type="password" autoComplete="off" placeholder="输入华为云 Secret Key" value={cloudDraft.sk} onChange={e => setCloudDraft({...cloudDraft,sk:e.target.value})}/>
       <p className="helper-text">AK/SK 需要在登录华为云网页后从我的凭证中获取。</p>
-      <button className="primary-button full-button" onClick={submitCloudLogin} disabled={busy}><Cloud size={17}/>{busy ? "正在验证…" : "登录华为云"}</button>
+      <button className="primary-button full-button" onClick={submitCloudLogin}><Cloud size={17}/>连接华为云</button>
       <div className="connection-state"><span className={"connection-dot " + (state.cloudConnected ? "connected" : "")}/>{state.cloudConnected ? "已连接" : state.cloudConnectionLabel || "未连接"}</div>
     </section>
   </>;
