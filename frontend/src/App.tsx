@@ -16,8 +16,8 @@ declare global {
 
 const callNative = (name: string, ...args: string[]) => {
   try {
-    const fn = window.Android?.[name];
-    if (typeof fn === "function") return fn(...args);
+    const bridge = window.Android;
+    if (bridge && typeof bridge[name] === "function") return bridge[name](...args);
   } catch (error: any) {
     console.warn("Native bridge call failed", name, error);
   }
