@@ -1197,6 +1197,11 @@ open class HuaweiCloudActivity : Activity() {
         val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/config"
         onStep("正在读取函数配置并设置专属日志流。", null)
         val config = signedGet(configUrl)
+        // FunctionGraph GET config may include response-only/immutable fields.
+        // In particular, sending the top-level "type" back in UpdateFunctionConfig
+        // is rejected by Huawei with FSS.0400 "Not allow modify type".
+        // Keep the existing writable settings, but never echo this immutable field.
+        config.remove("type")
         config.put("log_config", JSONObject().put("group_name", groupName).put("group_id", groupId).put("stream_name", platform).put("stream_id", streamId))
         val update = signedRequest("PUT", configUrl, config.toString())
         if (update.first !in 200..299) error("函数日志绑定失败（HTTP ${update.first}）：${update.second.take(800)}")
