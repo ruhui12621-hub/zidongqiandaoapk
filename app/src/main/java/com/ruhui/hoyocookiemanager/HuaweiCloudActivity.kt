@@ -851,7 +851,7 @@ open class HuaweiCloudActivity : Activity() {
                 val gameLabels = selectedGames.map { GameCatalog.label(it) }.joinToString("、")
                 runOnUiThread {
                     showSklandDeployMessage(accountId, "森空岛部署及检查完成",
-                        "最终结果：森空岛函数$action成功。\n当前账号启用游戏：$gameLabels。\n已保留其他森空岛账号配置。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                        "最终结果：森空岛函数${action}成功。\n当前账号启用游戏：$gameLabels。\n已保留其他森空岛账号配置。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
