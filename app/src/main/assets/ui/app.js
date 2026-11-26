@@ -165,7 +165,7 @@ document.addEventListener("click",e=>{
  if(action==="back"){selectedId=null;page="home";native("backToHome");render()}
  if(action==="open-today-detail"){selectedTodayGameKey=e.target.closest("[data-game]")?.dataset.game||null;page="today-detail";render()}
  if(action==="today-detail-back"){page="home";selectedTodayGameKey=null;render()}
- if(action==="copy-today-detail"){const a=account();const d=(state.todayDetails||{})[a?.id]||{};const g=selectedTodayGameKey&&d.games?d.games[selectedTodayGameKey]:null;const value=e.target.dataset.copy==="all"?(Array.isArray(d.allRawMessages)?d.allRawMessages.join("\n"):String(d.allRawMessages||"")):(Array.isArray(g?.rawMessages)?g.rawMessages.join("\n"):String(g?.rawMessages||""));native("copyText",value);toast("原始消息已复制")}
+ if(action==="copy-today-detail"){const a=account();const d=a?.todayDetails||{};const g=selectedTodayGameKey&&d.games?d.games[selectedTodayGameKey]:null;const value=e.target.dataset.copy==="all"?(Array.isArray(d.allRawMessages)?d.allRawMessages.join("\n"):String(d.allRawMessages||"")):(Array.isArray(g?.rawMessages)?g.rawMessages.join("\n"):String(g?.rawMessages||""));native("copyText",value);toast("原始消息已复制")}
  if(action==="hoyo-login"){const a=account();if(a)native("openLogin",a.id)}
  if(action==="open-game-picker"){showGamePicker()}
  if(action==="deploy-hoyo-account"){
