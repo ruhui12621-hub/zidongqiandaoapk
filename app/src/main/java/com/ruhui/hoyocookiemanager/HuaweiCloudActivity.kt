@@ -728,9 +728,11 @@ open class HuaweiCloudActivity : Activity() {
 
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用森空岛函数。")
                 logSklandDeployStep("正在使用华为云 TIMER 定时触发器事件格式测试森空岛函数。")
-                val testSummary = invokeFunctionOnce(urn)
+                val testResult = invokeFunctionOnce(urn)
+                val testSummary = testResult.summary
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "森空岛函数调用成功。")
                 AppMessageBus.setAccountStage(this, accountId, "output", "测试输出结果", "成功", testSummary)
+                AppMessageBus.setAccountStage(this, accountId, "raw_output", "原始输出结果", "成功", testResult.rawOutput)
                 logSklandDeployStep("森空岛 TIMER 事件格式测试完成：$testSummary", true)
 
                 AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器", "进行中", "正在查询森空岛函数现有定时触发器。")
@@ -860,9 +862,11 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "部署阶段已完成：函数已存在且就绪，账号配置已同步；现在开始独立测试。", true)
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用函数。")
                 logAccountDeployStep(accountId, "正在使用华为云 TIMER 定时触发器事件格式测试函数（不再发送空事件 {}）。")
-                val testSummary = invokeFunctionOnce(urn)
+                val testResult = invokeFunctionOnce(urn)
+                val testSummary = testResult.summary
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "函数调用成功。")
                 AppMessageBus.setAccountStage(this, accountId, "output", "测试输出结果", "成功", testSummary)
+                AppMessageBus.setAccountStage(this, accountId, "raw_output", "原始输出结果", "成功", testResult.rawOutput)
                 logAccountDeployStep(accountId, "TIMER 事件格式测试完成：$testSummary", true)
                 AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器", "进行中", "正在查询现有定时触发器。")
                 logAccountDeployStep(accountId, "正在查询现有定时触发器。")
@@ -1046,7 +1050,9 @@ open class HuaweiCloudActivity : Activity() {
         error("函数包已上传，但等待函数就绪超时。" + if (lastError.isBlank()) "" else " 最近错误：$lastError")
     }
 
-    private fun invokeFunctionOnce(functionUrn: String): String {
+    private data class FunctionInvokeResult(val summary: String, val rawOutput: String)
+
+    private fun invokeFunctionOnce(functionUrn: String): FunctionInvokeResult {
         val url = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions/" + enc(functionUrn) + "/invocations"
         // Match Huawei FunctionGraph's documented TIMER event shape instead of sending an empty object.
         val timerEvent = JSONObject()
@@ -1074,14 +1080,15 @@ open class HuaweiCloudActivity : Activity() {
                 .map { result.optString(it).trim() }.firstOrNull { it.isNotBlank() && it != "null" }
             if (errorText != null) error("定时触发器格式测试失败：$errorText")
             val requestId = result.optString("request_id")
-            return "已使用 TIMER 事件格式调用成功（HTTP ${response.first}" +
+            val summary = "已使用 TIMER 事件格式调用成功（HTTP ${response.first}" +
                 if (requestId.isNotBlank()) "，请求 ID：$requestId）" else "）"
+            return FunctionInvokeResult(summary, raw)
         }
         if (raw.contains("Traceback", true) || raw.contains("Exception", true) ||
             raw.contains("FileNotFoundError", true) || raw.contains("error", true))
             error("定时触发器格式测试返回异常内容：" + raw.take(1200))
         // A raw scalar such as 0 is a function return value, not malformed JSON.
-        return "已使用 TIMER 事件格式调用（HTTP ${response.first}），函数原始返回值：$raw"
+        return FunctionInvokeResult("已使用 TIMER 事件格式调用（HTTP ${response.first}）", raw)
     }
 
     private fun listFunctionTriggers(functionUrn: String): org.json.JSONArray {
