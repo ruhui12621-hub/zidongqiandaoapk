@@ -593,34 +593,17 @@ open class HuaweiCloudActivity : Activity() {
                     line.contains("签到失败") || line.contains("check-in failed", true) || line.contains("checkin failed", true) -> "failed"
                     else -> "unknown"
                 }
-                fun gameLogLines(game: String, names: List<String>, source: List<String>): List<String> {
-                    val displayName = when (game) {
-                        "genshin" -> "原神"
-                        "honkai2" -> "崩坏学园2"
-                        "honkai3rd" -> "崩坏3rd"
-                        "tears_of_themis" -> "未定事件簿"
-                        "honkai_sr" -> "崩坏：星穹铁道"
-                        "zzz" -> "绝区零"
-                        else -> game
-                    }
-                    // New cloud packages emit the actual returned result with an explicit game tag.
-                    // Prefer these over the old "正在进行签到" startup marker.
+                fun gameLogLines(displayName: String, aliases: List<String>, source: List<String>): List<String> {
+                    // Use the exact display name shown in the account-detail game table.
+                    // Explicit result tags take priority over generic/startup log lines.
                     val tagged = source.filter { it.contains("[签到结果][$displayName]") }
                     if (tagged.isNotEmpty()) return tagged
+                    val searchTerms = (listOf(displayName) + aliases).distinct()
                     return source.filter { line ->
-                        names.any { line.contains(it, true) } &&
+                        searchTerms.any { term -> line.contains(term, true) } &&
                             !line.contains("正在进行「$displayName」签到")
                     }
                 }
-                val aliases = mapOf(
-                    "genshin" to listOf("原神", "Genshin Impact", "genshin"),
-                    "honkai2" to listOf("崩坏2", "Honkai 2", "Honkai Impact 2"),
-                    "honkai3rd" to listOf("崩坏3", "Honkai Impact 3", "Honkai 3rd"),
-                    "tears_of_themis" to listOf("未定事件簿", "Tears of Themis"),
-                    "honkai_sr" to listOf("星穹铁道", "崩坏：星穹铁道", "Honkai: Star Rail", "Honkai Star Rail"),
-                    "zzz" to listOf("绝区零", "Zenless Zone Zero", "ZZZ"),
-                    "arknights" to listOf("明日方舟", "Arknights"), "endfield" to listOf("终末地", "Endfield")
-                )
                 for ((platform, functionName) in listOf(AccountStore.HOYOLAB to HOYOLAB_FUNCTION, AccountStore.SKLAND to SKLAND_FUNCTION)) {
                     val platformAccounts = accounts.filter { it.platform == platform }
                     if (platformAccounts.isEmpty()) continue
@@ -645,8 +628,9 @@ open class HuaweiCloudActivity : Activity() {
                         }
                         val perGame = linkedMapOf<String, String>()
                         for (game in account.games) {
-                            val names = aliases[game].orEmpty()
-                            val lines = if (names.isEmpty()) emptyList() else gameLogLines(game, names, matched)
+                            val displayName = GameCatalog.label(game)
+                            val names = GameCatalog.aliases(game)
+                            val lines = gameLogLines(displayName, names, matched)
                             perGame[game] = when {
                                 lines.firstOrNull(::isOutcome) != null -> outcome(lines.first(::isOutcome))
                                 else -> "unknown"
@@ -662,13 +646,14 @@ open class HuaweiCloudActivity : Activity() {
                         statuses[account.id] = accountStatus
                         val gameDetails = JSONObject()
                         for (game in account.games) {
-                            val names = aliases[game].orEmpty()
-                            val lines = if (names.isEmpty()) emptyList() else gameLogLines(game, names, matched)
+                            val displayName = GameCatalog.label(game)
+                            val names = GameCatalog.aliases(game)
+                            val lines = gameLogLines(displayName, names, matched)
                             val outcomeLine = lines.firstOrNull(::isOutcome)
                             gameDetails.put(game, JSONObject()
                                 .put("status", when (perGame[game]) { "success" -> "今日签到成功"; "failed" -> "今日签到失败"; else -> "未获取到明确结果" })
                                 .put("reason", outcomeLine ?: if (lines.isEmpty()) "没有找到包含此游戏名称的签到日志，不能据此认定签到失败。" else "已找到相关日志，但没有识别到明确的成功或失败标记。")
-                                .put("rawMessages", org.json.JSONArray(lines.take(100))))
+                                )
                         }
                         details[account.id] = JSONObject()
                             .put("status", accountStatus)
