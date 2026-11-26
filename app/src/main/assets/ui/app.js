@@ -61,7 +61,7 @@ function renderDetail(a){
   html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Cookie 状态</span><strong style="color:'+(accountCookieReady?'var(--green)':'var(--amber)')+'">'+(accountCookieReady?'已获取最新 · '+serverLabel:'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="hoyo-login">'+(a.platform==="miyoushe_cn"?"打开米游社登录页面":"打开 HoYoLAB 登录页面")+'</button>';
   html+='<button class="secondary game-picker-trigger" data-action="open-game-picker">选择要启用的游戏</button>';
-  html+='<button class="primary" data-action="deploy-hoyo-account" '+(!pageCookieReady||!state.cloudConnected?'disabled':'')+'>更新云函数并上传</button>';
+  html+='<button class="primary" data-action="deploy-hoyo-account">更新云函数并上传</button>';
   html+='<p class="hint">默认勾选云端当前启用的游戏。上传时会同时更新游戏选择和本次网页 Cookie；其他云端配置保持不变。</p></div>';
  }else{
   const gameStates=a.gameTodayStatuses||{};
@@ -146,7 +146,15 @@ document.addEventListener("click",e=>{
  if(action==="back"){selectedId=null;native("backToHome");render()}
  if(action==="hoyo-login"){const a=account();if(a)native("openLogin",a.id)}
  if(action==="open-game-picker"){showGamePicker()}
- if(action==="deploy-hoyo-account"){const a=account();if(a)native("deployHoyoAccount",a.id,JSON.stringify(Array.from(selectedHoyoGames(a))));toast("正在合并云端配置并上传")}
+ if(action==="deploy-hoyo-account"){
+   const a=account();
+   if(!a)return;
+   const pageCookieReady=!!(state.hoyoPageCookieReady&&state.hoyoPageCookieAccountId===a.id);
+   if(!pageCookieReady){toast("请先打开本账号登录页面并成功获取 Cookie");return}
+   if(!state.cloudConnected){toast("请先连接华为云");return}
+   native("deployHoyoAccount",a.id,JSON.stringify(Array.from(selectedHoyoGames(a))));
+   toast("正在合并云端配置并上传")
+  }
  if(action==="skland-login"){const a=account();if(a)native("openLogin",a.id)}
  if(action==="cloud-login"){
   cloudDraft.region=$("#cloud-region").value;cloudDraft.ak=$("#cloud-ak").value;cloudDraft.sk=$("#cloud-sk").value;
