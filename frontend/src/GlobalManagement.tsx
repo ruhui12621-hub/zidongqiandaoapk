@@ -87,7 +87,7 @@ export default function GlobalManagement({ accounts, gameCatalog, onGoToAccountL
         const module = gameModules.find(item => item.id === account.platform);
         const games = account.games || [];
         const labels = (gameCatalog?.[module?.catalog || ""] || []);
-        return <button className="surface-card managed-account-row" key={account.id} onClick={event => { event.preventDefault(); event.stopPropagation(); onGoToAccountList(); }}>
+        return <button type="button" className="surface-card managed-account-row" key={account.id} onClick={onGoToAccountList}>
           <div className="managed-account-main">
             <strong>{account.name || module?.label || "账号"}</strong>
             <small>{module?.label || account.platform} · ID {String(account.id).slice(0, 8)}</small>
