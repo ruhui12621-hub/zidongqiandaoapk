@@ -1205,8 +1205,13 @@ open class HuaweiCloudActivity : Activity() {
         config.put("log_config", JSONObject().put("group_name", groupName).put("group_id", groupId).put("stream_name", platform).put("stream_id", streamId))
         val update = signedRequest("PUT", configUrl, config.toString())
         if (update.first !in 200..299) error("函数日志绑定失败（HTTP ${update.first}）：${update.second.take(800)}")
-        val verify = signedGet(configUrl).optJSONObject("log_config") ?: error("函数日志绑定后回读失败。")
-        if (verify.optString("group_id") != groupId || verify.optString("stream_id") != streamId) error("函数日志绑定回读不一致，已拒绝继续。")
+        // Read the binding through FunctionGraph's dedicated LTS detail endpoint.
+        // The general function-config GET response does not reliably expose log_config.
+        val verifyUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/lts-log-detail"
+        val verify = signedGet(verifyUrl)
+        if (verify.optString("group_id") != groupId || verify.optString("stream_id") != streamId) {
+            error("函数日志绑定回读不一致：期望日志组/流 ID 为 $groupId/$streamId，实际为 ${verify.optString("group_id")}/${verify.optString("stream_id")}。")
+        }
         onStep("函数日志绑定成功并已回读验证：$groupName/$platform。", true)
         return "日志组：$groupName；日志流：$platform；保留期：7 天；函数绑定已验证。"
     }
