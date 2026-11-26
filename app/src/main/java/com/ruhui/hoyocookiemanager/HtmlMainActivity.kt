@@ -150,14 +150,9 @@ class HtmlMainActivity : HuaweiCloudActivity() {
 
     private fun stateJson(): JSONObject {
         val accountsJson = JSONArray()
-        val gamesLabels = mapOf(
-            "genshin" to "原神", "honkai2" to "崩坏2", "honkai3rd" to "崩坏3",
-            "tears_of_themis" to "未定事件簿", "honkai_sr" to "崩坏：星穹铁道",
-            "zzz" to "绝区零", "arknights" to "明日方舟", "endfield" to "明日方舟：终末地"
-        )
         AccountStore(this).all().forEach { account ->
             val games = JSONArray()
-            account.games.forEach { key -> games.put(JSONObject().put("key", key).put("label", gamesLabels[key] ?: key)) }
+            account.games.forEach { key -> games.put(JSONObject().put("key", key).put("label", GameCatalog.label(key))) }
             accountsJson.put(
                 JSONObject()
                     .put("id", account.id)
@@ -178,6 +173,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         val savedAkSk = runCatching { AndroidCredentialVault(this).latest() }.getOrNull() != null
         return JSONObject()
             .put("accounts", accountsJson)
+            .put("gameCatalog", GameCatalog.json())
             .put("selectedAccountId", selectedAccountId ?: JSONObject.NULL)
             .put("syncState", sync)
             .put("syncLabel", when (sync) {
