@@ -7,6 +7,9 @@
     if (!state || typeof state !== "object") return;
     const acquired = state.tokenSaved === true;
     const status = byId("status");
-    if (status) status.textContent = acquired ? "Cookie已获取" : "Cookie未获取";
+    if (!status) return;
+    status.textContent = acquired ? "Cookie已获取" : "Cookie未获取";
+    status.classList.toggle("ok", acquired);
+    status.classList.toggle("bad", false);
   };
 })();
