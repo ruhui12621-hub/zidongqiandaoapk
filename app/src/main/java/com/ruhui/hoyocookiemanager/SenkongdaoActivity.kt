@@ -253,7 +253,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页开始加载",
                     "地址：$url\n视图：${if (popup) "验证弹窗" else "主登录窗口"}", null)
-                pushSklandUi()
             }
             override fun onPageFinished(view: WebView, url: String) {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页加载回调完成",
@@ -344,7 +343,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         tokenExecutor.execute {
             var connection: HttpURLConnection? = null
             try {
-                connection = (URL(TOKEN_URL).openConnection() as HttpURLConnection).apply {
+                val request = (URL(TOKEN_URL).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = 10000
                     readTimeout = 10000
@@ -354,8 +353,9 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                     setRequestProperty("Referer", HOME_URL)
                     setRequestProperty("Accept", "application/json, text/plain, */*")
                 }
-                val code = connection.responseCode
-                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                connection = request
+                val code = request.responseCode
+                val stream = if (code in 200..299) request.inputStream else request.errorStream
                 val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {
@@ -376,7 +376,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                         checking = false
                         statusText = "等待登录"
                         AppMessageBus.post(this, AppMessageBus.SKLAND, "Token 后台检测失败",
-                            "请求异常：\${e.javaClass.simpleName}；\${e.message ?: "无详细信息"}", false)
+                            "请求异常：${e.javaClass.simpleName}；${e.message ?: "无详细信息"}", false)
                         pushSklandUi()
                     }
                 }
