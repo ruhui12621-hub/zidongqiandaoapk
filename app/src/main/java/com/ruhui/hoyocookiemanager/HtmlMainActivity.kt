@@ -226,7 +226,9 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         @JavascriptInterface fun openLogin(id: String) {
             runOnUiThread {
                 val account = AccountStore(this@HtmlMainActivity).find(id) ?: return@runOnUiThread
-                HuaweiCloudSession.clearPendingHoyoCookie()
+                if (account.platform == AccountStore.HOYOLAB || account.platform == AccountStore.MIYOUSHE_CN) {
+                    HuaweiCloudSession.clearPendingHoyoCookie()
+                }
                 pushState()
                 val target = when (account.platform) {
                     AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN -> MainActivity::class.java
