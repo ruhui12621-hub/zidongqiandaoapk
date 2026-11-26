@@ -261,17 +261,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网页加载回调完成",
                     "地址：$url\n标题：${view.title.orEmpty()}\n此回调本身不代表页面业务内容一定正常。", true)
-                // Match HoYoLAB: use the shared native two-axis centering path.
-                // Keep token detection site-specific; only the presentation is shared.
-                if (isSklandHost(url)) {
-                    // Override the site's restrictive mobile viewport so Chromium
-                    // exposes a real desktop layout viewport and pinch zoom range.
-                    DesktopWebView.enableDesktopViewport(view)
-                    // Keep fixed top navigation visually attached to the document
-                    // during horizontal panning without changing its measured width.
-                    DesktopWebView.makeTopFixedHeadersFollowHorizontalScroll(view)
-                }
-                DesktopWebView.centerDesktopContent(view, centerVertical = false)
+                // Same shared desktop-page pipeline as HoYoLAB; only token handling differs.
+                DesktopWebView.prepareDesktopPage(view, centerVertical = false)
                 if (isSklandHost(url)) {
                     scheduleCheck()
                 }
