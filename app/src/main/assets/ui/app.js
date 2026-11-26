@@ -130,6 +130,7 @@ function renderTodayDetail(a){
  const allLogs=Array.isArray(data.allRawMessages)?data.allRawMessages.join("\n"):String(data.allRawMessages||"");
  let out='<div class="detail-head"><button class="back-button" data-action="today-detail-back">‹</button><div class="detail-title"><h1>'+esc(title)+'</h1><p>'+esc(a.name)+' · '+esc(a.platformLabel)+' · 今日签到详情</p></div></div>';
  out+='<div class="card"><div class="card-title">状态判定</div><div class="metric"><strong>'+esc(status)+'</strong><p class="hint">'+esc(reason)+'</p></div></div>';
+ out+='<div class="card log-source-card"><div class="card-title">日志配置</div><div class="metric"><span>日志组：</span><strong>'+esc(data.logGroupName||"未获取")+'</strong></div><div class="metric"><span>日志流：</span><strong>'+esc(data.logStreamName||"未获取")+'</strong></div></div>';
  out+='<div class="card"><div class="card-title">云函数今日日志</div><div class="message-box">'+esc(allLogs||(selectedTodayGameKey?"没有读取到该账号的云函数日志。":"没有读取到云函数日志。"))+'</div><button class="secondary" data-action="copy-today-logs">复制云函数日志</button></div>';
  return out;
 }
