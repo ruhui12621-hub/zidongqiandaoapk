@@ -4,9 +4,21 @@ const $=s=>document.querySelector(s);
 const view=$("#view");
 let state={accounts:[],syncState:"unknown",canAddAccount:false};
 let page="home",selectedId=null,selectedTodayGameKey=null,cloudDraft={region:"cn-east-3",ak:"",sk:""},cloudVaultLoaded=false;
+let lastDetailRenderKey="";
 const gameSelections={};
 const hoyoGameOptions={cn:[["genshin","原神"],["honkai2","崩坏2"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]],os:[["genshin","原神"],["honkai3rd","崩坏3"],["tears_of_themis","未定事件簿"],["honkai_sr","崩坏：星穹铁道"],["zzz","绝区零"]]};
 function selectedHoyoGames(a){if(!gameSelections[a.id])gameSelections[a.id]=new Set((a.games||[]).map(g=>g.key));return gameSelections[a.id]}
+// The account detail view only depends on this account's data. Global message updates
+// and the background state poll must not rebuild its DOM when these values are unchanged.
+function detailRenderKey(source=state){
+ const a=(source.accounts||[]).find(item=>item.id===selectedId);
+ if(!a)return "";
+ return JSON.stringify({
+  account:a,
+  hoyoPageCookieReady:!!(source.hoyoPageCookieReady&&source.hoyoPageCookieAccountId===selectedId),
+  hoyoPageCookieAccountId:source.hoyoPageCookieAccountId||null
+ });
+}
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const account=()=>state.accounts.find(x=>x.id===selectedId);
 const platformInitial=p=>p==="skland"?"森":p==="miyoushe_cn"?"米":"H";
@@ -14,7 +26,16 @@ const statusClass=s=>/成功|已连接|已获取|同步/.test(s)?"ok":/失败|�
 function toast(msg){const root=$("#toast-root");root.innerHTML='<div class="toast">'+esc(msg)+'</div>';const t=root.firstElementChild;requestAnimationFrame(()=>t.classList.add("show"));setTimeout(()=>t.classList.remove("show"),2200)}
 function native(name,...args){try{if(window.Android&&typeof Android[name]==="function")return Android[name](...args)}catch(e){toast("操作失败："+e.message)}}
 function readState(){try{const raw=native("getState");if(raw)applyState(JSON.parse(raw))}catch(e){console.warn(e)}}
-function applyState(next){if(!next)return;state=next;if(!cloudDraft.region||cloudDraft.region==="cn-east-3")cloudDraft.region=state.region||"cn-east-3";if(document.activeElement&&document.activeElement.matches("input,select,textarea"))return;render()}
+function applyState(next){
+ if(!next)return;
+ state=next;
+ if(!cloudDraft.region||cloudDraft.region==="cn-east-3")cloudDraft.region=state.region||"cn-east-3";
+ if(document.activeElement&&document.activeElement.matches("input,select,textarea"))return;
+ // Polling continues for login/cookie synchronization, but an unchanged account
+ // detail payload must not replace the DOM (especially the raw-output text area).
+ if(selectedId&&detailRenderKey(next)===lastDetailRenderKey)return;
+ render();
+}
 window.onNativeState=raw=>{try{applyState(typeof raw==="string"?JSON.parse(raw):raw)}catch(e){console.error(e)}};
 function pageTitle(title,sub){return '<div class="page-heading"><div><div class="eyebrow">HOYO CHECK-IN</div><h1>'+title+'</h1><p>'+sub+'</p></div></div>'}
 function nav(){document.querySelectorAll(".nav-item").forEach(x=>x.classList.toggle("active",x.dataset.page===page))}
@@ -159,6 +180,9 @@ function render(){
   if(currentMessageBox)currentMessageBox.scrollTop=wasAtMessageBottom
    ?currentMessageBox.scrollHeight:previousMessageScroll;
  }
+ // Save the exact account-detail data represented by the DOM. Subsequent polling
+ // only redraws this screen when this account's displayed data really changes.
+ lastDetailRenderKey=selectedId?detailRenderKey(state):"";
  if(page==="cloud"){
   if(!cloudVaultLoaded){try{const saved=native("getSavedCloudCredentials");if(saved){const pair=JSON.parse(saved);cloudDraft.ak=pair.ak||"";cloudDraft.sk=pair.sk||"";}cloudVaultLoaded=true;}catch(e){}}
   const r=$("#cloud-region");if(r)r.value=cloudDraft.region||state.region||"cn-east-3";
