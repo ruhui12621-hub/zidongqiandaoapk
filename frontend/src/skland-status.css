@@ -1,9 +1,3 @@
-:root {
-  color-scheme: dark;
-  font-family: Inter, Roboto, "Noto Sans SC", system-ui, sans-serif;
-  background: #080807;
-}
-* { box-sizing: border-box; }
 html, body, #skland-status-root {
   width: 100%;
   height: 100%;
@@ -12,51 +6,3 @@ html, body, #skland-status-root {
   overflow: hidden;
   background: #080807;
 }
-.skland-status {
-  width: 100%;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 9px;
-  background: #080807;
-  color: #a39b8c;
-}
-.skland-status__label {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 12px;
-  font-weight: 650;
-}
-.skland-status__dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: #a39b8c;
-}
-.skland-status__label.is-ready { color: #91c6a0; }
-.skland-status__label.is-ready .skland-status__dot {
-  background: #91c6a0;
-  box-shadow: 0 0 7px #91c6a066;
-}
-.skland-status__back {
-  width: 112px;
-  height: 30px;
-  flex: 0 0 112px;
-  border: 1px solid #453923;
-  border-radius: 7px;
-  background: #171511;
-  color: #e1d1af;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 550;
-  -webkit-tap-highlight-color: transparent;
-}
-.skland-status__back:active { background: #292319; }
