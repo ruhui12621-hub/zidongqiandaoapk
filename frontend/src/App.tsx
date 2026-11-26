@@ -112,10 +112,12 @@ export default function App() {
 
   // Return both the React screen and native account state to the account-list tab.
   const goToAccountList = useCallback(() => {
+    // Switch to the first bottom-navigation page and reset the previous page's scroll position.
     setSelectedId(null);
     setTodayGame({ key: null, label: null });
     setGameDraft(null);
     setPage("home");
+    window.scrollTo(0, 0);
     callNative("backToHome");
   }, []);
   const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
