@@ -79,6 +79,9 @@ function renderDetail(a){
   html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
   html+='<p class="hint">登录后会自动检测并加密保存 Token；签到游戏与状态来自云端配置。</p></div>';
  }
+ const updateMessage=String(a.cloudUpdateMessage||"").trim();
+ const updateTone=updateMessage.startsWith("✓")?"success":updateMessage.startsWith("✕")?"failed":"pending";
+ html+='<div class="card cloud-update-card"><div class="card-title">云函数更新结果</div><div class="message-box account-update-message '+updateTone+'">'+esc(updateMessage||"暂无本账号的云函数更新记录")+'</div></div>';
  return html
 }
 function renderCloud(){
@@ -96,6 +99,11 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
+ const previousAccountUpdateBox=selectedId?view.querySelector(".account-update-message"):null;
+ const previousAccountUpdateScroll=previousAccountUpdateBox?previousAccountUpdateBox.scrollTop:0;
+ const wasAtAccountUpdateBottom=previousAccountUpdateBox
+  ?previousAccountUpdateBox.scrollHeight-previousAccountUpdateBox.clientHeight-previousAccountUpdateBox.scrollTop<24
+  :true;
  const previousMessageBox=page==="messages"?view.querySelector(".message-box"):null;
  const previousMessageScroll=previousMessageBox?previousMessageBox.scrollTop:0;
  const wasAtMessageBottom=previousMessageBox
@@ -111,6 +119,11 @@ function render(){
   const currentMessageBox=view.querySelector(".message-box");
   if(currentMessageBox)currentMessageBox.scrollTop=wasAtMessageBottom
    ?currentMessageBox.scrollHeight:previousMessageScroll;
+ }
+ if(selectedId){
+  const currentAccountUpdateBox=view.querySelector(".account-update-message");
+  if(currentAccountUpdateBox)currentAccountUpdateBox.scrollTop=wasAtAccountUpdateBottom
+   ?currentAccountUpdateBox.scrollHeight:previousAccountUpdateScroll;
  }
  if(page==="cloud"){
   if(!cloudVaultLoaded){try{const saved=native("getSavedCloudCredentials");if(saved){const pair=JSON.parse(saved);cloudDraft.ak=pair.ak||"";cloudDraft.sk=pair.sk||"";}cloudVaultLoaded=true;}catch(e){}}
