@@ -644,9 +644,9 @@ open class HuaweiCloudActivity : Activity() {
         AppMessageBus.postForAccount(this, accountId, title, detail, success)
     }
 
-    /** Record each deployment stage in both the account detail and app-wide logs. */
+    /** Detailed step-by-step messages stay in the app-wide message stream. */
     private fun logAccountDeployStep(accountId: String, detail: String, success: Boolean? = null) {
-        showAccountDeployMessage(accountId, "HoYoLAB 部署进度", detail, success)
+        showOperationMessage("HoYoLAB 部署进度", detail, success)
     }
 
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
@@ -674,6 +674,8 @@ open class HuaweiCloudActivity : Activity() {
             return
         }
 
+        AppMessageBus.resetAccountStages(this, accountId)
+        AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端函数并准备上传。")
         showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
         worker.execute {
             var deploymentReady = false
@@ -708,17 +710,27 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "已查询到函数并取得函数 URN，函数已就绪。", true)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
+                    if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
                 // From this point the function code is deployed and FunctionGraph reports it ready.
                 // Keep the local config in sync even if the later test/trigger check fails.
                 deploymentReady = true
                 HuaweiCloudSession.lastConfigYaml = mergedYaml
                 configYaml = mergedYaml
                 logAccountDeployStep(accountId, "部署阶段已完成：函数已存在且就绪，账号配置已同步；现在开始独立测试。", true)
+                AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用函数。")
                 logAccountDeployStep(accountId, "正在使用华为云 TIMER 定时触发器事件格式测试函数（不再发送空事件 {}）。")
                 val testSummary = invokeFunctionOnce(urn)
+                AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "函数调用成功。")
+                AppMessageBus.setAccountStage(this, accountId, "output", "测试输出结果", "成功", testSummary)
                 logAccountDeployStep(accountId, "TIMER 事件格式测试完成：$testSummary", true)
+                AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器", "进行中", "正在查询现有定时触发器。")
                 logAccountDeployStep(accountId, "正在查询现有定时触发器。")
                 val timerSummary = ensureDailyTimerIfMissing(urn)
+                val triggerExists = timerSummary.contains("检测到已有")
+                AppMessageBus.setAccountStage(this, accountId, "trigger", "定时触发器",
+                    if (triggerExists) "已存在" else "已创建",
+                    if (triggerExists) "检测到已有定时触发器，未重复创建。" else timerSummary)
                 logAccountDeployStep(accountId, "定时触发器检查完成：$timerSummary", true)
                 val action = if (created) "创建" else "更新"
                 runOnUiThread {
@@ -730,6 +742,18 @@ open class HuaweiCloudActivity : Activity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     val reason = e.message ?: e.javaClass.simpleName
+                    val currentStages = AppMessageBus.currentAccountStages(this, accountId)
+                    val activeStage = (0 until currentStages.length()).mapNotNull { currentStages.optJSONObject(it) }
+                        .firstOrNull { it.optString("status") == "进行中" }?.optString("key").orEmpty()
+                    if (activeStage.isNotBlank()) {
+                        val label = when (activeStage) {
+                            "function" -> "云函数"
+                            "trigger" -> "定时触发器"
+                            "test" -> "函数运行测试"
+                            else -> "测试输出结果"
+                        }
+                        AppMessageBus.setAccountStage(this, accountId, activeStage, label, "失败", reason)
+                    }
                     logAccountDeployStep(accountId, if (deploymentReady)
                         "部署已成功，但后续测试或定时触发器检查失败：$reason"
                         else "部署流程中止：$reason", false)
