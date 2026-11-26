@@ -59,7 +59,6 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         AppMessageBus.setActiveChannel(AppMessageBus.SKLAND)
         CookieManager.getInstance().setAcceptCookie(true)
         tokenSavedCached = hasToken()
-        saved = tokenSavedCached
         AppMessageBus.beginSession(this, AppMessageBus.SKLAND, "森空岛启动", "已进入森空岛登录 Activity，开始初始化 WebView。")
         try {
             initializeChromeView()
