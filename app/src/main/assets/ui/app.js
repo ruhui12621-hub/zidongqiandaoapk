@@ -121,15 +121,13 @@ function renderMessages(){
   '<button class="secondary" data-action="copy-all-messages">复制全部消息</button>'
 }
 function render(){
- // Preserve each execution-stage detail pane independently. Other
- // stage/status updates must never reset the raw-output pane's scroll.
- const retainedStages=[];
+ // Keep each stage pane's scroll position while allowing its text to refresh.
+ // Do not reuse old DOM/text: the freshly rendered state must always win.
+ const retainedStageScroll=[];
  view.querySelectorAll(".cloud-update-card tr[data-stage-key]").forEach(row=>{
   const pane=row.querySelector(".stage-detail");
-  if(pane)retainedStages.push({
+  if(pane)retainedStageScroll.push({
    key:row.dataset.stageKey,
-   node:pane,
-   text:pane.textContent,
    scrollTop:pane.scrollTop
   });
  });
@@ -145,13 +143,14 @@ function render(){
  else if(page==="cloud")view.innerHTML=renderCloud();
  else if(page==="messages")view.innerHTML=renderMessages();
  else view.innerHTML=renderHome();
- retainedStages.forEach(saved=>{
+ retainedStageScroll.forEach(saved=>{
   const row=Array.from(view.querySelectorAll(".cloud-update-card tr[data-stage-key]"))
    .find(item=>item.dataset.stageKey===saved.key);
-  const current=row?.querySelector(".stage-detail");
-  if(current&&current.textContent===saved.text){
-   current.replaceWith(saved.node);
-   saved.node.scrollTop=saved.scrollTop;
+  const pane=row?.querySelector(".stage-detail");
+  if(pane){
+   // Restore even when the log text changed; never restore stale content.
+   pane.scrollTop=saved.scrollTop;
+   requestAnimationFrame(()=>{pane.scrollTop=saved.scrollTop;});
   }
  });
  if(page==="messages"){
