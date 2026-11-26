@@ -318,7 +318,9 @@ class MainActivity : HuaweiCloudActivity() {
         root.removeAllViews()
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
         (webView.parent as? ViewGroup)?.removeView(webView)
-        root.addView(View(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }, LinearLayout.LayoutParams(-1, dp(36)))
+        // Slightly increase the top breathing room so the desktop HoYoLAB page sits lower on screen.
+        val topWebSpacing = if (activePlatform == AccountStore.HOYOLAB) dp(56) else dp(36)
+        root.addView(View(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }, LinearLayout.LayoutParams(-1, topWebSpacing))
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(loginChrome, LinearLayout.LayoutParams(-1, dp(42)))
         popupWebView?.let { popup ->
