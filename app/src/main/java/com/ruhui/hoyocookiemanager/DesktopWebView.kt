@@ -92,30 +92,35 @@ object DesktopWebView {
 
 
     /**
-     * Center an oversized desktop page using WebView's native scroll position.
-     *
-     * Unlike DOM scrollTo(), this uses WebView's rendered content width and scale,
-     * so the calculation is in the same pixel coordinate system as scrollTo().
-     * A few bounded layout passes handle the viewport update and late page layout.
-     * A touch-down cancels the remaining passes without consuming the gesture.
+     * Center an oversized desktop page with WebView's native scroll position.
+     * The document width is measured in CSS pixels by Chromium, then converted
+     * to WebView pixels using the current native scale factor.
      */
     fun centerDesktopContent(view: WebView) {
-        val delays = longArrayOf(120L, 500L, 1100L)
-        val tasks = delays.map { delay ->
+        val delays = longArrayOf(150L, 550L, 1200L)
+        var touched = false
+        val tasks = delays.map {
             Runnable {
-                if (!view.isAttachedToWindow || view.width <= 0) return@Runnable
-                val contentWidthPx = (view.contentWidth * view.scale).toInt()
-                val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
-                if (maxScrollX > 0) {
-                    view.scrollTo(maxScrollX / 2, view.scrollY)
+                if (touched || !view.isAttachedToWindow || view.width <= 0) return@Runnable
+                view.evaluateJavascript(
+                    "(function(){var r=document.documentElement,b=document.body;" +
+                        "return Math.max(r?r.scrollWidth:0,b?b.scrollWidth:0);})()"
+                ) { result ->
+                    if (touched || !view.isAttachedToWindow) return@evaluateJavascript
+                    val cssWidth = result?.toDoubleOrNull() ?: return@evaluateJavascript
+                    val contentWidthPx = (cssWidth * view.scale).toInt()
+                    val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
+                    if (maxScrollX > 0) {
+                        view.scrollTo(maxScrollX / 2, view.scrollY)
+                    }
                 }
             }
         }
 
         view.setOnTouchListener { _, event ->
             if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                touched = true
                 tasks.forEach(view::removeCallbacks)
-                // Do not consume or alter Chromium's native drag/pinch handling.
             }
             false
         }
