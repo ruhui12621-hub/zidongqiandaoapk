@@ -158,22 +158,14 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     private fun stateJson(): JSONObject {
         val accountsJson = JSONArray()
         AccountStore(this).all().forEach { account ->
-            val games = JSONArray()
-            account.games.forEach { key -> games.put(JSONObject().put("key", key).put("label", GameCatalog.label(key))) }
             accountsJson.put(
-                JSONObject()
-                    .put("id", account.id)
-                    .put("name", account.name)
-                    .put("platform", account.platform)
-                    .put("platformLabel", AccountStore.platformLabel(account.platform))
-                    .put("userId", account.platformUserId.orEmpty())
-                    .put("games", games)
-                    .put("cookieReady", account.cookieReady)
-                    .put("tokenReady", account.tokenReady)
-                    .put("cloudUpdateStages", AppMessageBus.currentAccountStages(this, account.id))
-                    .put("todayStatus", todayStatuses[account.id] ?: "今日签到状态未知")
-                    .put("gameTodayStatuses", JSONObject().apply { todayGameStatuses[account.id].orEmpty().forEach { (key, value) -> put(key, value) } })
-                    .put("todayDetails", runCatching { JSONObject(todayDetails[account.id].orEmpty().ifBlank { "{}" }) }.getOrDefault(JSONObject()))
+                HomeAccountDisplayAssembler.build(
+                    account = account,
+                    todayStatus = todayStatuses[account.id] ?: "今日签到状态未知",
+                    gameTodayStatuses = todayGameStatuses[account.id].orEmpty(),
+                    todayDetailsJson = todayDetails[account.id],
+                    cloudUpdateStages = AppMessageBus.currentAccountStages(this, account.id)
+                )
             )
         }
         val sync = CloudAccountSyncState.get(this)
