@@ -557,14 +557,14 @@ open class HuaweiCloudActivity : Activity() {
                     val listUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions?func_name=" +
                         enc(functionName) + "&precise_search=true&maxitems=10"
                     val functions = signedGet(listUrl).optJSONArray("functions")
-                        ?: return PlatformLogResult("FunctionGraph 未返回函数列表", emptyList(), "")
+                        ?: return PlatformLogResult("FunctionGraph 未返回函数列表", emptyList(), "", "", "")
                     val matches = (0 until functions.length()).mapNotNull { functions.optJSONObject(it) }
                         .filter { it.optString("func_name") == functionName }
                     if (matches.size != 1)
-                        return PlatformLogResult("函数不存在或无法唯一识别：$functionName", emptyList(), "")
+                        return PlatformLogResult("函数不存在或无法唯一识别：$functionName", emptyList(), "", "", "")
                     val urn = matches.single().optString("func_urn")
                     if (urn.isBlank())
-                        return PlatformLogResult("函数缺少 URN：$functionName", emptyList(), "")
+                        return PlatformLogResult("函数缺少 URN：$functionName", emptyList(), "", "", "")
                     val detail = signedGet(
                         "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail"
                     )
