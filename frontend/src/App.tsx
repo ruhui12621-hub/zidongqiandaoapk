@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, CircleHelp, Cloud,
   Copy, ExternalLink, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
@@ -31,6 +31,7 @@ const gameTone = (value: string) => value === "success" ? "good" : value === "fa
 
 export default function App() {
   const [state, setState] = useState<AnyState>({ accounts: [], syncState: "unknown", canAddAccount: false });
+  const lastStateRef = useRef("");
   const [page, setPage] = useState("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [todayGame, setTodayGame] = useState<{key: string | null; label: string | null}>({key:null,label:null});
@@ -48,29 +49,34 @@ export default function App() {
     window.setTimeout(() => setToast(""), 2300);
   }, []);
 
+  const applyNativeState = useCallback((next: AnyState) => {
+    if (!next) return;
+    const snapshot = JSON.stringify(next);
+    if (snapshot === lastStateRef.current) return;
+    lastStateRef.current = snapshot;
+    setState(next);
+    setCloudDraft(old => ({...old, region: old.region === "cn-east-3" ? (next.region || old.region) : old.region}));
+  }, []);
+
   const readState = useCallback(() => {
     try {
       const raw = callNative("getState");
-      if (raw) {
-        const next = JSON.parse(raw);
-        setState(next);
-        setCloudDraft(old => ({...old, region: old.region === "cn-east-3" ? (next.region || old.region) : old.region}));
-      }
+      if (raw) applyNativeState(JSON.parse(raw));
     } catch (error) { console.warn(error); }
-  }, []);
+  }, [applyNativeState]);
 
   useEffect(() => {
     readState();
     const timer = window.setInterval(readState, 1800);
     window.onNativeState = raw => {
-      try { setState(typeof raw === "string" ? JSON.parse(raw) : raw); }
+      try { applyNativeState(typeof raw === "string" ? JSON.parse(raw) : raw); }
       catch (error) { console.error(error); }
     };
     return () => {
       window.clearInterval(timer);
       window.onNativeState = undefined;
     };
-  }, [readState]);
+  }, [readState, applyNativeState]);
 
   useEffect(() => {
     if (page !== "cloud" || cloudLoaded) return;
