@@ -169,7 +169,7 @@ object DesktopWebView {
      * CSS document dimensions are converted to WebView pixels with the current
      * page scale; the fixed-header synchronizer compensates for horizontal pan.
      */
-    fun centerDesktopContent(view) {
+    fun centerDesktopContent(view: WebView) {
         fun center() {
             if (view.width <= 0 || view.height <= 0) return
             view.evaluateJavascript(
