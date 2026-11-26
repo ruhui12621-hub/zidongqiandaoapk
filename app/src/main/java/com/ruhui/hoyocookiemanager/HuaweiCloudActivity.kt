@@ -509,6 +509,11 @@ open class HuaweiCloudActivity : Activity() {
      * local accounts. With multiple accounts, a log must contain that account's stable
      * platform ID or explicit account name; otherwise the app does not guess.
      */
+    /**
+     * Query each platform through its own fixed FunctionGraph function and its own
+     * LTS stream. A shared stream is treated as an isolation failure: never display
+     * mixed logs as if they belonged to either platform.
+     */
     protected fun queryTodayCheckinStatusForAccounts(
         onResult: (Map<String, String>, Map<String, Map<String, String>>, Map<String, String>, String) -> Unit
     ) {
@@ -516,7 +521,13 @@ open class HuaweiCloudActivity : Activity() {
         val saved = runCatching { AndroidCredentialVault(this).latest() }.getOrNull()
         if (saved == null) {
             val empty = accounts.associate { a -> a.id to a.games.associateWith { "unknown" } }
-            onResult(accounts.associate { it.id to "无法获取签到结果" }, empty, accounts.associate { it.id to JSONObject().put("reason", "未配置华为云 AK/SK").put("allRawMessages", "未配置华为云 AK/SK").toString() }, "未配置华为云 AK/SK")
+            val reason = "未配置华为云 AK/SK"
+            onResult(
+                accounts.associate { it.id to "无法获取签到结果" },
+                empty,
+                accounts.associate { it.id to JSONObject().put("reason", reason).put("allRawMessages", reason).toString() },
+                reason
+            )
             return
         }
         worker.execute {
@@ -525,41 +536,73 @@ open class HuaweiCloudActivity : Activity() {
             val details = linkedMapOf<String, String>()
             var summary = "今日运行日志读取完成"
             try {
-                authAk = saved.first; authSk = saved.second
-                regionValue = getSharedPreferences("app_settings", MODE_PRIVATE).getString("cloud_region", "cn-east-3") ?: "cn-east-3"
+                authAk = saved.first
+                authSk = saved.second
+                regionValue = getSharedPreferences("app_settings", MODE_PRIVATE)
+                    .getString("cloud_region", "cn-east-3") ?: "cn-east-3"
                 val projects = signedGet("https://iam.$regionValue.myhuaweicloud.com/v3/projects")
                 val rows = projects.optJSONArray("projects") ?: error("IAM 未返回项目列表")
                 projectId = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
-                    .firstOrNull { it.optString("name").equals(regionValue, true) }?.optString("id").orEmpty()
+                    .firstOrNull { it.optString("name").equals(regionValue, true) }
+                    ?.optString("id").orEmpty()
                 if (projectId.isBlank()) error("未找到 $regionValue 对应的华为云项目")
-                HuaweiCloudSession.ak = authAk; HuaweiCloudSession.sk = authSk
-                HuaweiCloudSession.region = regionValue; HuaweiCloudSession.projectId = projectId
+                HuaweiCloudSession.ak = authAk
+                HuaweiCloudSession.sk = authSk
+                HuaweiCloudSession.region = regionValue
+                HuaweiCloudSession.projectId = projectId
 
-                fun readTodayLogs(functionName: String): Pair<String, List<String>> {
+                data class PlatformLogResult(val state: String, val logs: List<String>, val sourceId: String)
+
+                fun readTodayLogs(functionName: String): PlatformLogResult {
                     val listUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions?func_name=" +
                         enc(functionName) + "&precise_search=true&maxitems=10"
-                    val functions = signedGet(listUrl).optJSONArray("functions") ?: return "函数不存在或无法查询" to emptyList()
-                    val matches = (0 until functions.length()).mapNotNull { functions.optJSONObject(it) }.filter { it.optString("func_name") == functionName }
-                    if (matches.size != 1) return "函数不存在或无法唯一识别" to emptyList()
+                    val functions = signedGet(listUrl).optJSONArray("functions")
+                        ?: return PlatformLogResult("FunctionGraph 未返回函数列表", emptyList(), "")
+                    val matches = (0 until functions.length()).mapNotNull { functions.optJSONObject(it) }
+                        .filter { it.optString("func_name") == functionName }
+                    if (matches.size != 1)
+                        return PlatformLogResult("函数不存在或无法唯一识别：$functionName", emptyList(), "")
                     val urn = matches.single().optString("func_urn")
-                    val detail = signedGet("https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail")
-                    val groupId = detail.optString("group_id"); val streamId = detail.optString("stream_id")
-                    if (groupId.isBlank() || streamId.isBlank()) return "未启用日志或日志流不可用" to emptyList()
+                    if (urn.isBlank())
+                        return PlatformLogResult("函数缺少 URN：$functionName", emptyList(), "")
+                    val detail = signedGet(
+                        "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail"
+                    )
+                    val groupId = detail.optString("group_id")
+                    val streamId = detail.optString("stream_id")
+                    if (groupId.isBlank() || streamId.isBlank())
+                        return PlatformLogResult("函数未启用独立日志流或日志流不可用：$functionName", emptyList(), "")
                     val calendar = Calendar.getInstance()
-                    calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0)
-                    calendar.set(Calendar.SECOND, 0); calendar.set(Calendar.MILLISECOND, 0)
-                    val start = calendar.timeInMillis; val end = System.currentTimeMillis()
+                    calendar.set(Calendar.HOUR_OF_DAY, 0)
+                    calendar.set(Calendar.MINUTE, 0)
+                    calendar.set(Calendar.SECOND, 0)
+                    calendar.set(Calendar.MILLISECOND, 0)
+                    val startTime = calendar.timeInMillis
+                    val endTime = System.currentTimeMillis()
                     val queryUrl = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId/groups/${enc(groupId)}/streams/${enc(streamId)}/content/query"
-                    val logs = mutableListOf<String>(); val seen = mutableSetOf<String>()
-                    var scrollId = ""; var lineNum = ""; var page = 0; var complete = false
+                    val logs = mutableListOf<String>()
+                    val seen = mutableSetOf<String>()
+                    var scrollId = ""
+                    var lineNum = ""
+                    var page = 0
+                    var complete = false
                     while (page < 100 && !complete) {
-                        val body = JSONObject().put("start_time", start.toString()).put("end_time", end.toString())
-                            .put("limit", 5000).put("is_desc", true).put("search_type", if (page == 0) "init" else "forwards")
-                            .put("is_count", true).put("is_iterative", true)
-                        if (scrollId.isNotBlank()) body.put("scroll_id", scrollId) else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
+                        val body = JSONObject()
+                            .put("start_time", startTime.toString())
+                            .put("end_time", endTime.toString())
+                            .put("limit", 5000)
+                            .put("is_desc", true)
+                            .put("search_type", if (page == 0) "init" else "forwards")
+                            .put("is_count", true)
+                            .put("is_iterative", true)
+                        if (scrollId.isNotBlank()) body.put("scroll_id", scrollId)
+                        else if (lineNum.isNotBlank()) body.put("line_num", lineNum)
                         val response = signedRequest("POST", queryUrl, body.toString())
-                        if (response.first !in 200..299) error("LTS 查询失败（HTTP ${response.first}）：${response.second.take(500)}")
-                        val result = JSONObject(response.second); val pageLogs = result.optJSONArray("logs"); val count = pageLogs?.length() ?: 0
+                        if (response.first !in 200..299)
+                            error("LTS 查询失败（HTTP ${response.first}）：${response.second.take(500)}")
+                        val result = JSONObject(response.second)
+                        val pageLogs = result.optJSONArray("logs")
+                        val count = pageLogs?.length() ?: 0
                         if (pageLogs != null) for (i in 0 until count) {
                             val item = pageLogs.optJSONObject(i) ?: continue
                             val content = item.optString("content").takeIf { it.isNotBlank() } ?: continue
@@ -570,32 +613,60 @@ open class HuaweiCloudActivity : Activity() {
                         val nextScroll = result.optString("scrollId")
                         if (nextScroll.isNotBlank()) scrollId = nextScroll
                         if (count > 0) lineNum = pageLogs?.optJSONObject(count - 1)?.optString("line_num").orEmpty()
-                        complete = result.optBoolean("isQueryComplete", false) || count == 0 || (count < 5000 && nextScroll.isBlank())
+                        complete = result.optBoolean("isQueryComplete", false) ||
+                            count == 0 || (count < 5000 && nextScroll.isBlank())
                     }
-                    return "OK" to logs
+                    return PlatformLogResult("OK", logs, "$groupId/$streamId")
                 }
-                // “请勿重复签到”表示今天已经完成签到；即使同一条日志外层带有“签到失败”，
-                // 也必须优先按已签到处理，不能仅凭“失败”关键词误判。
+
+                // Always inspect both fixed functions, even if one platform currently
+                // has no local account. This lets us detect accidental LTS stream sharing.
+                val bindings = listOf(
+                    AccountStore.HOYOLAB to HOYOLAB_FUNCTION,
+                    AccountStore.SKLAND to SKLAND_FUNCTION
+                )
+                val logResults = linkedMapOf<String, PlatformLogResult?>()
+                val logErrors = linkedMapOf<String, String>()
+                for ((platform, functionName) in bindings) {
+                    val result = runCatching { readTodayLogs(functionName) }
+                    if (result.isSuccess) logResults[platform] = result.getOrThrow()
+                    else logErrors[platform] = "日志查询失败：" +
+                        (result.exceptionOrNull()?.message ?: "未知错误")
+                }
+
+                // LTS group/stream is the hard boundary. If Huawei returns the same
+                // stream for both functions, fail closed rather than cross-contaminate.
+                val sourceOwners = logResults.entries
+                    .filter { it.value?.sourceId?.isNotBlank() == true }
+                    .groupBy { it.value!!.sourceId }
+                val sharedSourcePlatforms = sourceOwners.values
+                    .filter { it.size > 1 }
+                    .flatten()
+                    .map { it.key }
+                    .toSet()
+
                 fun isAlreadyCheckedIn(line: String): Boolean =
                     line.contains("今日已签到") || line.contains("今天已经签到") ||
                     line.contains("已经签到过") || line.contains("已签到过") ||
                     line.contains("无需重复签到") || line.contains("请勿重复签到") ||
                     line.contains("already checked in", true) || line.contains("already signed in", true) ||
                     line.contains("already claimed", true)
+
                 fun isOutcome(line: String): Boolean =
                     line.contains("签到成功") || line.contains("签到完成") || isAlreadyCheckedIn(line) ||
                     line.contains("签到失败") ||
                     line.contains("check-in success", true) || line.contains("checkin success", true) ||
                     line.contains("check-in failed", true) || line.contains("checkin failed", true)
+
                 fun outcome(line: String): String = when {
                     isAlreadyCheckedIn(line) || line.contains("签到成功") || line.contains("签到完成") ||
                         line.contains("check-in success", true) || line.contains("checkin success", true) -> "success"
-                    line.contains("签到失败") || line.contains("check-in failed", true) || line.contains("checkin failed", true) -> "failed"
+                    line.contains("签到失败") || line.contains("check-in failed", true) ||
+                        line.contains("checkin failed", true) -> "failed"
                     else -> "unknown"
                 }
+
                 fun gameLogLines(displayName: String, aliases: List<String>, source: List<String>): List<String> {
-                    // Use the exact display name shown in the account-detail game table.
-                    // Explicit result tags take priority over generic/startup log lines.
                     val tagged = source.filter { it.contains("[签到结果][$displayName]") }
                     if (tagged.isNotEmpty()) return tagged
                     val searchTerms = (listOf(displayName) + aliases).distinct()
@@ -604,37 +675,47 @@ open class HuaweiCloudActivity : Activity() {
                             !line.contains("正在进行「$displayName」签到")
                     }
                 }
-                for ((platform, functionName) in listOf(AccountStore.HOYOLAB to HOYOLAB_FUNCTION, AccountStore.SKLAND to SKLAND_FUNCTION)) {
+
+                for ((platform, _) in bindings) {
                     val platformAccounts = accounts.filter { it.platform == platform }
                     if (platformAccounts.isEmpty()) continue
-                    val logResult = runCatching { readTodayLogs(functionName) }
-                    if (logResult.isFailure) {
-                        val msg = "日志查询失败：" + (logResult.exceptionOrNull()?.message ?: "未知错误")
-                        platformAccounts.forEach { a -> statuses[a.id] = "无法获取签到结果"; gameStatuses[a.id] = a.games.associateWith { "unknown" }; details[a.id] = JSONObject().put("reason", msg).put("allRawMessages", msg).toString() }
+                    val reason = when {
+                        platform in logErrors -> logErrors.getValue(platform)
+                        platform in sharedSourcePlatforms ->
+                            "隔离检查失败：HoYoLAB 与森空岛函数返回了相同的 LTS 日志流。为防止读取到另一平台日志，本平台今日日志已拒绝展示。"
+                        logResults[platform]?.state != "OK" ->
+                            logResults[platform]?.state ?: "未取得该平台函数日志"
+                        else -> ""
+                    }
+                    if (reason.isNotBlank()) {
+                        platformAccounts.forEach { account ->
+                            statuses[account.id] = "无法获取签到结果"
+                            gameStatuses[account.id] = account.games.associateWith { "unknown" }
+                            details[account.id] = JSONObject()
+                                .put("reason", reason)
+                                .put("allRawMessages", reason)
+                                .put("games", JSONObject())
+                                .toString()
+                        }
                         continue
                     }
-                    val (readState, logs) = logResult.getOrThrow()
-                    if (readState != "OK") {
-                        platformAccounts.forEach { a -> statuses[a.id] = "无法获取签到结果"; gameStatuses[a.id] = a.games.associateWith { "unknown" }; details[a.id] = JSONObject().put("reason", readState).put("allRawMessages", readState).toString() }
-                        continue
-                    }
+
+                    // This account receives logs from exactly one platform-bound function.
+                    val platformLogs = logResults.getValue(platform).logs
                     for (account in platformAccounts) {
-                        val matched = if (platformAccounts.size == 1) logs else {
-                            val ids = listOfNotNull(account.platformUserId, account.name).map { it.trim() }.filter { it.length >= 3 }
-                            logs.filter { line -> ids.any { id ->
+                        val matched = if (platformAccounts.size == 1) platformLogs else {
+                            val ids = listOfNotNull(account.platformUserId, account.name)
+                                .map { it.trim() }.filter { it.length >= 3 }
+                            platformLogs.filter { line -> ids.any { id ->
                                 if (id == account.name) line.contains(id, true)
-                                else Regex("(?<![A-Za-z0-9])${Regex.escape(id)}(?![A-Za-z0-9])", RegexOption.IGNORE_CASE).containsMatchIn(line)
+                                else Regex("(?<![A-Za-z0-9])${Regex.escape(id)}(?![A-Za-z0-9])", RegexOption.IGNORE_CASE)
+                                    .containsMatchIn(line)
                             } }
                         }
                         val perGame = linkedMapOf<String, String>()
                         for (game in account.games) {
-                            val displayName = GameCatalog.label(game)
-                            val names = GameCatalog.aliases(game)
-                            val lines = gameLogLines(displayName, names, matched)
-                            perGame[game] = when {
-                                lines.firstOrNull(::isOutcome) != null -> outcome(lines.first(::isOutcome))
-                                else -> "unknown"
-                            }
+                            val lines = gameLogLines(GameCatalog.label(game), GameCatalog.aliases(game), matched)
+                            perGame[game] = lines.firstOrNull(::isOutcome)?.let(::outcome) ?: "unknown"
                         }
                         gameStatuses[account.id] = perGame
                         val accountStatus = when {
@@ -646,32 +727,43 @@ open class HuaweiCloudActivity : Activity() {
                         statuses[account.id] = accountStatus
                         val gameDetails = JSONObject()
                         for (game in account.games) {
-                            val displayName = GameCatalog.label(game)
-                            val names = GameCatalog.aliases(game)
-                            val lines = gameLogLines(displayName, names, matched)
+                            val lines = gameLogLines(GameCatalog.label(game), GameCatalog.aliases(game), matched)
                             val outcomeLine = lines.firstOrNull(::isOutcome)
                             gameDetails.put(game, JSONObject()
-                                .put("status", when (perGame[game]) { "success" -> "今日签到成功"; "failed" -> "今日签到失败"; else -> "未获取到明确结果" })
-                                .put("reason", outcomeLine ?: if (lines.isEmpty()) "没有找到包含此游戏名称的签到日志，不能据此认定签到失败。" else "已找到相关日志，但没有识别到明确的成功或失败标记。")
-                                )
+                                .put("status", when (perGame[game]) {
+                                    "success" -> "今日签到成功"
+                                    "failed" -> "今日签到失败"
+                                    else -> "未获取到明确结果"
+                                })
+                                .put("reason", outcomeLine ?: if (lines.isEmpty())
+                                    "没有找到包含此游戏名称的本平台签到日志，不能据此认定签到失败。"
+                                else "已找到相关日志，但没有识别到明确的成功或失败标记。")
+                            )
                         }
                         details[account.id] = JSONObject()
                             .put("status", accountStatus)
-                            .put("reason", "只有日志中明确出现签到成功、今日已签到、无需重复签到或签到失败等结果时才判定；日志缺失或无法匹配时显示未知。")
+                            .put("reason", "日志仅从账号所属平台绑定的独立云函数读取；没有明确结果时显示未知。")
                             .put("games", gameDetails)
                             .put("allRawMessages", org.json.JSONArray(matched.take(300)))
                             .toString()
                     }
                 }
-                accounts.filter { it.platform == AccountStore.MIYOUSHE_CN }.forEach { a ->
-                    gameStatuses[a.id] = a.games.associateWith { "unknown" }
-                    statuses[a.id] = "无法获取签到结果"
-                    details[a.id] = JSONObject().put("reason", "当前未接入此平台的云端签到函数").put("allRawMessages", "当前未接入此平台的云端签到函数").toString()
+
+                accounts.filter { it.platform == AccountStore.MIYOUSHE_CN }.forEach { account ->
+                    gameStatuses[account.id] = account.games.associateWith { "unknown" }
+                    statuses[account.id] = "无法获取签到结果"
+                    val reason = "当前未接入此平台的云端签到函数"
+                    details[account.id] = JSONObject().put("reason", reason)
+                        .put("allRawMessages", reason).toString()
                 }
             } catch (e: Exception) {
                 summary = "今日签到日志读取失败：" + (e.message ?: e.javaClass.simpleName)
-                accounts.filter { it.id !in statuses }.forEach { a ->
-                    statuses[a.id] = "无法获取签到结果"; gameStatuses[a.id] = a.games.associateWith { "unknown" }; details[a.id] = JSONObject().put("reason", "日志查询失败：" + (e.message ?: e.javaClass.simpleName)).put("allRawMessages", "日志查询失败：" + (e.message ?: e.javaClass.simpleName)).toString()
+                accounts.filter { it.id !in statuses }.forEach { account ->
+                    statuses[account.id] = "无法获取签到结果"
+                    gameStatuses[account.id] = account.games.associateWith { "unknown" }
+                    val reason = "日志查询失败：" + (e.message ?: e.javaClass.simpleName)
+                    details[account.id] = JSONObject().put("reason", reason)
+                        .put("allRawMessages", reason).toString()
                 }
             }
             runOnUiThread { onResult(statuses, gameStatuses, details, summary) }
