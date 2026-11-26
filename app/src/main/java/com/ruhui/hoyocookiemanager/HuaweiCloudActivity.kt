@@ -69,6 +69,9 @@ open class HuaweiCloudActivity : Activity() {
     /** Called after a successful cloud login and account synchronization. */
     protected open fun onCloudLoginSyncComplete() {}
 
+    /** Notify the HTML account screen after cloud deployment messages or stages change. */
+    protected open fun onCloudDeploymentProgress() {}
+
     /**
      * Read the existing FunctionGraph packages before account editing is enabled.
      * Only a successful function-list response with zero matching functions is an
@@ -657,10 +660,12 @@ open class HuaweiCloudActivity : Activity() {
     private fun showSklandDeployMessage(accountId: String, title: String, detail: String, success: Boolean?) {
         AppMessageBus.post(this, AppMessageBus.SKLAND, title, detail, success)
         AppMessageBus.postForAccount(this, accountId, title, detail, success)
+        onCloudDeploymentProgress()
     }
 
     private fun logSklandDeployStep(detail: String, success: Boolean? = null) {
         AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛部署进度", detail, success)
+        onCloudDeploymentProgress()
     }
 
     /**
@@ -1121,6 +1126,7 @@ open class HuaweiCloudActivity : Activity() {
     protected fun showOperationMessage(title: String, detail: String, success: Boolean?) {
         AppMessageBus.post(this, messageChannel(), title, detail, success)
         lastResultMessage = AppMessageBus.current(this, messageChannel())
+        onCloudDeploymentProgress()
 
     }
 
