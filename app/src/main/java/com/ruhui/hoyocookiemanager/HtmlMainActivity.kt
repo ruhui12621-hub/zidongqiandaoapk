@@ -19,6 +19,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     private var selectedAccountId: String? = null
     private var todayStatuses: Map<String, String> = emptyMap()
     private var todayGameStatuses: Map<String, Map<String, String>> = emptyMap()
+    private var todayDetails: Map<String, String> = emptyMap()
     private var todaySummary = "等待读取今日签到状态"
     private var todayQuerying = false
     private var pageReady = false
@@ -115,9 +116,10 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         AppMessageBus.post(this, AppMessageBus.HOYOLAB, "今日签到信息读取开始",
             "正在从华为云 FunctionGraph / LTS 下载并分析今天的运行日志。", null)
         pushState()
-        queryTodayCheckinStatusForAccounts { statuses, gameStatuses, summary ->
+        queryTodayCheckinStatusForAccounts { statuses, gameStatuses, details, summary ->
             todayStatuses = statuses
             todayGameStatuses = gameStatuses
+            todayDetails = details
             todaySummary = summary
             todayQuerying = false
             val accountNames = AccountStore(this).all().associate { it.id to it.name }
@@ -169,6 +171,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                     .put("cloudUpdateStages", AppMessageBus.currentAccountStages(this, account.id))
                     .put("todayStatus", todayStatuses[account.id] ?: "今日签到状态未知")
                     .put("gameTodayStatuses", JSONObject().apply { todayGameStatuses[account.id].orEmpty().forEach { (key, value) -> put(key, value) } })
+                    .put("todayDetails", runCatching { JSONObject(todayDetails[account.id].orEmpty().ifBlank { "{}" }) }.getOrDefault(JSONObject()))
             )
         }
         val sync = CloudAccountSyncState.get(this)
