@@ -202,7 +202,6 @@ export default function App() {
       </div> : <div className="account-list">{accounts.map((a: AnyState) => {
         const aggregate = accountSummary(a.games || [], a.gameTodayStatuses || {});
         return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");}}>
-          <span className="account-avatar">{platformInitial(a.platform)}</span>
           <span className="account-info"><strong>{a.name}</strong><small>{a.platformLabel}</small></span>
           <span className={"account-status " + statusTone(aggregate)}>{aggregate}</span>
           <ChevronRight size={17} className="subtle-icon"/>
@@ -347,9 +346,9 @@ export default function App() {
     {modal === "add" && <div className="modal-backdrop" onClick={() => setModal(null)}>
       <section className="modal-sheet" onClick={e => e.stopPropagation()}>
         <div className="modal-title"><div><h2>添加账号</h2><p>选择需要添加的平台。</p></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div>
-        <button className="choice-row" onClick={() => addAccount("hoyolab")}><span className="choice-symbol">H</span><span><strong>HoYoLAB（国际服）</strong><small>国际服游戏账号</small></span><ChevronRight size={17}/></button>
-        <button className="choice-row" onClick={() => addAccount("miyoushe_cn")}><span className="choice-symbol">米</span><span><strong>米游社（国服）</strong><small>国服游戏账号</small></span><ChevronRight size={17}/></button>
-        <button className="choice-row" onClick={() => addAccount("skland")}><span className="choice-symbol">森</span><span><strong>森空岛</strong><small>明日方舟 / 终末地</small></span><ChevronRight size={17}/></button>
+        <button className="choice-row" onClick={() => addAccount("hoyolab")}><span><strong>HoYoLAB（国际服）</strong><small>国际服游戏账号</small></span><ChevronRight size={17}/></button>
+        <button className="choice-row" onClick={() => addAccount("miyoushe_cn")}><span><strong>米游社（国服）</strong><small>国服游戏账号</small></span><ChevronRight size={17}/></button>
+        <button className="choice-row" onClick={() => addAccount("skland")}><span><strong>森空岛</strong><small>明日方舟 / 终末地</small></span><ChevronRight size={17}/></button>
       </section>
     </div>}
 
