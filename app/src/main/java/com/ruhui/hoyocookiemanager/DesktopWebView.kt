@@ -91,6 +91,59 @@ object DesktopWebView {
     }
 
 
+    /**
+     * Fit the desktop document into the available WebView width before centering.
+     *
+     * Never jump to the midpoint of an oversized document: that hides both
+     * edges. First let Chromium zoom out in bounded steps until the full
+     * document fits. Then keep the horizontal origin at zero; pages whose
+     * own layout is narrower than the viewport are centered by their CSS.
+     *
+     * Re-check after layout settles, but stop as soon as the user touches the
+     * page so automatic positioning never fights a drag or pinch gesture.
+     */
+    fun centerDesktopContent(view: WebView) {
+        var userInteracted = false
+        val touchGuard = android.view.View.OnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN ||
+                event.actionMasked == android.view.MotionEvent.ACTION_POINTER_DOWN) {
+                userInteracted = true
+            }
+            false
+        }
+        view.setOnTouchListener(touchGuard)
+
+        val attempts = intArrayOf(180, 650, 1400)
+        attempts.forEach { delay ->
+            view.postDelayed({
+                if (userInteracted || !view.isAttachedToWindow || view.width <= 0) return@postDelayed
+                view.evaluateJavascript(
+                    "(function(){var d=document.documentElement,b=document.body;" +
+                        "return Math.max(d?d.scrollWidth:0,b?b.scrollWidth:0);})()"
+                ) { raw ->
+                    if (userInteracted || !view.isAttachedToWindow) return@evaluateJavascript
+                    val cssWidth = raw?.toDoubleOrNull() ?: return@evaluateJavascript
+                    val visibleCssWidth = view.width / view.scale.coerceAtLeast(0.1f)
+                    if (cssWidth > visibleCssWidth * 1.02) {
+                        // A centered midpoint would crop both sides. Zoom out
+                        // instead so the complete desktop page remains reachable.
+                        var remaining = 8
+                        while (remaining-- > 0 && view.width / view.scale < cssWidth * view.scale / view.scale) {
+                            if (!view.zoomOut()) break
+                        }
+                    }
+                    view.post {
+                        if (!userInteracted && view.isAttachedToWindow) {
+                            // Do not set scrollX to half the overflow. That is
+                            // precisely what made the left and right edges disappear.
+                            view.scrollTo(0, view.scrollY)
+                        }
+                    }
+                }
+            }, delay.toLong())
+        }
+    }
+
     /** Attach a popup in the same layout slot as its source WebView. */
     fun attachPopup(
         container: android.view.ViewGroup,
