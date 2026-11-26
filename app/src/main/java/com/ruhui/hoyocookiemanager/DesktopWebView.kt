@@ -73,10 +73,12 @@ object DesktopWebView {
                     val scale = view.scale
                     val maxScrollX = ((cssWidth * scale).toInt() - view.width).coerceAtLeast(0)
                     val maxScrollY = ((cssHeight * scale).toInt() - view.height).coerceAtLeast(0)
-                    // Some sites place their navigation/title bar at the document top.
-                    // Keep that header fully visible while still centering the desktop canvas horizontally.
+                    // Never center by scrolling into a wide document: that cuts off its
+                    // left-side navigation/header (as seen on Skland). Keep the document's
+                    // leading edge visible; native pinch zoom remains enabled in configure().
+                    // Vertical centering is retained only when explicitly requested.
                     val targetY = if (centerVertical) maxScrollY / 2 else 0
-                    view.scrollTo(maxScrollX / 2, targetY)
+                    view.scrollTo(0, targetY)
                 }
             }
         }
