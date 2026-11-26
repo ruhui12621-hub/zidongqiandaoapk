@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import GlobalManagement from "./GlobalManagement";
 import {
   ArrowLeft, CalendarCheck, Check, CheckCircle2, ChevronRight, Cloud,
   Copy, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
@@ -335,12 +336,13 @@ export default function App() {
       {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content" key={page + ":" + (selectedId || "")}>
-      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
+      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onOpenAccount={id => {setSelectedId(id);setPage("home");}} /> : page === "today-detail" ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
     </main>
     {!selectedId && <nav className="bottom-nav">
       <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
       <button className={page === "cloud" ? "active" : ""} onClick={() => setPage("cloud")}><Cloud size={19}/><span>华为云</span></button>
       <button className={page === "messages" ? "active" : ""} onClick={() => setPage("messages")}><FileText size={19}/><span>运行消息</span></button>
+      <button className={page === "management" ? "active" : ""} onClick={() => setPage("management")}><Settings2 size={19}/><span>全局管理</span></button>
     </nav>}
 
     {modal === "add" && <div className="modal-backdrop" onClick={closeModal}>
