@@ -223,7 +223,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 AppMessageBus.post(this@SenkongdaoActivity, AppMessageBus.SKLAND, "网站请求打开新窗口",
                     "是否对话框：$isDialog\n是否由用户手势触发：$isUserGesture\n来源地址：${source.url.orEmpty()}", null)
                 return try {
-                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false, fitToScreen = true)
+                    val child = DesktopWebView.create(this@SenkongdaoActivity, multiWindow = false, fitToScreen = false)
                     configureLogin(child, true)
                     popupView?.let { destroy(it) }
                     popupView = child
