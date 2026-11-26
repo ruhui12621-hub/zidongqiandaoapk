@@ -122,6 +122,7 @@ function renderMessages(){
 }
 function render(){
  // Keep each stage pane's scroll position while allowing its text to refresh.
+ // CSS also disables overflow anchoring so browser layout changes cannot pull the pane upward.
  // Do not reuse old DOM/text: the freshly rendered state must always win.
  const retainedStageScroll=[];
  view.querySelectorAll(".cloud-update-card tr[data-stage-key]").forEach(row=>{
