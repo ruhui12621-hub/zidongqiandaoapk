@@ -1471,7 +1471,10 @@ open class HuaweiCloudActivity : Activity() {
         val url = URL(urlText)
         val date = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
         val headers = sortedMapOf("host" to url.host, "x-sdk-date" to date)
-        if (method != "GET") headers["content-type"] = if (method == "POST") "application/json;charset=utf8" else "application/json"
+        // APIGW requires Content-Type even on GET requests. Include it in the
+        // canonical signed headers for every method so the signature matches
+        // the actual HTTP request headers.
+        headers["content-type"] = "application/json"
         extraHeaders.forEach { (key, value) -> headers[key.lowercase(Locale.ROOT)] = value }
         val names = headers.keys.toList()
         val canonicalHeaders = names.joinToString("") { it + ":" + headers[it] + "\n" }
@@ -1491,7 +1494,8 @@ open class HuaweiCloudActivity : Activity() {
             requestMethod = method; connectTimeout = 30000; readTimeout = if (method == "GET") 90000 else 180000
             setRequestProperty("X-Sdk-Date", date); setRequestProperty("Authorization", authorization)
             setRequestProperty("Accept", "application/json")
-            if (method != "GET") { doOutput = true; setRequestProperty("Content-Type", headers["content-type"]) }
+            setRequestProperty("Content-Type", headers["content-type"])
+            if (method != "GET") doOutput = true
             extraHeaders.forEach { (key, value) -> setRequestProperty(key, value) }
         }
         try {
