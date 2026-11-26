@@ -264,6 +264,11 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 // Match HoYoLAB: use the shared native two-axis centering path.
                 // Keep token detection site-specific; only the presentation is shared.
                 DesktopWebView.centerDesktopContent(view, centerVertical = false)
+                // Make a fixed-position desktop header follow the document when
+                // the user pans the wide page horizontally.
+                if (isSklandHost(url)) {
+                    DesktopWebView.makeTopFixedHeadersFollowHorizontalScroll(view)
+                }
                 if (isSklandHost(url)) {
                     scheduleCheck()
                 }
