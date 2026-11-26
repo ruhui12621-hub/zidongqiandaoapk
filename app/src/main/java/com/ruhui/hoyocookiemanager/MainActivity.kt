@@ -268,8 +268,14 @@ class MainActivity : HuaweiCloudActivity() {
                         }
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
-                        DesktopWebView.enableDesktopViewport(view)
-                        if (activePlatform == AccountStore.HOYOLAB) DesktopWebView.centerDesktopContent(view)
+                        // HoYoLAB must keep its own desktop viewport: forcing width=980 can alter
+                        // the site's login overlay/window behavior. Only relax zoom restrictions here.
+                        if (activePlatform == AccountStore.HOYOLAB) {
+                            DesktopWebView.enablePageZoom(view)
+                            DesktopWebView.centerDesktopContent(view)
+                        } else {
+                            DesktopWebView.enableDesktopViewport(view)
+                        }
                         requestCookieRefresh()
                         view.postDelayed({ requestCookieRefresh() }, 900L)
                         view.postDelayed({ requestCookieRefresh() }, 2200L)
@@ -331,7 +337,8 @@ class MainActivity : HuaweiCloudActivity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
-                    DesktopWebView.enableDesktopViewport(view)
+                    // Preserve the authentication popup's native viewport and window sizing.
+                    DesktopWebView.enablePageZoom(view)
                     requestCookieRefresh()
                     view.postDelayed({ requestCookieRefresh() }, 900L)
                     view.postDelayed({ requestCookieRefresh() }, 2200L)
