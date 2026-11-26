@@ -91,44 +91,6 @@ object DesktopWebView {
     }
 
 
-    /**
-     * Center an oversized desktop page with WebView's native scroll position.
-     * The document width is measured in CSS pixels by Chromium, then converted
-     * to WebView pixels using the current native scale factor.
-     */
-    fun centerDesktopContent(view: WebView) {
-        val delays = longArrayOf(150L, 550L, 1200L)
-        var touched = false
-        val tasks = delays.map {
-            Runnable {
-                if (touched || !view.isAttachedToWindow || view.width <= 0) return@Runnable
-                view.evaluateJavascript(
-                    "(function(){var r=document.documentElement,b=document.body;" +
-                        "return Math.max(r?r.scrollWidth:0,b?b.scrollWidth:0);})()"
-                ) { result ->
-                    if (touched || !view.isAttachedToWindow) return@evaluateJavascript
-                    val cssWidth = result?.toDoubleOrNull() ?: return@evaluateJavascript
-                    val contentWidthPx = (cssWidth * view.scale).toInt()
-                    val maxScrollX = (contentWidthPx - view.width).coerceAtLeast(0)
-                    if (maxScrollX > 0) {
-                        view.scrollTo(maxScrollX / 2, view.scrollY)
-                    }
-                }
-            }
-        }
-
-        view.setOnTouchListener { _, event ->
-            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
-                touched = true
-                tasks.forEach(view::removeCallbacks)
-            }
-            false
-        }
-        tasks.forEachIndexed { index, task ->
-            view.postDelayed(task, delays[index])
-        }
-    }
-
     /** Attach a popup in the same layout slot as its source WebView. */
     fun attachPopup(
         container: android.view.ViewGroup,
