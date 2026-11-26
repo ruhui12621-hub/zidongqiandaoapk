@@ -26,18 +26,15 @@ class MainActivity : HuaweiCloudActivity() {
     private var statusText = "登录状态：尚未检测"
     // True only when this login-page Activity has successfully acquired a Cookie.
     private var pageCookieAcquired = false
-    private var initialCookieSnapshot = ""
-    private var lastCookieSnapshot = ""
-    private val cookiePollHandler = Handler(Looper.getMainLooper())
-    private val cookiePollTask = object : Runnable {
+    private val cookieRefreshHandler = Handler(Looper.getMainLooper())
+    private val cookieRefreshTask = Runnable {
+        if (!isFinishing && !isDestroyed && !pageCookieAcquired) refreshFromWebView()
+    }
+    private val cookieFallbackTask = object : Runnable {
         override fun run() {
             if (isFinishing || isDestroyed || pageCookieAcquired) return
-            val current = readCookieSnapshot()
-            if (current != lastCookieSnapshot) {
-                lastCookieSnapshot = current
-                refreshFromWebView()
-            }
-            if (!pageCookieAcquired) cookiePollHandler.postDelayed(this, 1500L)
+            refreshFromWebView()
+            if (!pageCookieAcquired) cookieRefreshHandler.postDelayed(this, 8000L)
         }
     }
     private var detailsText = "登录后自动检测 Cookie。"
@@ -70,8 +67,6 @@ class MainActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
         CookieManager.getInstance().setAcceptCookie(true)
-        initialCookieSnapshot = readCookieSnapshot()
-        lastCookieSnapshot = initialCookieSnapshot
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
         returnToAccountDetail = intent.getBooleanExtra("return_to_account_detail", false)
@@ -83,7 +78,7 @@ class MainActivity : HuaweiCloudActivity() {
         }
         buildHome()
         showBrowser()
-        cookiePollHandler.postDelayed(cookiePollTask, 1200L)
+        cookieRefreshHandler.postDelayed(cookieFallbackTask, 8000L)
     }
 
     override fun onDestroy() {
@@ -110,7 +105,7 @@ class MainActivity : HuaweiCloudActivity() {
         } catch (_: Exception) {
             // Ignore WebView teardown failures; no credential data is written by this Activity.
         }
-        cookiePollHandler.removeCallbacks(cookiePollTask)
+        cookieRefreshHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
@@ -193,6 +188,11 @@ class MainActivity : HuaweiCloudActivity() {
                 cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
             ).apply {
                 webChromeClient = object : WebChromeClient() {
+                    override fun onProgressChanged(view: WebView, newProgress: Int) {
+                        super.onProgressChanged(view, newProgress)
+                        if (newProgress >= 100) requestCookieRefresh()
+                    }
+
                     override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                         recordWebDiagnostic(
                             "JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
@@ -269,7 +269,9 @@ class MainActivity : HuaweiCloudActivity() {
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         DesktopWebView.enableDesktopViewport(view)
-                        view.postDelayed({ refreshFromWebView() }, 900)
+                        requestCookieRefresh()
+                        view.postDelayed({ requestCookieRefresh() }, 900L)
+                        view.postDelayed({ requestCookieRefresh() }, 2200L)
                     }
                 }
             }
@@ -302,6 +304,11 @@ class MainActivity : HuaweiCloudActivity() {
             cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
         ).apply {
             webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView, newProgress: Int) {
+                    super.onProgressChanged(view, newProgress)
+                    if (newProgress >= 100) requestCookieRefresh()
+                }
+
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                     recordWebDiagnostic(
                         "弹窗 JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
@@ -324,6 +331,9 @@ class MainActivity : HuaweiCloudActivity() {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
                     DesktopWebView.enableDesktopViewport(view)
+                    requestCookieRefresh()
+                    view.postDelayed({ requestCookieRefresh() }, 900L)
+                    view.postDelayed({ requestCookieRefresh() }, 2200L)
                 }
 
                 override fun onReceivedError(
@@ -368,6 +378,18 @@ class MainActivity : HuaweiCloudActivity() {
         yamlValue = makeYaml(cached, server)
         statusText = "Cookie 状态：已获取（${if (server == "cn") "国服" else "国际服"}）"
         detailsText = "已保留本次应用运行期间最新获取的 Cookie。"
+    }
+
+    // Event-first Cookie detection: debounce bursts from navigation/progress/popup events.
+    private fun requestCookieRefresh(delayMs: Long = 350L) {
+        if (isFinishing || isDestroyed || pageCookieAcquired) return
+        cookieRefreshHandler.removeCallbacks(cookieRefreshTask)
+        cookieRefreshHandler.postDelayed(cookieRefreshTask, delayMs)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized && showingBrowser) requestCookieRefresh(250L)
     }
 
     private fun readCookieSnapshot(): String {
@@ -452,7 +474,11 @@ class MainActivity : HuaweiCloudActivity() {
             store.update(account)
             val normalizedInitial = initialCookieSnapshot.split(';').map { it.trim() }.filter { it.isNotBlank() }.sorted().joinToString("; ")
             val normalizedCurrent = found.split(';').map { it.trim() }.filter { it.isNotBlank() }.sorted().joinToString("; ")
-            if (normalizedCurrent != normalizedInitial) pageCookieAcquired = true
+            // This page session is successful once a valid Cookie has been identified and saved.
+            // Do not compare against the Activity's initial Cookie snapshot: it may already exist
+            // in CookieManager while the account detail and login footer still need synchronization.
+            pageCookieAcquired = true
+            cookieRefreshHandler.removeCallbacks(cookieFallbackTask)
             activeAccountId = account.id
 
             val server = detectedGameServer!!
