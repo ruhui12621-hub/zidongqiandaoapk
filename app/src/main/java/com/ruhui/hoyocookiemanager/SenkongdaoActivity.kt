@@ -42,13 +42,15 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var loginMode = true
     private var checking = false
     private var saved = false
+    private var tokenSavedCached = false
+    private var lastUiPayload: String? = null
     private var lastCheck = 0L
     private val pollHandler = Handler(Looper.getMainLooper())
     private val pollTask = object : Runnable {
         override fun run() {
             if (!loginMode || saved) return
             scheduleCheck()
-            pollHandler.postDelayed(this, 2000L)
+            pollHandler.postDelayed(this, 8000L)
         }
     }
 
@@ -56,6 +58,8 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AppMessageBus.setActiveChannel(AppMessageBus.SKLAND)
         CookieManager.getInstance().setAcceptCookie(true)
+        tokenSavedCached = hasToken()
+        saved = tokenSavedCached
         AppMessageBus.beginSession(this, AppMessageBus.SKLAND, "森空岛启动", "已进入森空岛登录 Activity，开始初始化 WebView。")
         try {
             initializeChromeView()
@@ -114,7 +118,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                             this@SenkongdaoActivity, AppMessageBus.SKLAND, "森空岛界面 JavaScript 错误",
                             "${message.message()}\n来源：${message.sourceId()}\n行号：${message.lineNumber()}", false
                         )
-                        pushSklandUi()
+                        // Avoid pushing state from the JS error callback; that repeated the failing script.
                     }
                     return true
                 }
@@ -170,12 +174,17 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         if (!::chromeView.isInitialized) return
         val payload = JSONObject().put("loginMode", loginMode)
             .put("status", statusText)
-            .put("tokenSaved", hasToken())
+            .put("tokenSaved", tokenSavedCached)
             .put("message", AppMessageBus.current(this, AppMessageBus.SKLAND))
+            .toString()
+        if (payload == lastUiPayload) return
+        lastUiPayload = payload
         chromeView.post {
-            chromeView.evaluateJavascript(
-                "window.updateSklandState && window.updateSklandState(" + JSONObject.quote(payload.toString()) + ")", null
-            )
+            if (!isFinishing && !isDestroyed && ::chromeView.isInitialized) {
+                chromeView.evaluateJavascript(
+                    "window.updateSklandState && window.updateSklandState(" + JSONObject.quote(payload) + ")", null
+                )
+            }
         }
     }
 
@@ -416,6 +425,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 }
             }
             saved = true
+            tokenSavedCached = true
             checking = false
             statusText = "已保存"
             AppMessageBus.post(this, AppMessageBus.SKLAND, "森空岛登录成功", "已自动解析登录状态并在本机加密保存 Token；未将凭据写入消息栏。", true)
