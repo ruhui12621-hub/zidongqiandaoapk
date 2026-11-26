@@ -6,16 +6,19 @@ import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.webkit.WebViewAssetLoader
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Single HTML-driven application shell. All visible app UI lives in assets/ui. */
+/** Single React-driven application shell. All visible app UI lives in bundled assets/ui. */
 class HtmlMainActivity : HuaweiCloudActivity() {
     private lateinit var shell: FrameLayout
     private lateinit var ui: WebView
+    private lateinit var assetLoader: WebViewAssetLoader
     private var selectedAccountId: String? = null
     private var todayStatuses: Map<String, String> = emptyMap()
     private var todayGameStatuses: Map<String, Map<String, String>> = emptyMap()
@@ -28,26 +31,30 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AccountStore.clearLegacyLocalData(this)
         AccountStore.clearMemory()
-        shell = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 5, 5)) }
+        assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+        shell = FrameLayout(this).apply { setBackgroundColor(Color.rgb(33, 33, 33)) }
         ui = WebView(this).apply {
-            setBackgroundColor(Color.rgb(5, 5, 5))
+            setBackgroundColor(Color.rgb(33, 33, 33))
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.allowFileAccess = true
+            settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.allowFileAccessFromFileURLs = false
-            settings.allowUniversalAccessFromFileURLs = false
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.loadsImagesAutomatically = true
             settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
             addJavascriptInterface(HtmlBridge(), "Android")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    return assetLoader.shouldInterceptRequest(request.url)
+                }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    return !request.url.toString().startsWith("file:///android_asset/ui/")
+                    return request.url.host != "appassets.androidplatform.net"
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (url == "file:///android_asset/ui/index.html") {
+                    if (url == "https://appassets.androidplatform.net/assets/ui/index.html") {
                         pageReady = true
                         pushState()
                     }
@@ -57,7 +64,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         shell.addView(ui, FrameLayout.LayoutParams(-1, -1))
         prepareHtmlCloudBackend(shell)
         setContentView(shell)
-        ui.loadUrl("file:///android_asset/ui/index.html")
+        ui.loadUrl("https://appassets.androidplatform.net/assets/ui/index.html")
 
         if (runCatching { AndroidCredentialVault(this).latest() }.getOrNull() != null) {
             synchronizeCloudAccounts { success, message ->
@@ -151,22 +158,14 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     private fun stateJson(): JSONObject {
         val accountsJson = JSONArray()
         AccountStore(this).all().forEach { account ->
-            val games = JSONArray()
-            account.games.forEach { key -> games.put(JSONObject().put("key", key).put("label", GameCatalog.label(key))) }
             accountsJson.put(
-                JSONObject()
-                    .put("id", account.id)
-                    .put("name", account.name)
-                    .put("platform", account.platform)
-                    .put("platformLabel", AccountStore.platformLabel(account.platform))
-                    .put("userId", account.platformUserId.orEmpty())
-                    .put("games", games)
-                    .put("cookieReady", account.cookieReady)
-                    .put("tokenReady", account.tokenReady)
-                    .put("cloudUpdateStages", AppMessageBus.currentAccountStages(this, account.id))
-                    .put("todayStatus", todayStatuses[account.id] ?: "今日签到状态未知")
-                    .put("gameTodayStatuses", JSONObject().apply { todayGameStatuses[account.id].orEmpty().forEach { (key, value) -> put(key, value) } })
-                    .put("todayDetails", runCatching { JSONObject(todayDetails[account.id].orEmpty().ifBlank { "{}" }) }.getOrDefault(JSONObject()))
+                HomeAccountDisplayAssembler.build(
+                    account = account,
+                    todayStatus = todayStatuses[account.id] ?: "今日签到状态未知",
+                    gameTodayStatuses = todayGameStatuses[account.id].orEmpty(),
+                    todayDetailsJson = todayDetails[account.id],
+                    cloudUpdateStages = AppMessageBus.currentAccountStages(this, account.id)
+                )
             )
         }
         val sync = CloudAccountSyncState.get(this)
@@ -219,7 +218,10 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             runOnUiThread { selectedAccountId = id; pushState() }
         }
         @JavascriptInterface fun backToHome() {
-            runOnUiThread { selectedAccountId = null; pushState() }
+            // This bridge only synchronizes native back-button state.
+            // Do not call pushState() here: it rebuilds the full account snapshot
+            // (including AccountStore reads) on the UI thread and can freeze WebView navigation.
+            runOnUiThread { selectedAccountId = null }
         }
 
         @JavascriptInterface fun refreshTodayStatuses() {
@@ -250,8 +252,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         @JavascriptInterface fun copyText(value: String) {
             runOnUiThread {
                 val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("错误消息", value))
-                android.widget.Toast.makeText(this@HtmlMainActivity, "报错消息已复制", android.widget.Toast.LENGTH_SHORT).show()
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("复制内容", value))
             }
         }
 
@@ -265,8 +266,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun deploySklandAccount(id: String) {
-            htmlDeploySklandAccount(id)
+        @JavascriptInterface fun deploySklandAccount(id: String, selectedGamesJson: String) {
+            htmlDeploySklandAccount(id, selectedGamesJson)
             pushState()
         }
 

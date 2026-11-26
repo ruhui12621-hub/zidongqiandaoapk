@@ -8,6 +8,7 @@ on:
     branches: [ main ]
     paths:
       - 'app/**'
+      - 'frontend/**'
       - '*.gradle.kts'
       - 'settings.gradle.kts'
       - '.github/workflows/build-apk.yml'
@@ -23,6 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build React frontend
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -45,7 +54,6 @@ jobs:
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" "$skland_url" -o app/src/main/assets/cloud/skland.zip
           unzip -t app/src/main/assets/cloud/hoyolab.zip >/dev/null
           unzip -t app/src/main/assets/cloud/skland.zip >/dev/null
-          # Record exactly which cloud-function release is embedded in this APK.
           jq -r '"release_tag=" + .tag_name + "\nrelease_commit=" + .target_commitish + "\npublished_at=" + .published_at' <<< "$release_json" > app/src/main/assets/cloud/manifest.txt
           echo "Embedded cloud-function package manifest:"
           cat app/src/main/assets/cloud/manifest.txt
@@ -53,13 +61,19 @@ jobs:
 
       - name: Build debug APK
         run: gradle assembleDebug
-      - name: Verify embedded cloud-function ZIPs
+      - name: Verify embedded cloud-function ZIPs and React assets
         run: |
+          set -euo pipefail
           apk="app/build/outputs/apk/debug/app-debug.apk"
           unzip -Z1 "$apk" | grep -Fx 'assets/cloud/hoyolab.zip'
           unzip -Z1 "$apk" | grep -Fx 'assets/cloud/skland.zip'
           unzip -Z1 "$apk" | grep -Fx 'assets/cloud/manifest.txt'
-          echo "Verified: both ZIP packages are physically embedded in the APK assets."
+          unzip -Z1 "$apk" | grep -Fx 'assets/ui/index.html'
+          unzip -Z1 "$apk" | grep -Fx 'assets/ui/login-status.html'
+          unzip -Z1 "$apk" | grep -Fx 'assets/ui/skland-status.html'
+          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\.js$'
+          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\.css$'
+          echo "Verified: cloud-function packages and all React pages are embedded in the APK."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

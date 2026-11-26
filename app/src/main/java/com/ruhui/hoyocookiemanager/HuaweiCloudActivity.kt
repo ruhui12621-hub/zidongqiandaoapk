@@ -3,6 +3,7 @@ package com.ruhui.hoyocookiemanager
 import android.app.Activity
 import android.os.Bundle
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
@@ -178,105 +179,12 @@ open class HuaweiCloudActivity : Activity() {
                     val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
                     HuaweiCloudSession.lastConfigYaml = yaml
 
-                    // 国服凭据位于 account.cookie，允许为空；国际服凭据必须单独读取 games.os.cookie。
-                    // 不能用全局 cookie 正则，否则会先命中国服空值并误判整个同步失败。
-                    var inGames = false
-                    var inOs = false
-                    var inAccount = false
-                    var cnCookie: String? = null
-                    var osCookie: String? = null
-                    yaml.lineSequence().forEach { line ->
-                        val indent = line.takeWhile { it == ' ' }.length
-                        val keyLine = line.trim()
-                        if (indent == 0) {
-                            inAccount = keyLine == "account:"
-                            if (keyLine == "games:") {
-                                inGames = true
-                                inOs = false
-                            } else {
-                                inGames = false
-                                inOs = false
-                            }
-                        }
-                        if (inAccount && indent == 2 && keyLine.startsWith("cookie:")) {
-                            val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
-                            cnCookie = raw.removeSurrounding("\"").removeSurrounding("'").trim()
-                        }
-                        if (inGames && indent == 2 && keyLine == "os:") {
-                            inOs = true
-                            return@forEach
-                        }
-                        if (inGames && indent == 2 && keyLine.endsWith(":") && keyLine != "os:") {
-                            inOs = false
-                        }
-                        if (inGames && inOs && indent == 4 && keyLine.startsWith("cookie:")) {
-                            val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
-                            osCookie = raw.removeSurrounding("\"").removeSurrounding("'").trim()
-                        }
-                    }
-
-                    // Restore the enabled international game list from the cloud YAML.
-                    // Without this, the imported account has an empty game set and makeYaml()
-                    // later turns every game off (including the configured ZZZ check-in).
-                    val enabledOsGames = linkedSetOf<String>()
-                    val supportedOsGames = setOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
-                    var inGamesSection = false
-                    var inOsSection = false
-                    var currentGame: String? = null
-                    yaml.lineSequence().forEach { line ->
-                        val indent = line.takeWhile { it == ' ' }.length
-                        val keyLine = line.trim()
-                        if (indent == 0) {
-                            inGamesSection = keyLine == "games:"
-                            inOsSection = false
-                            currentGame = null
-                            return@forEach
-                        }
-                        if (!inGamesSection) return@forEach
-                        if (indent == 2) {
-                            inOsSection = keyLine == "os:"
-                            currentGame = null
-                            return@forEach
-                        }
-                        if (!inOsSection) return@forEach
-                        if (indent == 4 && keyLine.endsWith(":")) {
-                            currentGame = keyLine.removeSuffix(":").takeIf { it in supportedOsGames }
-                            return@forEach
-                        }
-                        if (indent == 6 && keyLine.startsWith("checkin:") &&
-                            keyLine.substringAfter(':').trim().equals("true", true)) {
-                            currentGame?.let(enabledOsGames::add)
-                        }
-                    }
-
-                    val enabledCnGames = linkedSetOf<String>()
-                    val supportedCnGames = setOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
-                    var inCnGames = false
-                    var currentCnGame: String? = null
-                    yaml.lineSequence().forEach { line ->
-                        val indent = line.takeWhile { it == ' ' }.length
-                        val keyLine = line.trim()
-                        if (indent == 0) {
-                            inCnGames = keyLine == "games:"
-                            currentCnGame = null
-                            return@forEach
-                        }
-                        if (!inCnGames) return@forEach
-                        if (indent == 2) {
-                            inCnGames = keyLine == "cn:"
-                            currentCnGame = null
-                            return@forEach
-                        }
-                        if (!inCnGames) return@forEach
-                        if (indent == 4 && keyLine.endsWith(":")) {
-                            currentCnGame = keyLine.removeSuffix(":").takeIf { it in supportedCnGames }
-                            return@forEach
-                        }
-                        if (indent == 6 && keyLine.startsWith("checkin:") &&
-                            keyLine.substringAfter(':').trim().equals("true", true)) {
-                            currentCnGame?.let(enabledCnGames::add)
-                        }
-                    }
+                    // YAML structure and platform game rules belong to the HoYoLAB config adapter.
+                    val parsedConfig = HoYoLabCloudConfigAdapter.read(yaml)
+                    val cnCookie = parsedConfig.cnCookie
+                    val osCookie = parsedConfig.osCookie
+                    val enabledCnGames = parsedConfig.enabledCnGames
+                    val enabledOsGames = parsedConfig.enabledOsGames
 
                     val cnValue = cnCookie.orEmpty()
                     if (cnValue.isNotBlank() && cnValue != "null" && cnValue != "~" &&
@@ -327,29 +235,27 @@ open class HuaweiCloudActivity : Activity() {
                 }
 
                 if (sklandFunction != null) {
-                    val tokenText = readZipText(
-                        downloadZip(sklandFunction, "森空岛"),
-                        "code/INPUT_HYPERGRYPH_TOKEN.txt",
-                        "森空岛"
+                    val archive = downloadZip(sklandFunction, "森空岛")
+                    val accountConfig = readZipEntryTextOrNull(
+                        archive, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH
                     )
-                    val tokens = tokenText.lineSequence().map { it.trim() }
-                        .filter { it.isNotBlank() && !it.startsWith("#") }.distinct().toList()
-                    tokens.forEach { token ->
-                        val stableId = MessageDigest.getInstance("SHA-256")
-                            .digest(token.toByteArray(Charsets.UTF_8))
-                            .joinToString("") { "%02x".format(it) }
+                    val legacyTokens = readZipEntryTextOrNull(
+                        archive, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
+                    )
+                    if (accountConfig == null && legacyTokens == null) {
+                        error("森空岛函数包中既没有账号配置，也没有旧版 Token 文件；已停止同步。")
+                    }
+                    val cloudAccounts = SklandCloudConfigAdapter.readAccounts(accountConfig, legacyTokens)
+                    cloudAccounts.forEach { cloudAccount ->
                         val account = store.add(
                             AccountStore.SKLAND,
-                            platformUserId = stableId,
-                            games = setOf("endfield")
+                            platformUserId = cloudAccount.platformUserId,
+                            games = cloudAccount.games
                         )
-                        SklandTokenVault(this, account.id).save(token)
+                        SklandTokenVault(this, account.id).save(cloudAccount.token)
                         store.update(account.copy(
-                            // Endfield is an additional Skland game; keep any existing
-                            // game selections and ensure Endfield is checked as requested.
-                            games = account.games + "endfield",
-                            // Importing a cloud token does not count as a token freshly acquired
-                            // during this app session; preserve tokenReady as-is.
+                            platformUserId = cloudAccount.platformUserId,
+                            games = cloudAccount.games,
                             credentialReady = true
                         ))
                         imported++
@@ -388,8 +294,8 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { deployHoyolabAccount(accountId, selectedGamesJson) }
     }
 
-    protected fun htmlDeploySklandAccount(accountId: String) {
-        runOnUiThread { deploySklandAccount(accountId) }
+    protected fun htmlDeploySklandAccount(accountId: String, selectedGamesJson: String) {
+        runOnUiThread { deploySklandAccount(accountId, selectedGamesJson) }
     }
 
     protected fun htmlCloudBackendReady(): Boolean = true
@@ -816,7 +722,7 @@ open class HuaweiCloudActivity : Activity() {
      * stores one token per line in code/INPUT_HYPERGRYPH_TOKEN.txt; replace only
      * the token belonging to this account and preserve every other cloud token.
      */
-    private fun deploySklandAccount(accountId: String) {
+    private fun deploySklandAccount(accountId: String, selectedGamesJson: String) {
         AppMessageBus.resetAccountStages(this, accountId)
         val title = "森空岛更新"
         if (projectId.isBlank() || authAk.isBlank() || authSk.isBlank()) {
@@ -827,6 +733,17 @@ open class HuaweiCloudActivity : Activity() {
             ?: run { showSklandDeployMessage(accountId, "$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
         if (account.platform != AccountStore.SKLAND) {
             showSklandDeployMessage(accountId, "$title 失败", "当前账号不是森空岛账号，已停止上传。", false)
+            return
+        }
+        val selectedGames = try {
+            val array = JSONArray(selectedGamesJson)
+            (0 until array.length()).map { array.getString(it) }.toSet()
+        } catch (e: Exception) {
+            showSklandDeployMessage(accountId, "$title 失败", "游戏选择数据无效，已停止上传。", false)
+            return
+        }
+        if (selectedGames.isEmpty() || !SklandCloudConfigAdapter.supportedGames.containsAll(selectedGames)) {
+            showSklandDeployMessage(accountId, "$title 失败", "至少选择一款森空岛支持的游戏。", false)
             return
         }
         val token = try {
@@ -841,21 +758,55 @@ open class HuaweiCloudActivity : Activity() {
         }
 
         AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端森空岛函数并准备上传。")
-        showSklandDeployMessage(accountId, "$title 进行中", "正在读取森空岛内置函数包，并仅更新当前账号对应的 Token；其他账号和云端配置保持不变。", null)
+        showSklandDeployMessage(accountId, "$title 进行中", "正在合并当前账号 Token 与启用游戏；其他账号配置保持不变。", null)
         worker.execute {
             var deploymentReady = false
             try {
                 logSklandDeployStep("正在读取 APK 内置函数包 cloud/skland.zip。")
                 val packaged = readPackagedZip("cloud/skland.zip")
                 logSklandDeployStep("森空岛内置函数包读取成功，大小：${packaged.size} 字节。", true)
-                val tokenPath = "code/INPUT_HYPERGRYPH_TOKEN.txt"
-                val cloudTokens = readZipEntryText(packaged, tokenPath)
-                logSklandDeployStep("已读取云函数 Token 列表；不会在消息中输出 Token 原文。", true)
-                val mergedTokens = replaceSklandToken(cloudTokens, token, account.platformUserId)
-                val tokenCount = mergedTokens.lineSequence().map { it.trim() }
-                    .count { it.isNotBlank() && !it.startsWith("#") }
-                logSklandDeployStep("已合并当前账号 Token，云端保留并整理后共 $tokenCount 个 Token。", true)
-                val archive = replaceZip(packaged, tokenPath, mergedTokens)
+                if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                    error("云端账号尚未完成同步，无法安全合并森空岛账号配置。请先重新连接华为云。")
+                }
+                // AccountStore is populated from the authoritative cloud package before editing.
+                // Rebuild the complete Skland account list from its independently encrypted vaults;
+                // never start from the APK's blank template and accidentally drop other cloud accounts.
+                val managedSklandAccounts = AccountStore(this).all()
+                    .filter { it.platform == AccountStore.SKLAND }
+                if (managedSklandAccounts.none { it.id == accountId }) {
+                    error("当前森空岛账号不在已同步账号列表中，已停止上传。")
+                }
+                val cloudAccounts = managedSklandAccounts.map { managed ->
+                    val managedToken = if (managed.id == accountId) token else {
+                        SklandTokenVault(this, managed.id).latest().orEmpty()
+                    }
+                    if (managedToken.isBlank() || managedToken.any(Char::isWhitespace)) {
+                        error("账号「${managed.name}」缺少有效的本机加密 Token，无法安全保留全部云端账号。")
+                    }
+                    SklandCloudConfigAdapter.CloudAccount(
+                        platformUserId = if (managed.id == accountId) sha256(token)
+                            else managed.platformUserId ?: sha256(managedToken),
+                        token = managedToken,
+                        games = if (managed.id == accountId) selectedGames else managed.games
+                    )
+                }
+                val mergedConfig = SklandCloudConfigAdapter.encodeAccounts(cloudAccounts)
+                val mergedLegacyTokens = SklandCloudConfigAdapter.legacyTokenText(mergedConfig)
+                val tokenCount = cloudAccounts.size
+                logSklandDeployStep("账号配置合并完成：共 $tokenCount 个账号；当前账号启用 ${selectedGames.size} 款游戏。未输出 Token 原文。", true)
+
+                var archive = replaceZip(
+                    packaged,
+                    SklandCloudConfigAdapter.LEGACY_TOKEN_PATH,
+                    mergedLegacyTokens,
+                    allowCreate = true
+                )
+                archive = replaceZip(
+                    archive,
+                    SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH,
+                    mergedConfig,
+                    allowCreate = true
+                )
                 logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
 
                 val created = createOrUpdateFunction(SKLAND_FUNCTION, SKLAND_HANDLER, archive) { detail, success ->
@@ -865,15 +816,24 @@ open class HuaweiCloudActivity : Activity() {
                 val function = waitForFunction(SKLAND_FUNCTION)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("森空岛函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                // FunctionGraph has accepted the package and reports the function ready.
+                // Commit the cloud-authoritative account metadata before later LTS/test checks.
+                deploymentReady = true
+                AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
+                    if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
+                AccountStore(this).update(account.copy(
+                    platformUserId = sha256(token),
+                    games = selectedGames,
+                    credentialReady = true
+                ))
+                onCloudDeploymentProgress()
+
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
                 val ltsSummary = ensureLtsIsolation(urn, "skland") { detail, success -> logSklandDeployStep(detail, success) }
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
-                AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
-                    if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
-                deploymentReady = true
 
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用森空岛函数。")
-                logSklandDeployStep("正在使用华为云 TIMER 定时触发器事件格式测试森空岛函数。")
+                logSklandDeployStep("正在使用华为云 TIMER 事件格式测试森空岛函数。")
                 val testResult = invokeFunctionOnce(urn)
                 val testSummary = testResult.summary
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "成功", "森空岛函数调用成功。")
@@ -890,9 +850,10 @@ open class HuaweiCloudActivity : Activity() {
                 logSklandDeployStep("森空岛定时触发器检查完成：$timerSummary", true)
 
                 val action = if (created) "创建" else "更新"
+                val gameLabels = selectedGames.map { GameCatalog.label(it) }.joinToString("、")
                 runOnUiThread {
                     showSklandDeployMessage(accountId, "森空岛部署及检查完成",
-                        "最终结果：森空岛函数${action}成功。\n当前账号 Token 已写入函数包；其他森空岛账号 Token 均予以保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                        "最终结果：森空岛函数${action}成功。\n当前账号启用游戏：$gameLabels。\n已保留其他森空岛账号配置。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -922,20 +883,6 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    /** Replace the current account's cloud token by its stable token hash; retain all other accounts. */
-    private fun replaceSklandToken(source: String, token: String, accountTokenHash: String?): String {
-        val targetHash = accountTokenHash?.takeIf { it.isNotBlank() }
-        val retained = source.split(Regex("\\r?\\n")).filter { line ->
-            val value = line.trim()
-            value.isNotBlank() && (
-                value.startsWith("#") ||
-                    (value != token && (targetHash == null || sha256(value) != targetHash))
-                )
-        }
-        val result = retained.toMutableList()
-        if (result.none { it.trim() == token }) result.add(token)
-        return result.joinToString("\n") + "\n"
-    }
 
     private fun deployHoyolabAccount(accountId: String, selectedGamesJson: String) {
         AppMessageBus.resetAccountStages(this, accountId)
@@ -980,13 +927,13 @@ open class HuaweiCloudActivity : Activity() {
                     logAccountDeployStep(accountId, "尚无已读取的云端配置，改用 APK 内置默认配置。")
                     readZipEntryText(packaged, "config/config.yaml")
                 }
-                val mergedCookieYaml = replaceCloudCookie(baseYaml, pendingCookie, pendingServer)
+                val mergedCookieYaml = HoYoLabCloudConfigAdapter.replaceCookie(baseYaml, pendingCookie, pendingServer)
                 logAccountDeployStep(accountId, "Cookie 已定位并合并到 ${if (pendingServer == "cn") "account.cookie" else "games.os.cookie"}；未输出 Cookie 内容。", true)
                 val selectedGames = try {
                     val array = org.json.JSONArray(selectedGamesJson)
                     (0 until array.length()).map { array.getString(it) }.toSet()
                 } catch (e: Exception) { error("游戏选择数据无效，已停止上传。") }
-                val mergedYaml = replaceCloudGames(mergedCookieYaml, selectedGames, pendingServer)
+                val mergedYaml = HoYoLabCloudConfigAdapter.replaceGames(mergedCookieYaml, selectedGames, pendingServer)
                 logAccountDeployStep(accountId, "游戏签到选项已按当前选择更新，正在重新打包 ZIP。", true)
                 val archive = replaceZip(packaged, "config/config.yaml", mergedYaml)
                 logAccountDeployStep(accountId, "函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
@@ -998,16 +945,22 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "已查询到函数并取得函数 URN，函数已就绪。", true)
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
+                // FunctionGraph has accepted the package and reports the function ready.
+                // Keep the selected games and YAML in sync even if later checks fail.
+                deploymentReady = true
+                AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
+                    if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
+                AccountStore(this).update(account.copy(
+                    games = selectedGames,
+                    credentialReady = true
+                ))
+                onCloudDeploymentProgress()
+                HuaweiCloudSession.lastConfigYaml = mergedYaml
+                configYaml = mergedYaml
+
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
                 val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
-                AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
-                    if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
-                // From this point the function code is deployed and FunctionGraph reports it ready.
-                // Keep the local config in sync even if the later test/trigger check fails.
-                deploymentReady = true
-                HuaweiCloudSession.lastConfigYaml = mergedYaml
-                configYaml = mergedYaml
                 logAccountDeployStep(accountId, "部署阶段已完成：函数已存在且就绪，账号配置已同步；现在开始独立测试。", true)
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用函数。")
                 logAccountDeployStep(accountId, "正在使用华为云 TIMER 定时触发器事件格式测试函数（不再发送空事件 {}）。")
@@ -1058,14 +1011,14 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun readZipEntryText(source: ByteArray, wanted: String): String {
+    private fun readZipEntryTextOrNull(source: ByteArray, wanted: String): String? {
         var found: String? = null
         ZipInputStream(ByteArrayInputStream(source)).use { input ->
             while (true) {
                 val entry = input.nextEntry ?: break
                 val path = entry.name.replace('\\', '/')
                 if (!entry.isDirectory && (path == wanted || path.endsWith("/$wanted"))) {
-                    if (found != null) error("APK 内置 ZIP 中存在多个 $wanted，已停止。")
+                    if (found != null) error("ZIP 中存在多个 $wanted，已停止。")
                     val out = ByteArrayOutputStream()
                     val buffer = ByteArray(8192)
                     var total = 0
@@ -1081,106 +1034,11 @@ open class HuaweiCloudActivity : Activity() {
                 input.closeEntry()
             }
         }
-        return found ?: error("APK 内置 ZIP 中不存在 $wanted。")
+        return found
     }
 
-    /** Replace only account.cookie (CN) or games.os.cookie (global); preserve every other YAML line. */
-    private fun replaceCloudCookie(source: String, cookie: String, server: String): String {
-        val lines = source.split("\n").toMutableList()
-        var inAccount = false
-        var inGames = false
-        var inOs = false
-        val matches = mutableListOf<Int>()
-        for (i in lines.indices) {
-            val line = lines[i].removeSuffix("\r")
-            val trimmed = line.trim()
-            val indent = line.takeWhile { it == ' ' }.length
-            if (server == "cn") {
-                if (indent == 0) inAccount = trimmed == "account:"
-                if (inAccount && indent == 2 && trimmed.startsWith("cookie:")) matches.add(i)
-            } else {
-                if (indent == 0) {
-                    inGames = trimmed == "games:"
-                    inOs = false
-                } else if (inGames && indent == 2) {
-                    inOs = trimmed == "os:"
-                } else if (inGames && inOs && indent == 4 && trimmed.startsWith("cookie:")) {
-                    matches.add(i)
-                }
-            }
-        }
-        if (matches.size != 1) {
-            val path = if (server == "cn") "account.cookie" else "games.os.cookie"
-            error("云端配置中无法唯一定位 " + path + "（匹配数：" + matches.size + "），为避免覆盖其他配置，已停止上传。")
-        }
-        val index = matches.single()
-        val oldLine = lines[index]
-        val lineEnding = if (oldLine.endsWith("\r")) "\r" else ""
-        val indent = oldLine.takeWhile { it == ' ' }.length
-        val escaped = cookie.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\r", "").replace("\n", "")
-        lines[index] = " ".repeat(indent) + "cookie: \"$escaped\"" + lineEnding
-        return lines.joinToString("\n")
-    }
-
-    /** Update only each supported game's checkin flag inside games.cn or games.os. */
-    private fun replaceCloudGames(source: String, selected: Set<String>, server: String): String {
-        val supported = if (server == "cn") {
-            linkedSetOf("genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
-        } else {
-            linkedSetOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz")
-        }
-        if (!supported.containsAll(selected)) error("游戏选择中包含当前服务器不支持的项目，已停止上传。")
-        val lines = source.split("\n").toMutableList()
-        var inGames = false
-        var inServer = false
-        var currentGame: String? = null
-        val matches = mutableMapOf<String, MutableList<Int>>()
-        supported.forEach { matches[it] = mutableListOf() }
-        for (i in lines.indices) {
-            val line = lines[i].removeSuffix("\r")
-            val trimmed = line.trim()
-            val indent = line.takeWhile { it == ' ' }.length
-            if (indent == 0) {
-                inGames = trimmed == "games:"
-                inServer = false
-                currentGame = null
-                continue
-            }
-            if (!inGames) continue
-            if (indent == 2) {
-                inServer = trimmed == "$server:"
-                currentGame = null
-                continue
-            }
-            if (!inServer) continue
-            if (indent == 4 && trimmed.endsWith(":")) {
-                currentGame = trimmed.removeSuffix(":").takeIf { it in supported }
-                continue
-            }
-            if (indent == 6 && trimmed.startsWith("checkin:")) {
-                val game = currentGame ?: continue
-                matches[game]?.add(i)
-            }
-        }
-        val missing = supported.filter { matches[it]?.size != 1 }
-        if (missing.isNotEmpty()) {
-            error("云端配置中无法唯一定位游戏签到选项：" + missing.joinToString("、") +
-                "。为避免改动错误配置，已停止上传。")
-        }
-        for (game in supported) {
-            val index = matches.getValue(game).single()
-            val old = lines[index]
-            val ending = if (old.endsWith("\r")) "\r" else ""
-            val content = old.removeSuffix("\r")
-            val match = Regex("^(\\s*checkin:\\s*)(true|false)(.*)$", RegexOption.IGNORE_CASE)
-                .matchEntire(content) ?: error("游戏 $game 的 checkin 字段格式无法识别，已停止上传。")
-            lines[index] = match.groupValues[1] + (game in selected).toString() +
-                match.groupValues[3] + ending
-        }
-        return lines.joinToString("\n")
-    }
+    private fun readZipEntryText(source: ByteArray, wanted: String): String =
+        readZipEntryTextOrNull(source, wanted) ?: error("APK 内置 ZIP 中不存在 $wanted。")
 
     private fun ensureLtsIsolation(functionUrn: String, platform: String, onStep: (String, Boolean?) -> Unit = { _, _ -> }): String {
         require(platform == "hoyolab" || platform == "skland") { "未知日志平台：$platform" }
@@ -1435,7 +1293,7 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
-    private fun replaceZip(source: ByteArray, wanted: String, yaml: String): ByteArray {
+    private fun replaceZip(source: ByteArray, wanted: String, yaml: String, allowCreate: Boolean = false): ByteArray {
         if (!isZip(source)) error("原函数代码包不是有效 ZIP。")
         val entries = mutableListOf<Pair<ZipEntry, ByteArray>>()
         ZipInputStream(ByteArrayInputStream(source)).use { input ->
@@ -1457,8 +1315,10 @@ open class HuaweiCloudActivity : Activity() {
             val p = it.first.name.replace('\\', '/')
             p == wanted || p.endsWith("/" + wanted)
         }
-        if (hits.size != 1) error(if (hits.isEmpty()) "ZIP 中不存在 " + wanted + "，未执行替换。" else "ZIP 中存在多个目标配置文件，已停止。")
-        val target = hits.single().first
+        if (hits.size > 1 || (hits.isEmpty() && !allowCreate)) {
+            error(if (hits.isEmpty()) "ZIP 中不存在 " + wanted + "，未执行替换。" else "ZIP 中存在多个目标配置文件，已停止。")
+        }
+        val target = hits.singleOrNull()?.first
         val result = ByteArrayOutputStream()
         ZipOutputStream(result).use { zip ->
             for ((entry, bytes) in entries) {
@@ -1467,6 +1327,11 @@ open class HuaweiCloudActivity : Activity() {
                 if (entry.comment != null) copy.comment = entry.comment
                 zip.putNextEntry(copy)
                 if (!entry.isDirectory) zip.write(if (entry === target) yaml.toByteArray(Charsets.UTF_8) else bytes)
+                zip.closeEntry()
+            }
+            if (target == null) {
+                zip.putNextEntry(ZipEntry(wanted))
+                zip.write(yaml.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
             }
         }

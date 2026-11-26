@@ -30,6 +30,7 @@ class AccountStore(context: Context) {
     @Synchronized
     fun add(platform: String, name: String = "", platformUserId: String? = null, games: Set<String> = emptySet()): ManagedAccount {
         require(platform in PLATFORMS) { "不支持的账号平台" }
+        require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "所选游戏不属于当前平台" }
         val normalized = normalizeUserId(platformUserId)
         val existing = if (normalized != null) all().firstOrNull {
             it.platform == platform && it.platformUserId == normalized
@@ -49,6 +50,7 @@ class AccountStore(context: Context) {
     @Synchronized
     fun update(account: ManagedAccount) {
         require(account.platform in PLATFORMS) { "不支持的账号平台" }
+        require(account.games.all { GlobalModuleRegistry.isGameAllowed(account.platform, it) }) { "账号启用了不属于当前平台的游戏" }
         synchronized(cache) {
             val index = cache.indexOfFirst { it.id == account.id }
             require(index >= 0) { "账号不存在" }
@@ -149,30 +151,4 @@ object CloudAccountSyncState {
 
     fun allowsAccountChanges(context: Context): Boolean =
         get(context) == SYNCED || get(context) == EMPTY_CONFIRMED
-}
-
-/**
- * Extracts only stable account identifiers from a Cookie header. Never returns token values.
- * Priority is explicit user/account IDs, not stoken/ltoken/cookie_token credentials.
- */
-object HoYoAccountIdentity {
-    private val priority = listOf(
-        "ltuid_v2", "ltuid", "account_id_v2", "account_id",
-        "stuid_v2", "stuid", "login_uid"
-    )
-
-    fun fromCookie(cookie: String, platform: String): String? {
-        if (platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)) return null
-        val fields = cookie.split(';').mapNotNull { part ->
-            val key = part.trim().substringBefore('=').trim().lowercase()
-            val value = part.trim().substringAfter('=', "").trim()
-            if (key.isBlank() || value.isBlank()) null else key to value
-        }.toMap()
-        val preferred = if (platform == AccountStore.MIYOUSHE_CN) {
-            listOf("stuid_v2", "stuid", "ltuid_v2", "ltuid", "account_id_v2", "account_id", "login_uid")
-        } else priority
-        return preferred.firstNotNullOfOrNull { key ->
-            fields[key]?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
-        }
-    }
 }

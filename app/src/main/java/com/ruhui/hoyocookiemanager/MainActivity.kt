@@ -20,10 +20,14 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 
 class MainActivity : HuaweiCloudActivity() {
+    private companion object {
+        const val LOGIN_STATUS_URL = "https://appassets.androidplatform.net/assets/ui/login-status.html"
+    }
     private lateinit var root: LinearLayout
     private var statusText = "登录状态：尚未检测"
     // True only when this login-page Activity has successfully acquired a Cookie.
@@ -42,6 +46,8 @@ class MainActivity : HuaweiCloudActivity() {
     private var detailsText = "登录后自动检测 Cookie。"
     private lateinit var webView: WebView
     private lateinit var loginChrome: WebView
+    private lateinit var loginAssetLoader: WebViewAssetLoader
+    private var loginStatusPageReady = false
     private var popupWebView: WebView? = null
     private var cookieValue = ""
     private var yamlValue = ""
@@ -58,16 +64,6 @@ class MainActivity : HuaweiCloudActivity() {
     private var browserVisible = false
     private var showingBrowser = false
     private val webDiagnostics = mutableListOf<String>()
-
-    private val cookieUrls = listOf(
-        "https://www.hoyolab.com/",
-        "https://act.hoyolab.com/",
-        "https://bbs-api-os.hoyolab.com/",
-        "https://www.miyoushe.com/",
-        "https://bbs.mihoyo.com/",
-        "https://user.mihoyo.com/",
-        "https://bbs-api.mihoyo.com/"
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +102,7 @@ class MainActivity : HuaweiCloudActivity() {
                 webView.destroy()
             }
             if (::loginChrome.isInitialized) {
+                loginStatusPageReady = false
                 loginChrome.stopLoading()
                 loginChrome.removeJavascriptInterface("LoginUi")
                 loginChrome.destroy()
@@ -128,20 +125,33 @@ class MainActivity : HuaweiCloudActivity() {
             setBackgroundColor(Color.rgb(5, 5, 5))
         }
         if (!::loginChrome.isInitialized) {
+            loginAssetLoader = WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+                .build()
             loginChrome = WebView(this).apply {
-                setBackgroundColor(Color.rgb(5, 5, 5))
+                setBackgroundColor(Color.rgb(8, 8, 7))
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
-                settings.allowFileAccess = true
+                settings.allowFileAccess = false
                 settings.allowContentAccess = false
+                settings.javaScriptCanOpenWindowsAutomatically = false
+                settings.loadsImagesAutomatically = false
+                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 addJavascriptInterface(LoginChromeBridge(), "LoginUi")
                 webChromeClient = WebChromeClient()
                 webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? =
+                        loginAssetLoader.shouldInterceptRequest(request.url)
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                        !request.url.toString().startsWith("file:///android_asset/ui/")
-                    override fun onPageFinished(view: WebView, url: String) { pushLoginChrome() }
+                        request.url.host != "appassets.androidplatform.net"
+                    override fun onPageFinished(view: WebView, url: String) {
+                        if (url == LOGIN_STATUS_URL) {
+                            loginStatusPageReady = true
+                            pushLoginChrome()
+                        }
+                    }
                 }
-                loadUrl("file:///android_asset/ui/login.html")
+                loadUrl(LOGIN_STATUS_URL)
             }
         }
         (loginChrome.parent as? ViewGroup)?.removeView(loginChrome)
@@ -152,15 +162,11 @@ class MainActivity : HuaweiCloudActivity() {
 
     private fun pushLoginChrome() {
         if (!::loginChrome.isInitialized) return
-        val payload = org.json.JSONObject()
-            .put("title", if (activePlatform == AccountStore.MIYOUSHE_CN) "米游社登录" else "HoYoLAB 登录")
-            .put("status", statusText)
-            .put("pageCookieAcquired", pageCookieAcquired)
-            .put("detail", detailsText)
-            .put("message", AppMessageBus.current(this, AppMessageBus.HOYOLAB))
+        if (!loginStatusPageReady) return
+        val acquired = pageCookieAcquired
         loginChrome.post {
             loginChrome.evaluateJavascript(
-                "window.updateLoginState && window.updateLoginState(" + org.json.JSONObject.quote(payload.toString()) + ")",
+                "window.setLoginCookieState && window.setLoginCookieState($acquired)",
                 null
             )
         }
@@ -282,7 +288,7 @@ class MainActivity : HuaweiCloudActivity() {
                         pushLoginChrome()
                         recordWebDiagnostic("页面加载完成：${url.substringBefore('?')}")
                         // Both services use exactly the same page presentation pipeline.
-                        DesktopWebView.prepareDesktopPage(view)
+                        DesktopWebView.prepareDesktopPage(view, activePlatform)
                         requestCookieRefresh()
                         view.postDelayed({ requestCookieRefresh() }, 900L)
                         view.postDelayed({ requestCookieRefresh() }, 2200L)
@@ -364,7 +370,7 @@ class MainActivity : HuaweiCloudActivity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     recordWebDiagnostic("验证子窗口加载完成：${url.substringBefore('?')}")
-                    DesktopWebView.prepareDesktopPage(view)
+                    DesktopWebView.prepareDesktopPage(view, activePlatform)
                     // Popup inherits the shared native WebView zoom and viewport settings.
                     requestCookieRefresh()
                     view.postDelayed({ requestCookieRefresh() }, 900L)
@@ -430,7 +436,7 @@ class MainActivity : HuaweiCloudActivity() {
     private fun readCookieSnapshot(): String {
         val manager = sessionCookieManager ?: return ""
         val collected = linkedSetOf<String>()
-        cookieUrls.forEach { url ->
+        PlatformCredentialAdapters.cookieDomains().forEach { url ->
             manager.getCookie(url)?.split(';')
                 ?.map { it.trim() }
                 ?.filter { it.contains('=') }
@@ -442,23 +448,14 @@ class MainActivity : HuaweiCloudActivity() {
     private fun refreshFromWebView(showToast: Boolean = false) {
         val found = readCookieSnapshot()
         cookieValue = found
-        val names = found.split(';')
-            .mapNotNull { it.trim().substringBefore('=').takeIf { name -> name.isNotBlank() } }
-            .toSet()
-        // Account identifiers (stuid / ltuid / account_id) are not authentication tokens.
-        // Only real credential fields may mark the login session as acquired.
-        val cnMarkers = setOf("stoken", "stoken_v2", "cookie_token", "ltoken")
-        val osMarkers = setOf("ltoken_v2", "cookie_token_v2")
-        val hasCnToken = names.any { it in cnMarkers }
-        val hasOsToken = names.any { it in osMarkers }
+        // Platform adapters distinguish authentication credentials from ordinary account IDs.
+        val cnAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(AccountStore.MIYOUSHE_CN))
+        val osAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(AccountStore.HOYOLAB))
+        val hasCnToken = cnAdapter.hasAuthenticationCredential(found)
+        val hasOsToken = osAdapter.hasAuthenticationCredential(found)
         val cookieManager = sessionCookieManager ?: return
-        val cnDomainHasToken = listOf(
-            "https://www.miyoushe.com/", "https://bbs.mihoyo.com/",
-            "https://user.mihoyo.com/", "https://bbs-api.mihoyo.com/"
-        ).any { url ->
-            cookieManager.getCookie(url).orEmpty().split(';').any { part ->
-                part.trim().substringBefore('=') in cnMarkers
-            }
+        val cnDomainHasToken = cnAdapter.credentialDomains.any { url ->
+            cnAdapter.hasAuthenticationCredential(cookieManager.getCookie(url).orEmpty())
         }
         detectedGameServer = when {
             hasCnToken && !hasOsToken -> "cn"
@@ -495,19 +492,12 @@ class MainActivity : HuaweiCloudActivity() {
                 HuaweiCloudSession.clearPendingHoyoCookie()
                 return
             }
-            val cookieFields = found.split(';').mapNotNull { part ->
-                val key = part.trim().substringBefore('=').trim().lowercase()
-                val value = part.trim().substringAfter('=', "").trim()
-                if (key.isBlank() || value.isBlank()) null else key to value
-            }.toMap()
-            val tokenKeys = if (platform == AccountStore.MIYOUSHE_CN)
-                setOf("stoken", "stoken_v2", "cookie_token", "ltoken")
-            else setOf("ltoken_v2", "cookie_token_v2")
+            val platformAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(platform))
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
                 credentialReady = true,
                 cookieReady = true,
-                tokenReady = tokenKeys.any { !cookieFields[it].isNullOrBlank() }
+                tokenReady = platformAdapter.hasAuthenticationCredential(found)
             )
             store.update(account)
             // This page session is successful once a valid Cookie has been identified and saved.
