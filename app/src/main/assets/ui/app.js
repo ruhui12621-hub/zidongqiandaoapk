@@ -73,7 +73,7 @@ function renderDetail(a){
    const tone=result==="success"?"success":result==="failed"?"failed":"neutral";
    return '<tr class="clickable-status-row" data-action="open-today-detail" data-game="'+esc(key)+'"><td>'+esc(g.label||key)+'</td><td><span class="game-result '+tone+'">'+resultText+'</span></td></tr>';
   }).join("");
-  html+='<div class="card"><div class="card-title">今日签到信息</div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="2" class="empty-cell">云端暂未配置签到游戏</td></tr>') +'</tbody></table></div></div>';
+  html+='<div class="card today-status-card" data-action="open-today-detail"><div class="card-title">今日签到信息 <span class="detail-hint">点击查看原因与原始消息 ›</span></div><div class="game-status-table-wrap"><table class="game-status-table"><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="2" class="empty-cell">云端暂未配置签到游戏</td></tr>') +'</tbody></table></div></div>';
   html+='<div class="card"><div class="card-title">更新上传</div>';
   html+='<div class="metric" style="margin-bottom:12px"><span>应用运行期间 Token 状态</span><strong style="color:'+(a.tokenReady?'var(--green)':'var(--amber)')+'">'+(a.tokenReady?'已获取最新':'未获取')+'</strong></div>';
   html+='<button class="primary" data-action="skland-login">打开森空岛登录页面</button>';
@@ -86,7 +86,7 @@ function renderDetail(a){
  return html
 }
 function renderTodayDetail(a){
- const data=(state.todayDetails||{})[a.id]||{};
+ const data=a.todayDetails||{};
  const perGame=data.games||{};
  const chosen=selectedTodayGameKey&&perGame[selectedTodayGameKey]?perGame[selectedTodayGameKey]:null;
  const gameLabel=(a.games||[]).find(g=>(g.key||g.id||g.label)===selectedTodayGameKey)?.label;
