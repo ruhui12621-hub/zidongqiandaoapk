@@ -551,7 +551,7 @@ open class HuaweiCloudActivity : Activity() {
                 HuaweiCloudSession.region = regionValue
                 HuaweiCloudSession.projectId = projectId
 
-                data class PlatformLogResult(val state: String, val logs: List<String>, val sourceId: String)
+                data class PlatformLogResult(val state: String, val logs: List<String>, val sourceId: String, val groupName: String, val streamName: String)
 
                 fun readTodayLogs(functionName: String): PlatformLogResult {
                     val listUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions?func_name=" +
@@ -571,7 +571,22 @@ open class HuaweiCloudActivity : Activity() {
                     val groupId = detail.optString("group_id")
                     val streamId = detail.optString("stream_id")
                     if (groupId.isBlank() || streamId.isBlank())
-                        return PlatformLogResult("函数未启用独立日志流或日志流不可用：$functionName", emptyList(), "")
+                        return PlatformLogResult("函数未启用独立日志流或日志流不可用：$functionName", emptyList(), "", "", "")
+                    // Resolve names from LTS metadata by the IDs returned by FunctionGraph.
+                    // Do not hardcode platform/game names in the UI or infer names from labels.
+                    val ltsBase = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId"
+                    val groupRows = signedGet("$ltsBase/groups").optJSONArray("log_groups")
+                        ?: error("LTS 未返回日志组列表，无法显示日志配置名称。")
+                    val groupName = (0 until groupRows.length()).mapNotNull { groupRows.optJSONObject(it) }
+                        .firstOrNull { it.optString("log_group_id") == groupId }
+                        ?.optString("log_group_name").orEmpty()
+                    if (groupName.isBlank()) error("无法根据函数返回的日志组 ID 定位日志组名称。")
+                    val streamRows = signedGet("$ltsBase/groups/" + enc(groupId) + "/streams").optJSONArray("log_streams")
+                        ?: error("LTS 未返回日志流列表，无法显示日志配置名称。")
+                    val streamName = (0 until streamRows.length()).mapNotNull { streamRows.optJSONObject(it) }
+                        .firstOrNull { it.optString("log_stream_id") == streamId }
+                        ?.optString("log_stream_name").orEmpty()
+                    if (streamName.isBlank()) error("无法根据函数返回的日志流 ID 定位日志流名称。")
                     val calendar = Calendar.getInstance()
                     calendar.set(Calendar.HOUR_OF_DAY, 0)
                     calendar.set(Calendar.MINUTE, 0)
@@ -616,7 +631,7 @@ open class HuaweiCloudActivity : Activity() {
                         complete = result.optBoolean("isQueryComplete", false) ||
                             count == 0 || (count < 5000 && nextScroll.isBlank())
                     }
-                    return PlatformLogResult("OK", logs, "$groupId/$streamId")
+                    return PlatformLogResult("OK", logs, "$groupId/$streamId", groupName, streamName)
                 }
 
                 // Always inspect both fixed functions, even if one platform currently
@@ -695,6 +710,8 @@ open class HuaweiCloudActivity : Activity() {
                                 .put("reason", reason)
                                 .put("allRawMessages", reason)
                                 .put("games", JSONObject())
+                                .put("logGroupName", logResults[platform]?.groupName.orEmpty())
+                                .put("logStreamName", logResults[platform]?.streamName.orEmpty())
                                 .toString()
                         }
                         continue
@@ -744,6 +761,8 @@ open class HuaweiCloudActivity : Activity() {
                             .put("status", accountStatus)
                             .put("reason", "日志仅从账号所属平台绑定的独立云函数读取；没有明确结果时显示未知。")
                             .put("games", gameDetails)
+                            .put("logGroupName", logResults[platform]?.groupName.orEmpty())
+                            .put("logStreamName", logResults[platform]?.streamName.orEmpty())
                             .put("allRawMessages", org.json.JSONArray(matched.take(300)))
                             .toString()
                     }
