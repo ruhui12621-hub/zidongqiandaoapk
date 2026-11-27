@@ -19,3 +19,53 @@
 .session-cookie-state{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:11px 12px;border:1px solid #414141;border-radius:12px;background:#343434;font-size:11px}.session-cookie-state span{color:#aaa}.session-cookie-state strong{font-size:12px;font-weight:600}.session-cookie-state strong.good{color:var(--green)}.session-cookie-state strong.muted{color:#c2c2c2}
 
 .platform-toggle{cursor:pointer}.platform-chevron{transition:transform .18s ease}.platform-chevron.expanded{transform:rotate(90deg)}.platform-account-panel{margin-top:9px;margin-bottom:15px;animation:platform-reveal .16s ease-out}@keyframes platform-reveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+
+/* UX refinement: clearer hierarchy, touch targets and restrained secondary details. */
+.cloud-status-row{display:flex;align-items:center;gap:11px;min-height:62px;padding:10px 13px;margin:0 0 14px;border:1px solid #3d3d3d;border-radius:15px;background:#282828}
+.cloud-status-row .banner-icon{width:35px;height:35px;border-radius:11px}
+.cloud-status-row .banner-copy strong{font-size:13px}
+.cloud-status-row .banner-copy small{font-size:11px}
+.cloud-status-hint{font-size:10px;color:#858585;white-space:nowrap}
+.account-pair-row{gap:8px}
+.account-pair-name,.account-pair-status{min-height:66px;border-radius:14px}
+.account-pair-name{flex:1 1 auto;padding:11px 13px}
+.account-pair-main{gap:6px}
+.account-pair-main strong{font-size:14px;line-height:1.3}
+.account-pair-main small{font-size:11px}
+.account-pair-status{flex:0 1 42%;min-width:112px;max-width:46%;padding:9px 10px;gap:5px;font-size:12px;font-weight:560;line-height:1.4}
+.account-pair-status span{min-width:0;overflow-wrap:anywhere}
+.page-heading{margin-bottom:19px}
+.page-heading p,.back-heading p{font-size:13px;line-height:1.6}
+.card-heading{font-size:14px}
+.helper-text,.footnote{font-size:12px;line-height:1.65}
+.field-label{font-size:12px}
+.info-line{font-size:12px;line-height:1.5}
+.info-line span{flex:0 0 auto}
+.info-line strong{font-size:12px}
+.session-cookie-state{font-size:12px;min-height:46px}
+.session-cookie-state strong{font-size:13px}
+.stage-copy strong{font-size:12px}
+.stage-copy small{font-size:11px}
+.result-table table{font-size:12px;min-width:490px}
+.result-table th{font-size:11px}
+.result-label{font-size:11px;padding:5px 8px}
+.log-view{font-size:11px}
+.log-source-details,.raw-log-details{margin-top:8px;border-top:1px solid #414141}
+.log-source-details summary,.raw-log-details summary{padding:11px 2px;color:#c4c4c4;font-size:12px;cursor:pointer;list-style-position:inside}
+.log-source-details[open] summary,.raw-log-details[open] summary{margin-bottom:2px}
+.log-source-details .info-line:first-of-type{border-top:0}
+.raw-log-details .log-view{margin:0 0 4px}
+.choice-row{min-height:60px}
+.choice-row strong{font-size:13px}
+.choice-row small{font-size:11px}
+.primary-button,.secondary-button{font-size:13px;min-height:46px}
+.bottom-nav button{font-size:11px}
+.bottom-nav button span{font-size:11px}
+@media(max-width:390px){
+  .cloud-status-hint{display:none}
+  .account-pair-status{min-width:104px;max-width:44%;font-size:11px;padding:8px}
+  .account-pair-name{padding:10px}
+  .account-pair-main strong{font-size:13px}
+  .main-content{padding-left:14px;padding-right:14px}
+}
