@@ -97,7 +97,7 @@ object PlatformAccountsCsvAdapter {
             }
             val supported = allowedGames.getValue(row.platform)
             require(supported.containsAll(row.games)) {
-                "账号「${row.name.ifBlank { row.accountId }}」的游戏选择为空或包含不支持的游戏。"
+                "账号「${row.name.ifBlank { row.accountId }}」的游戏选择包含不支持的游戏。"
             }
             require(!row.credential.contains('\n') && !row.credential.contains('\r')) {
                 "账号「${row.name.ifBlank { row.accountId }}」的凭据包含换行符。"
