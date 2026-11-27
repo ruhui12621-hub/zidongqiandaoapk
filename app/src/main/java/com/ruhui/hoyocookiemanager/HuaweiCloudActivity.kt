@@ -924,12 +924,17 @@ open class HuaweiCloudActivity : Activity() {
                 val tokenCount = csvAccounts.size
                 logSklandDeployStep("CSV 校验完成：共 " + tokenCount + " 个账号；当前账号启用 " + selectedGames.size + " 款游戏。未输出 Token 原文。", true)
 
-                val archive = replaceZip(
+                val csvArchive = replaceZip(
                     packaged,
                     SklandCloudConfigAdapter.ACCOUNT_CSV_PATH,
                     csvText,
                     allowCreate = true
                 )
+                val archive = removeZipEntries(csvArchive, setOf(
+                    SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH,
+                    SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
+                ))
+                logSklandDeployStep("旧版 JSON/Token 账号文件已清理，CSV 是唯一账号数据源。", true)
                 logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
 
                 val created = createOrUpdateFunction(SKLAND_FUNCTION, SKLAND_HANDLER, archive) { detail, success ->
@@ -1551,6 +1556,49 @@ open class HuaweiCloudActivity : Activity() {
         val resultBytes = result.toByteArray()
         if (resultBytes.size > 50 * 1024 * 1024) error("重新打包后的 ZIP 超过 50 MB。")
         return resultBytes
+    }
+
+    private fun removeZipEntries(source: ByteArray, removePaths: Set<String>): ByteArray {
+        if (!isZip(source)) error("清理旧版账号文件前发现无效 ZIP。")
+        val entries = mutableListOf<Pair<ZipEntry, ByteArray>>()
+        ZipInputStream(ByteArrayInputStream(source)).use { input ->
+            while (true) {
+                val entry = input.nextEntry ?: break
+                val output = ByteArrayOutputStream()
+                if (!entry.isDirectory) {
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > 50 * 1024 * 1024) error("ZIP 单个文件超过 50 MB。")
+                        output.write(buffer, 0, count)
+                    }
+                }
+                entries.add(entry to output.toByteArray())
+                input.closeEntry()
+            }
+        }
+        val normalized = removePaths.map { it.replace('\\', '/') }.toSet()
+        val kept = entries.filter { (entry, _) ->
+            val path = entry.name.replace('\\', '/')
+            path !in normalized && normalized.none { path.endsWith("/" + it) }
+        }
+        val result = ByteArrayOutputStream()
+        ZipOutputStream(result).use { zip ->
+            for ((entry, bytes) in kept) {
+                val copy = ZipEntry(entry.name)
+                if (entry.time >= 0) copy.time = entry.time
+                if (entry.comment != null) copy.comment = entry.comment
+                zip.putNextEntry(copy)
+                if (!entry.isDirectory) zip.write(bytes)
+                zip.closeEntry()
+            }
+        }
+        val output = result.toByteArray()
+        if (output.size > 50 * 1024 * 1024) error("清理旧版账号文件后的 ZIP 超过 50 MB。")
+        return output
     }
 
     private fun isZip(b: ByteArray) = b.size >= 4 && b[0] == 0x50.toByte() &&
