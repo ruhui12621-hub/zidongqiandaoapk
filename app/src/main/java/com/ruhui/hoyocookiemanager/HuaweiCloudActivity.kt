@@ -932,7 +932,8 @@ open class HuaweiCloudActivity : Activity() {
                 )
                 val archive = removeZipEntries(csvArchive, setOf(
                     SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH,
-                    SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
+                    SklandCloudConfigAdapter.LEGACY_TOKEN_PATH,
+                    "TOKEN.txt"
                 ))
                 logSklandDeployStep("旧版 JSON/Token 账号文件已清理，CSV 是唯一账号数据源。", true)
                 logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
