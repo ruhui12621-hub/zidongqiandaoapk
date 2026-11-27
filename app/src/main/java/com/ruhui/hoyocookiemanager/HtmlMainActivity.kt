@@ -166,7 +166,7 @@ class HtmlMainActivity : HuaweiCloudActivity() {
                 gameTodayStatuses = todayGameStatuses[account.id].orEmpty(),
                 todayDetailsJson = todayDetails[account.id],
                 cloudUpdateStages = AppMessageBus.currentAccountStages(this, account.id)
-            ).put("sessionCookieAcquired", sessionCookieAcquiredAccountIds.contains(account.id))
+            ).put("sessionCredentialAcquired", sessionCredentialAcquiredAccountIds.contains(account.id))
             accountsJson.put(display)
         }
         val sync = CloudAccountSyncState.get(this)
@@ -293,9 +293,21 @@ class HtmlMainActivity : HuaweiCloudActivity() {
         // Explicit event from the login WebView; this is process-only runtime state.
         @JvmStatic
         fun markSessionCookieAcquired(accountId: String) {
-            if (accountId.isNotBlank()) sessionCookieAcquiredAccountIds.add(accountId)
+            markSessionCredentialAcquired(accountId)
         }
+
+        // Both HoYoLAB Cookies and Skland Tokens are recorded only after real extraction.
+        @JvmStatic
+        fun markSessionTokenAcquired(accountId: String) {
+            markSessionCredentialAcquired(accountId)
+        }
+
+        @JvmStatic
+        private fun markSessionCredentialAcquired(accountId: String) {
+            if (accountId.isNotBlank()) sessionCredentialAcquiredAccountIds.add(accountId)
+        }
+
         // Process-memory only: reset automatically when Android kills the APK process.
-        private val sessionCookieAcquiredAccountIds = mutableSetOf<String>()
+        private val sessionCredentialAcquiredAccountIds = mutableSetOf<String>()
     }
 }
