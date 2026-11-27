@@ -22,7 +22,9 @@ object GlobalModuleRegistry {
         val parserDescription: String,
         val credentialMarkers: Set<String> = emptySet(),
         val credentialDomains: List<String> = emptyList(),
-        val games: List<GameCatalog.Game>
+        val games: List<GameCatalog.Game>,
+        /** Games preselected when a new account is created under this platform. */
+        val defaultGames: Set<String> = emptySet()
     )
 
     data class AccountDefinition(
@@ -60,7 +62,8 @@ object GlobalModuleRegistry {
                 "https://act.hoyolab.com/",
                 "https://bbs-api-os.hoyolab.com/"
             ),
-            games = GameCatalog.hoyolabOs
+            games = GameCatalog.hoyolabOs,
+            defaultGames = setOf("zzz")
         ),
         GameModule(
             id = AccountStore.MIYOUSHE_CN,
@@ -74,14 +77,16 @@ object GlobalModuleRegistry {
                 "https://user.mihoyo.com/",
                 "https://bbs-api.mihoyo.com/"
             ),
-            games = GameCatalog.hoyolabCn
+            games = GameCatalog.hoyolabCn,
+            defaultGames = setOf("zzz")
         ),
         GameModule(
             id = AccountStore.SKLAND,
             label = AccountStore.platformLabel(AccountStore.SKLAND),
             credentialType = "Token",
             parserDescription = "解析森空岛 Token 接口响应、校验凭据并交由独立保管箱加密保存",
-            games = GameCatalog.skland
+            games = GameCatalog.skland,
+            defaultGames = setOf("endfield")
         )
     )
 
@@ -98,6 +103,10 @@ object GlobalModuleRegistry {
 
     fun gamesFor(platformId: String): List<GameCatalog.Game> =
         gameModule(platformId)?.games.orEmpty()
+
+    /** Platform-owned defaults; account creation must not hardcode individual game IDs. */
+    fun defaultGamesFor(platformId: String): Set<String> =
+        gameModule(platformId)?.defaultGames.orEmpty()
 
     fun isGameAllowed(platformId: String, gameId: String): Boolean =
         gamesFor(platformId).any { it.key == gameId }
