@@ -173,91 +173,82 @@ open class HuaweiCloudActivity : Activity() {
                 var imported = 0
                 val hoyoFunction = findFunction(HOYOLAB_FUNCTION)
                 val sklandFunction = findFunction(SKLAND_FUNCTION)
-                if (hoyoFunction == null) HuaweiCloudSession.lastConfigYaml = ""
+                if (hoyoFunction == null) {
+                    HuaweiCloudSession.lastConfigYaml = ""
+                    HuaweiCloudSession.lastHoyoAccountsCsv =
+                        PlatformAccountsCsvAdapter.encode(emptyList(), setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))
+                }
 
                 if (hoyoFunction != null) {
-                    val yaml = readZipText(downloadZip(hoyoFunction, "HoYoLAB"), "config/config.yaml", "HoYoLAB")
+                    val archive = downloadZip(hoyoFunction, "HoYoLAB")
+                    val yaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
                     HuaweiCloudSession.lastConfigYaml = yaml
-
-                    // YAML structure and platform game rules belong to the HoYoLAB config adapter.
-                    val parsedConfig = HoYoLabCloudConfigAdapter.read(yaml)
-                    val cnCookie = parsedConfig.cnCookie
-                    val osCookie = parsedConfig.osCookie
-                    val enabledCnGames = parsedConfig.enabledCnGames
-                    val enabledOsGames = parsedConfig.enabledOsGames
-
-                    val cnValue = cnCookie.orEmpty()
-                    if (cnValue.isNotBlank() && cnValue != "null" && cnValue != "~" &&
-                        cnValue != "__HOYOLAB_COOKIE__") {
-                        val identity = HoYoAccountIdentity.fromCookie(cnValue, AccountStore.MIYOUSHE_CN)
-                        val existing = store.all().firstOrNull {
-                            it.platform == AccountStore.MIYOUSHE_CN &&
-                                (identity == null || it.platformUserId == identity)
-                        }
-                        val account = existing ?: store.add(
-                            AccountStore.MIYOUSHE_CN,
-                            platformUserId = identity,
-                            games = enabledCnGames
+                    val cloudCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
+                    val rows = if (cloudCsv != null) {
+                        PlatformAccountsCsvAdapter.parse(
+                            cloudCsv,
+                            setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
                         )
-                        store.update(account.copy(
-                            platformUserId = identity ?: account.platformUserId,
-                            games = enabledCnGames,
-                            // Cloud configuration import is not a fresh login-page acquisition.
-                            // Preserve the current app-session status (new accounts default to false).
-                            credentialReady = true
-                        ))
+                    } else {
+                        // One-time migration from the previous single-CN/single-OS YAML structure.
+                        HoYoLabCloudConfigAdapter.legacyCsvAccounts(yaml)
+                    }
+                    HuaweiCloudSession.lastHoyoAccountsCsv = PlatformAccountsCsvAdapter.encode(
+                        rows,
+                        setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+                    )
+                    rows.forEach { row ->
+                        store.importCloudAccount(
+                            id = row.accountId,
+                            platform = row.platform,
+                            name = row.name,
+                            platformUserId = row.userId,
+                            games = row.games,
+                            enabled = row.enabled,
+                            remark = row.remark,
+                            credentialReady = row.credential.isNotBlank()
+                        )
                         imported++
                     }
+                }
 
-                    val cookie = osCookie.orEmpty()
-                    if (cookie.isNotBlank() && cookie != "null" && cookie != "~" &&
-                        cookie != "__HOYOLAB_COOKIE__") {
-                        val identity = HoYoAccountIdentity.fromCookie(cookie, AccountStore.HOYOLAB)
-                        val existing = store.all().firstOrNull {
-                            it.platform == AccountStore.HOYOLAB &&
-                                (identity == null || it.platformUserId == identity)
-                        }
-                        val account = existing ?: store.add(
-                            AccountStore.HOYOLAB,
-                            platformUserId = identity,
-                            games = enabledOsGames
-                        )
-                        store.update(account.copy(
-                            platformUserId = identity ?: account.platformUserId,
-                            games = enabledOsGames,
-                            // Cloud configuration import is not a fresh login-page acquisition.
-                            // Preserve the current app-session status (new accounts default to false).
-                            credentialReady = true
-                        ))
-                        imported++
-                    }
-                    // 国际服 Cookie 为空时仅跳过 HoYoLAB 凭据导入，不阻断后续森空岛 Token 同步。
+                if (sklandFunction == null) {
+                    HuaweiCloudSession.lastSklandAccountsCsv =
+                        PlatformAccountsCsvAdapter.encode(emptyList(), setOf(AccountStore.SKLAND))
                 }
 
                 if (sklandFunction != null) {
                     val archive = downloadZip(sklandFunction, "森空岛")
-                    val accountConfig = readZipEntryTextOrNull(
-                        archive, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH
-                    )
-                    val legacyTokens = readZipEntryTextOrNull(
-                        archive, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
-                    )
-                    if (accountConfig == null && legacyTokens == null) {
-                        error("森空岛函数包中既没有账号配置，也没有旧版 Token 文件；已停止同步。")
-                    }
-                    val cloudAccounts = SklandCloudConfigAdapter.readAccounts(accountConfig, legacyTokens)
-                    cloudAccounts.forEach { cloudAccount ->
-                        val account = store.add(
-                            AccountStore.SKLAND,
-                            platformUserId = cloudAccount.platformUserId,
-                            games = cloudAccount.games
+                    val cloudCsv = readZipEntryTextOrNull(archive, SklandCloudConfigAdapter.ACCOUNT_CSV_PATH)
+                    val rows = if (cloudCsv != null) {
+                        SklandCloudConfigAdapter.readCsv(cloudCsv)
+                    } else {
+                        val accountConfig = readZipEntryTextOrNull(
+                            archive, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH
                         )
-                        SklandTokenVault(this, account.id).save(cloudAccount.token)
-                        store.update(account.copy(
-                            platformUserId = cloudAccount.platformUserId,
-                            games = cloudAccount.games,
-                            credentialReady = true
-                        ))
+                        val legacyTokens = readZipEntryTextOrNull(
+                            archive, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
+                        )
+                        if (accountConfig == null && legacyTokens == null) {
+                            error("森空岛函数包中既没有 CSV、账号配置，也没有旧版 Token 文件；已停止同步。")
+                        }
+                        SklandCloudConfigAdapter.legacyCsvAccounts(accountConfig, legacyTokens)
+                    }
+                    HuaweiCloudSession.lastSklandAccountsCsv = SklandCloudConfigAdapter.encodeCsv(rows)
+                    rows.forEach { row ->
+                        if (row.credential.isNotBlank()) {
+                            SklandTokenVault(this, row.accountId).save(row.credential)
+                        }
+                        store.importCloudAccount(
+                            id = row.accountId,
+                            platform = row.platform,
+                            name = row.name,
+                            platformUserId = row.userId,
+                            games = row.games,
+                            enabled = row.enabled,
+                            remark = row.remark,
+                            credentialReady = row.credential.isNotBlank()
+                        )
                         imported++
                     }
                 }
