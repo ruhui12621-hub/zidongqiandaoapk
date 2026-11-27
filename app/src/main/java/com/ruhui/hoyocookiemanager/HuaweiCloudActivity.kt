@@ -294,7 +294,7 @@ open class HuaweiCloudActivity : Activity() {
             if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                 AppMessageBus.post(this, if (platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
                     "CSV 保存失败", "请先成功读取云端账号 CSV。", false)
-                pushState()
+                onCloudDeploymentProgress()
                 return@runOnUiThread
             }
             try {
@@ -340,7 +340,7 @@ open class HuaweiCloudActivity : Activity() {
                 AppMessageBus.post(this,
                     if (platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
                     "CSV 保存失败", error.message ?: error.javaClass.simpleName, false)
-                pushState()
+                onCloudDeploymentProgress()
             }
         }
     }
@@ -358,7 +358,7 @@ open class HuaweiCloudActivity : Activity() {
             if (group.size <= 1) {
                 AppMessageBus.post(this, if (account.platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
                     "无法删除账号", "这是该平台函数中的最后一个账号。请先停用它；保留 CSV 文件结构。", false)
-                pushState()
+                onCloudDeploymentProgress()
                 return@runOnUiThread
             }
             android.app.AlertDialog.Builder(this)
@@ -386,7 +386,7 @@ open class HuaweiCloudActivity : Activity() {
                     } else {
                         deployHoyolabAccount(anchorAccount.id, JSONArray(anchorAccount.games.sorted()).toString())
                     }
-                    pushState()
+                    onCloudDeploymentProgress()
                 }
                 .show()
         }
