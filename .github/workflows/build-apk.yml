@@ -13,7 +13,7 @@ on:
       - 'settings.gradle.kts'
       - '.github/workflows/build-apk.yml'
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-apk-${{ github.ref }}
@@ -83,6 +83,20 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish latest APK to GitHub Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-latest
+          name: 最新构建（Debug APK）
+          body: |
+            这是 main 分支最近一次成功构建的 APK。
+            每次成功构建都会替换本 Release 中的 app-debug.apk。
+          files: app/build/outputs/apk/debug/app-debug.apk
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          make_latest: true
 
       - name: Add prominent APK download link
         if: success()
