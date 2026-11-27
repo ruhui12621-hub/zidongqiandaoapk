@@ -1047,8 +1047,10 @@ open class HuaweiCloudActivity : Activity() {
             showAccountDeployMessage(accountId, "$title 失败", "当前账号不是 HoYoLAB/米游社账号，已停止上传。", false)
             return
         }
-        val hasPendingCookie = pendingCookie.isNotBlank()
-        val pendingAccount = pendingAccountId.takeIf { it.isNotBlank() }?.let { AccountStore(this).find(it) }
+        // A process-session Cookie belongs only to the account that acquired it.
+        // Updating another account must never copy or consume that Cookie.
+        val hasPendingCookie = pendingCookie.isNotBlank() && pendingAccountId == accountId
+        val pendingAccount = if (hasPendingCookie) AccountStore(this).find(pendingAccountId) else null
         if (hasPendingCookie && (pendingAccount == null || pendingAccount.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))) {
             showAccountDeployMessage(accountId, "$title 失败", "本次获取的 Cookie 无法匹配到有效的 HoYoLAB 账号，已停止上传。", false)
             return
