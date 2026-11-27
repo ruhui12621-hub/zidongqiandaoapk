@@ -271,6 +271,11 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
+        @JavascriptInterface fun savePlatformAccounts(platform: String, rowsJson: String) {
+            htmlSavePlatformAccounts(platform, rowsJson)
+            pushState()
+        }
+
         @JavascriptInterface fun getSavedCloudCredentials(): String {
             val pair = runCatching { AndroidCredentialVault(this@HtmlMainActivity).latest() }.getOrNull()
                 ?: return JSONObject().toString()
