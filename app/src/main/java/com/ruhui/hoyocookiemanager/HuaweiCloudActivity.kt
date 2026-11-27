@@ -1214,14 +1214,56 @@ open class HuaweiCloudActivity : Activity() {
         }
     }
 
+    private fun findFunctionForSnapshot(name: String): JSONObject? {
+        val region = HuaweiCloudSession.region
+        val projectId = HuaweiCloudSession.projectId
+        if (region.isBlank() || projectId.isBlank()) error("云端项目上下文缺失，请重新同步。")
+        val url = "https://functiongraph.$region.myhuaweicloud.com/v2/$projectId/fgs/functions" +
+            "?func_name=" + enc(name) + "&precise_search=true&maxitems=10"
+        val list = signedGet(url).optJSONArray("functions")
+            ?: error("FunctionGraph 未返回函数列表，不能进行 CSV 冲突检查")
+        val matches = (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+            .filter { it.optString("func_name") == name }
+        if (matches.size > 1) error("云端存在多个同名函数：$name，已停止上传")
+        return matches.singleOrNull()
+    }
+
+    private fun downloadFunctionZipForSnapshot(function: JSONObject, label: String): ByteArray {
+        val region = HuaweiCloudSession.region
+        val projectId = HuaweiCloudSession.projectId
+        val authAk = HuaweiCloudSession.ak
+        val authSk = HuaweiCloudSession.sk
+        val urn = function.optString("func_urn")
+        if (urn.isBlank()) error("$label 函数缺少 URN")
+        val code = signedGet(
+            "https://functiongraph.$region.myhuaweicloud.com/v2/$projectId/fgs/functions/" + enc(urn) + "/code"
+        )
+        if (!code.optString("code_type").equals("zip", true)) {
+            error("$label 函数不是 ZIP 代码类型，无法安全检查")
+        }
+        val funcCode = code.optJSONObject("func_code")
+        val encoded = funcCode?.optString("file").orEmpty().trim()
+        val link = funcCode?.optString("link").orEmpty().trim()
+        val bytes = if (encoded.isNotBlank()) {
+            Base64.decode(encoded, Base64.DEFAULT)
+        } else {
+            if (link.isBlank()) error("$label 函数代码既没有内联 file，也没有下载 link")
+            val downloadUrl = runCatching { URL(link) }.getOrElse { error("$label 函数返回了无效的代码下载地址") }
+            if (downloadUrl.protocol != "https") error("$label 函数代码下载地址不是 HTTPS，已拒绝下载")
+            downloadObsObject(downloadUrl, authAk, authSk, label)
+        }
+        if (!isZip(bytes)) error("$label 函数返回的代码包不是有效 ZIP")
+        return bytes
+    }
+
     private fun verifyHoyoCsvSnapshotUnchanged() {
-        val function = findFunction(HOYOLAB_FUNCTION)
+        val function = findFunctionForSnapshot(HOYOLAB_FUNCTION)
         if (!HuaweiCloudSession.lastHoyoFunctionExisted) {
             if (function != null) error("HoYoLAB 云函数在本次同步后被创建；为避免覆盖其他账号，请先重新同步。")
             return
         }
         if (function == null) error("HoYoLAB 云函数在本次同步后已被删除；请重新同步。")
-        val archive = downloadZip(function, "HoYoLAB")
+        val archive = downloadFunctionZipForSnapshot(function, "HoYoLAB")
         val currentYaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
         val sanitizedYaml = HoYoLabCloudConfigAdapter.clearAccountCredentials(currentYaml)
         if (sanitizedYaml != HuaweiCloudSession.lastConfigYaml) {
@@ -1262,13 +1304,13 @@ open class HuaweiCloudActivity : Activity() {
     }
 
     private fun verifySklandCsvSnapshotUnchanged() {
-        val function = findFunction(SKLAND_FUNCTION)
+        val function = findFunctionForSnapshot(SKLAND_FUNCTION)
         if (!HuaweiCloudSession.lastSklandFunctionExisted) {
             if (function != null) error("森空岛云函数在本次同步后被创建；为避免覆盖其他账号，请先重新同步。")
             return
         }
         if (function == null) error("森空岛云函数在本次同步后已被删除；请重新同步。")
-        val archive = downloadZip(function, "森空岛")
+        val archive = downloadFunctionZipForSnapshot(function, "森空岛")
         val currentCsv = readZipEntryTextOrNull(archive, SklandCloudConfigAdapter.ACCOUNT_CSV_PATH)
         if (currentCsv == null) {
             if (HuaweiCloudSession.lastSklandCsvPresent) {
