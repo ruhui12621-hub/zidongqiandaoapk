@@ -282,7 +282,7 @@ export default function App() {
       </div> : <div className="csv-table-wrap">
         <table className="csv-editor-table">
           <thead><tr>
-            <th>账号名称</th><th>平台用户 ID</th><th>凭据</th><th>游戏选择</th><th>启用</th><th>备注</th><th>操作</th>
+            <th>账号名称</th><th>账号标识</th><th>凭据</th><th>游戏选择</th><th>启用</th><th>备注</th><th>操作</th>
           </tr></thead>
           <tbody>{rows.map((row: AnyState) => {
             const options = getCsvGameOptions(row.platform);
