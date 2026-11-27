@@ -332,7 +332,7 @@ open class HuaweiCloudActivity : Activity() {
                     require(old.platform in allowedPlatforms) { "CSV 中混入了其他函数平台账号。" }
                     val gameArray = row.optJSONArray("games") ?: JSONArray()
                     val games = (0 until gameArray.length()).map { gameArray.getString(it) }.toSet()
-                    require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "游戏选择包含不属于当前平台的项目。" }
+                    require(games.all { GlobalModuleRegistry.isGameAllowed(old.platform, it) }) { "游戏选择包含不属于当前平台的项目。" }
                     val next = old.copy(
                         name = row.optString("name").trim().ifBlank { old.name },
                         games = games,
