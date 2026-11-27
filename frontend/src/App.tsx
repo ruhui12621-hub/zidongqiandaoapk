@@ -366,14 +366,7 @@ export default function App() {
           <span>本次应用运行期间获取的{credentialLabel}</span>
           <strong className={pageCredentialReady ? "good" : "muted"}>{pageCredentialReady ? "已获取" : "尚未获取"}</strong>
         </div>
-        <p className="helper-text">仅当本次应用运行期间，当前账号的登录页面实际解析并成功取得{credentialLabel}后才显示“已获取”；不读取云端 CSV 或本地历史凭据，应用进程结束后自动重置。</p>
-        <div className="card-heading">
-          <span>{isHoyo ? "更新云端 Cookie" : "保存账号并更新云函数"}</span>
-          <span className="subtle-caption">{visibleStages.length ? `${visibleStages.length} 个步骤` : "等待更新"}</span>
-        </div>
-        <p className="helper-text">{isHoyo
-          ? "点击下方按钮后，将当前账号本次运行期间获取的 Cookie 写入云端 CSV，再更新并检查 HoYoLAB 云函数。若本次尚未获取新 Cookie，则保留云端原有 Cookie，不会把云端状态当成本次已获取。"
-          : "保存当前账号修改，并将森空岛平台的全部账号统一写入 CSV，随后更新并检查对应云函数。"}</p>
+        
         <div className="csv-actions">
           <button className="primary-button" onClick={saveCsv} disabled={!state.canAddAccount || !csvDrafts.some((row: AnyState) => row.id === account.id)}>
             <Cloud size={16}/> 保存并更新云函数
