@@ -1332,6 +1332,119 @@ open class HuaweiCloudActivity : Activity() {
     private fun readZipEntryText(source: ByteArray, wanted: String): String =
         readZipEntryTextOrNull(source, wanted) ?: error("APK 内置 ZIP 中不存在 $wanted。")
 
+    /**
+     * Creates/verifies the FunctionGraph cloud-service agency and a narrowly scoped
+     * LTS search policy for exactly one managed stream. Same-name resources are
+     * compared before reuse; unrelated permissions are never overwritten.
+     */
+    private fun ensureLtsExecutionAgency(groupId: String, streamId: String, platform: String, onStep: (String, Boolean?) -> Unit): String {
+        if (domainId.isBlank()) error("缺少 IAM domain_id，无法安全配置 FunctionGraph 执行委托。")
+        require(platform == "hoyolab" || platform == "skland") { "未知日志平台：$platform" }
+
+        val iam = "https://iam.$regionValue.myhuaweicloud.com/v3.0"
+        val agencyName = "zidongqiandao-lts-reader"
+        val trustDomainName = "op_svc_cff"
+        val agencyListUrl = "$iam/OS-AGENCY/agencies?domain_id=${enc(domainId)}&name=${enc(agencyName)}&page=1&per_page=500"
+
+        onStep("正在检查 FunctionGraph 云服务委托。", null)
+        fun findAgency(): JSONObject? {
+            val rows = signedGet(agencyListUrl).optJSONArray("agencies")
+                ?: error("IAM 未返回委托列表，无法验证 FunctionGraph 委托。")
+            val matches = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+                .filter { it.optString("name") == agencyName && it.optString("domain_id") == domainId }
+            if (matches.size > 1) error("IAM 中存在多个同名委托 $agencyName，已停止，未修改任何委托。")
+            return matches.singleOrNull()
+        }
+
+        var agency = findAgency()
+        if (agency == null) {
+            onStep("未找到专用委托，正在创建 FunctionGraph 云服务委托。", null)
+            val body = JSONObject().put("agency", JSONObject()
+                .put("name", agencyName)
+                .put("domain_id", domainId)
+                .put("trust_domain_name", trustDomainName)
+                .put("duration", "FOREVER")
+                .put("description", "仅用于自动签到函数查询其专属 LTS 日志流"))
+            val created = signedRequest("POST", "$iam/OS-AGENCY/agencies", body.toString())
+            if (created.first !in 200..299) error("创建 FunctionGraph 云服务委托失败（HTTP ${created.first}）：${created.second.take(800)}")
+            agency = findAgency() ?: error("委托创建请求成功，但 IAM 回读不到委托。")
+        }
+        if (agency.optString("trust_domain_name") != trustDomainName)
+            error("同名委托 $agencyName 的信任主体不是 $trustDomainName，拒绝复用或覆盖。")
+        if (agency.optString("duration") != "FOREVER" && agency.optString("duration") != "null")
+            error("同名委托 $agencyName 不是永久委托，拒绝自动修改。")
+        val agencyId = agency.optString("id").takeIf { it.isNotBlank() }
+            ?: error("FunctionGraph 委托回读缺少 agency ID。")
+        onStep("FunctionGraph 云服务委托已验证：$agencyName。", true)
+
+        val displayName = "zidongqiandao-lts-$platform-reader"
+        val expectedResource = "lts:$regionValue:$domainId:logStream:$groupId/$streamId"
+        val roleListUrl = "$iam/OS-ROLE/roles?domain_id=${enc(domainId)}&type=project&page=1&per_page=500"
+        onStep("正在检查 $platform 专属 LTS 最小权限策略。", null)
+        fun findPolicy(): JSONObject? {
+            val rows = signedGet(roleListUrl).optJSONArray("roles")
+                ?: error("IAM 未返回自定义策略列表，无法验证 LTS 权限策略。")
+            val matches = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+                .filter { it.optString("display_name") == displayName && it.optString("domain_id") == domainId }
+            if (matches.size > 1) error("IAM 中存在多个同名策略 $displayName，已停止。")
+            return matches.singleOrNull()
+        }
+        fun policyMatches(role: JSONObject): Boolean {
+            if (role.optString("type") != "XA") return false
+            val policy = role.optJSONObject("policy") ?: return false
+            if (policy.optString("Version") != "1.1") return false
+            val statements = policy.optJSONArray("Statement") ?: return false
+            if (statements.length() != 1) return false
+            val statement = statements.optJSONObject(0) ?: return false
+            if (!statement.optString("Effect").equals("Allow", true)) return false
+            val actions = statement.optJSONArray("Action") ?: return false
+            val actionValues = (0 until actions.length()).map { actions.optString(it) }.toSet()
+            if (actionValues != setOf("lts:logStream:searchLog")) return false
+            val resources = statement.optJSONArray("Resource") ?: return false
+            val resourceValues = (0 until resources.length()).map { resources.optString(it) }.toSet()
+            return resourceValues == setOf(expectedResource)
+        }
+
+        var role = findPolicy()
+        if (role == null) {
+            val policyBody = JSONObject().put("role", JSONObject()
+                .put("display_name", displayName)
+                .put("type", "XA")
+                .put("description", "仅允许自动签到函数查询 $platform 的指定 LTS 日志流")
+                .put("description_cn", "自动签到 $platform 日志流只读查询权限")
+                .put("policy", JSONObject()
+                    .put("Version", "1.1")
+                    .put("Statement", org.json.JSONArray().put(JSONObject()
+                        .put("Effect", "Allow")
+                        .put("Action", org.json.JSONArray().put("lts:logStream:searchLog"))
+                        .put("Resource", org.json.JSONArray().put(expectedResource))))))
+            val created = signedRequest("POST", "$iam/OS-ROLE/roles", policyBody.toString())
+            if (created.first !in 200..299) error("创建 $platform LTS 最小权限策略失败（HTTP ${created.first}）：${created.second.take(800)}")
+            role = findPolicy() ?: error("LTS 策略创建请求成功，但 IAM 回读不到策略。")
+        }
+        if (!policyMatches(role))
+            error("同名策略 $displayName 的权限内容与本程序要求不完全一致，拒绝覆盖或扩大权限。")
+        val roleId = role.optString("id").takeIf { it.isNotBlank() }
+            ?: error("LTS 策略回读缺少 role ID。")
+
+        val projectRolesUrl = "$iam/OS-AGENCY/projects/${enc(projectId)}/agencies/${enc(agencyId)}/roles"
+        fun hasAttachedPolicy(): Boolean {
+            val rows = signedGet(projectRolesUrl).optJSONArray("roles")
+                ?: error("IAM 未返回委托项目权限列表，无法验证授权。")
+            return (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+                .any { it.optString("id") == roleId }
+        }
+        if (!hasAttachedPolicy()) {
+            onStep("正在把 $platform 专属 LTS 查询权限授予当前区域项目。", null)
+            val assigned = signedRequest("PUT", "$projectRolesUrl/${enc(roleId)}", "")
+            if (assigned.first !in 200..299 && assigned.first != 204)
+                error("授予 FunctionGraph 委托 LTS 权限失败（HTTP ${assigned.first}）：${assigned.second.take(800)}")
+        }
+        if (!hasAttachedPolicy()) error("LTS 权限授权请求已返回，但项目权限回读未发现对应策略。")
+        onStep("$platform 的 LTS 最小权限策略及项目授权均已回读验证。", true)
+        return agencyName
+    }
+
     private fun ensureLtsIsolation(functionUrn: String, platform: String, onStep: (String, Boolean?) -> Unit = { _, _ -> }): String {
         require(platform == "hoyolab" || platform == "skland") { "未知日志平台：$platform" }
         val base = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId"
@@ -1363,9 +1476,14 @@ open class HuaweiCloudActivity : Activity() {
         val streamId = stream.optString("log_stream_id").takeIf { it.isNotBlank() } ?: error("日志流 $platform 缺少 ID。")
         if (stream.has("ttl_in_days") && stream.optInt("ttl_in_days", 7) != 7) error("日志流 $platform 保留期不是 7 天，请先在 LTS 控制台调整；未继续绑定。")
         onStep("日志流检查成功：$platform（保留期 7 天）。", true)
+        val executionAgency = ensureLtsExecutionAgency(groupId, streamId, platform, onStep)
         val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/config"
-        onStep("正在读取函数配置并设置专属日志流。", null)
+        onStep("正在读取函数配置并设置专属日志流及执行委托。", null)
         val config = signedGet(configUrl)
+        val existingExecutionAgency = config.optString("app_xrole").trim().takeUnless { it.isBlank() || it == "null" }
+        if (existingExecutionAgency != null && existingExecutionAgency != executionAgency)
+            error("函数已有独立执行委托 $existingExecutionAgency，与自动签到专用委托不同；为避免覆盖现有权限配置，已停止。")
+        config.put("app_xrole", executionAgency)
         // FunctionGraph GET config may include response-only/immutable fields.
         // In particular, sending the top-level "type" back in UpdateFunctionConfig
         // is rejected by Huawei with FSS.0400 "Not allow modify type".
@@ -1402,8 +1520,11 @@ open class HuaweiCloudActivity : Activity() {
             verifiedUserData.optString("LTS_LOG_STREAM_ID") != streamId) {
             error("FunctionGraph 区域或 LTS 运行时元数据回读不一致，已停止后续测试。")
         }
-        onStep("函数日志绑定及运行时区域/LTS 元数据均已回读验证：$groupName/$platform。", true)
-        return "日志组：$groupName；日志流：$platform；保留期：7 天；函数绑定已验证。"
+        if (verifiedConfig.optString("app_xrole") != executionAgency)
+            error("FunctionGraph app_xrole 回读不一致：期望 $executionAgency，实际 ${verifiedConfig.optString("app_xrole")}。")
+        // xrole is deliberately preserved; only the dedicated execution agency is managed here.
+        onStep("函数日志绑定、LTS 权限、app_xrole 及运行时元数据均已回读验证：$groupName/$platform。", true)
+        return "日志组：$groupName；日志流：$platform；保留期：7 天；执行委托：$executionAgency；最小权限及函数绑定已验证。"
     }
     private fun waitForFunction(name: String): JSONObject {
         val base = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions"
