@@ -43,19 +43,9 @@ object AppMessageBus {
             val previous = prefs.getString("latest_$key", "").orEmpty()
             val channelLabel = if (key == SKLAND) "森空岛" else "HoYoLAB / 米游社 / 华为云"
             val unifiedEntry = "【$channelLabel】\n$message"
-            val savedAll = prefs.getString("latest_all", "").orEmpty()
-            val legacyHoyo = prefs.getString("latest_$HOYOLAB", "").orEmpty()
-            val legacySkland = prefs.getString("latest_$SKLAND", "").orEmpty()
-            val legacyHistory = listOf(
-                legacyHoyo.takeIf { it.isNotBlank() }?.let { "【HoYoLAB / 米游社 / 华为云】\n$it" },
-                legacySkland.takeIf { it.isNotBlank() }?.let { "【森空岛】\n$it" }
-            ).filterNotNull().joinToString("\n\n")
-            val allPrevious = savedAll.ifBlank { legacyHistory }
-            val allCombined = (if (allPrevious.isBlank()) unifiedEntry else "$allPrevious\n\n$unifiedEntry")
-                .split("\n\n").takeLast(120).joinToString("\n\n").takeLast(60000)
             val channelCombined = (if (previous.isBlank()) message else "$previous\n\n$message")
                 .split("\n\n").takeLast(40).joinToString("\n\n").takeLast(24000)
-            prefs.edit().putString("latest_$key", channelCombined).putString("latest_all", allCombined).apply()
+            prefs.edit().putString("latest_$key", channelCombined).apply()
         }
     }
 
@@ -144,20 +134,6 @@ object AppMessageBus {
     }
 
     fun currentActive(context: Context): String = current(context, activeChannel)
-
-    /** All service events in one chronological stream for the app-wide message page. */
-    fun currentAll(context: Context): String = runCatching {
-        val prefs = context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
-        val saved = prefs.getString("latest_all", "").orEmpty()
-        if (saved.isNotBlank()) saved else {
-            val hoyo = prefs.getString("latest_$HOYOLAB", "").orEmpty()
-            val skland = prefs.getString("latest_$SKLAND", "").orEmpty()
-            listOf(
-                hoyo.takeIf { it.isNotBlank() }?.let { "【HoYoLAB / 米游社 / 华为云】\n$it" },
-                skland.takeIf { it.isNotBlank() }?.let { "【森空岛】\n$it" }
-            ).filterNotNull().joinToString("\n\n").ifBlank { "暂无运行消息" }
-        }
-    }.getOrDefault("暂无运行消息")
 
     private fun normalize(channel: String): String =
         if (channel.equals(SKLAND, true)) SKLAND else HOYOLAB
