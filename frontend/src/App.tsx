@@ -338,24 +338,23 @@ export default function App() {
     return <>
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
-        <div className="card-heading"><span>登录页面</span></div>
+        <div className="card-heading"><span>Cookie 管理</span></div>
         {isHoyo ? <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
           : <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>}
         {isHoyo ? <>
+          <div className="info-line"><span>本次 APK 运行期间 Cookie</span><strong>{pageCookieReady ? "已获取" : "尚未获取"}</strong></div>
+          <p className="helper-text">此状态只表示本次 APK 运行期间是否从登录页面实际获取到当前账号的 Cookie，不会根据云端已有 Cookie 推断。</p>
           <div className="info-line"><span>云端 CSV Cookie</span><strong>{account.cookieReady ? "已配置" : "未配置"}</strong></div>
-          <div className="info-line"><span>本次 APK 运行 Cookie</span><strong>{pageCookieReady ? "已获取" : "尚未获取"}</strong></div>
-          <p className="helper-text">以上是两个独立状态：云端 CSV 状态来自已同步的账号配置；运行状态只表示本次 APK 进程中是否成功获取过 Cookie。</p>
         </> : <>
           <div className="info-line"><span>云端 CSV 登录令牌</span><strong>{account.tokenReady ? "已配置" : "未配置"}</strong></div>
         </>}
-      </section>
-
-      <section className="surface-card">
         <div className="card-heading">
-          <span>保存并更新云函数</span>
+          <span>{isHoyo ? "更新云端 Cookie" : "保存账号并更新云函数"}</span>
           <span className="subtle-caption">{visibleStages.length ? `${visibleStages.length} 个步骤` : "等待更新"}</span>
         </div>
-        <p className="helper-text">保存当前账号修改，并将当前平台的全部账号统一写入 CSV，随后更新并检查对应云函数。</p>
+        <p className="helper-text">{isHoyo
+          ? "点击下方按钮后，将当前账号本次运行期间获取的 Cookie 写入云端 CSV，再更新并检查 HoYoLAB 云函数。若本次尚未获取新 Cookie，则保留云端原有 Cookie，不会把云端状态当成本次已获取。"
+          : "保存当前账号修改，并将森空岛平台的全部账号统一写入 CSV，随后更新并检查对应云函数。"}</p>
         {visibleStages.length ? <div className="stage-list">{visibleStages.map((stage: AnyState, index: number) => <div className="stage-row" key={stage.key || index}>
           <span className="stage-index">{index + 1}</span>
           <div className="stage-copy"><strong>{stage.label || "执行阶段"}</strong><small>{stage.detail || "暂无详细信息"}</small></div>
