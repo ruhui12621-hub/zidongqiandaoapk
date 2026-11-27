@@ -184,7 +184,7 @@ open class HuaweiCloudActivity : Activity() {
                 if (hoyoFunction != null) {
                     val archive = downloadZip(hoyoFunction, "HoYoLAB")
                     HuaweiCloudSession.lastHoyoFunctionExisted = true
-                    val yaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
+                    val yaml = readZipTextFromArchive(archive, "config/config.yaml", "HoYoLAB")
                     val cloudCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
                     HuaweiCloudSession.lastHoyoCsvPresent = cloudCsv != null
                     val rows = if (cloudCsv != null) {
@@ -1084,7 +1084,7 @@ open class HuaweiCloudActivity : Activity() {
                 val packaged = readPackagedZip("cloud/hoyolab.zip")
                 logAccountDeployStep(accountId, "内置函数包读取成功，大小：${packaged.size} 字节。", true)
                 val baseYaml = HuaweiCloudSession.lastConfigYaml.ifBlank {
-                    readZipText(packaged, "config/config.yaml", "HoYoLAB")
+                    readZipTextFromArchive(packaged, "config/config.yaml", "HoYoLAB")
                         .let(HoYoLabCloudConfigAdapter::clearAccountCredentials)
                 }
                 val baseArchive = if (baseYaml.isNotBlank()) {
@@ -1215,6 +1215,9 @@ open class HuaweiCloudActivity : Activity() {
             }
         }
     }
+
+    private fun readZipTextFromArchive(source: ByteArray, wanted: String, label: String): String =
+        readZipEntryTextOrNull(source, wanted) ?: error("$label 函数 ZIP 中缺少 $wanted。")
 
     private fun findFunctionForSnapshot(name: String): JSONObject? {
         val region = HuaweiCloudSession.region
