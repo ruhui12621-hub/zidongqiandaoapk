@@ -330,6 +330,7 @@ export default function App() {
     // This is process-session state for either platform, never inferred from saved credentials.
     const pageCredentialReady = !!account.sessionCredentialAcquired;
     const credentialLabel = isHoyo ? "Cookie" : "Token";
+    // Shared runtime-only indicator is supplied by the native process state.
     const options = getCsvGameOptions(account.platform);
     const selectedGames = new Set((draft.games || []).map((game: AnyState) => game.key || game));
     const stages = account.cloudUpdateStages || [];
