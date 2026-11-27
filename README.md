@@ -2,6 +2,10 @@
 
 Android app for HoYoLAB and Skland login, with direct Huawei FunctionGraph deployment.
 
+## Download
+
+[**Download the latest APK**](https://github.com/ruhui12621-hub/zidongqiandaoapk/releases/tag/debug-latest) — this page is automatically updated after each successful build on `main`.
+
 ## Build
 
 Open the project in Android Studio and run `:app:assembleDebug`, or use GitHub Actions (**Build Android APK**).
