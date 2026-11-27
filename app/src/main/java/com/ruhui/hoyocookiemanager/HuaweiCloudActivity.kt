@@ -915,21 +915,34 @@ open class HuaweiCloudActivity : Activity() {
         val pendingCookie = HuaweiCloudSession.pendingHoyoCookie
         val pendingServer = HuaweiCloudSession.pendingHoyoCookieServer
         val pendingAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId
-        if (pendingCookie.isBlank() || pendingAccountId != accountId) {
-            showAccountDeployMessage(accountId, "$title 失败", "当前账号没有本次网页会话获取的 Cookie。请重新打开登录网页并等待显示“已获取”。", false)
-            return
-        }
-        if (pendingServer !in setOf("cn", "os")) {
-            showAccountDeployMessage(accountId, "$title 失败", "无法识别 Cookie 对应的服务器区域，已停止上传。", false)
-            return
-        }
         val account = AccountStore(this).find(accountId)
             ?: run { showAccountDeployMessage(accountId, "$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
-        val expectedPlatform = if (pendingServer == "cn") AccountStore.MIYOUSHE_CN else AccountStore.HOYOLAB
-        if (account.platform != expectedPlatform) {
-            showAccountDeployMessage(accountId, "$title 失败", "Cookie 所属服务器与当前账号平台不一致，已停止上传。", false)
+        if (account.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)) {
+            showAccountDeployMessage(accountId, "$title 失败", "当前账号不是 HoYoLAB/米游社账号，已停止上传。", false)
             return
         }
+        val expectedServer = if (account.platform == AccountStore.MIYOUSHE_CN) "cn" else "os"
+        val hasPendingCookie = pendingCookie.isNotBlank() && pendingAccountId == accountId
+        if (hasPendingCookie && pendingServer != expectedServer) {
+            showAccountDeployMessage(accountId, "$title 失败", "本次登录 Cookie 所属服务器与当前账号平台不一致，已停止上传。", false)
+            return
+        }
+        val cachedRows = runCatching {
+            HuaweiCloudSession.lastHoyoAccountsCsv.takeIf { it.isNotBlank() }?.let {
+                PlatformAccountsCsvAdapter.parse(it, setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))
+            }.orEmpty()
+        }.getOrElse {
+            showAccountDeployMessage(accountId, "$title 失败",
+                "内存中的 HoYoLAB CSV 无法解析：" + (it.message ?: it.javaClass.simpleName), false)
+            return
+        }
+        val cachedRow = cachedRows.firstOrNull { it.accountId == accountId }
+        val effectiveCookie = if (hasPendingCookie) pendingCookie else cachedRow?.credential.orEmpty()
+        if (account.enabled && effectiveCookie.isBlank()) {
+            showAccountDeployMessage(accountId, "$title 失败", "该账号已启用但没有可用 Cookie。请先登录，或先关闭该账号。", false)
+            return
+        }
+
 
         AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端函数并准备上传。")
         showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
@@ -940,23 +953,47 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "正在读取 APK 内置函数包 cloud/hoyolab.zip。")
                 val packaged = readPackagedZip("cloud/hoyolab.zip")
                 logAccountDeployStep(accountId, "内置函数包读取成功，大小：${packaged.size} 字节。", true)
-                val cloudYaml = HuaweiCloudSession.lastConfigYaml
-                val baseYaml = if (cloudYaml.isNotBlank()) {
-                    logAccountDeployStep(accountId, "已取得云端原配置，将在原配置上进行局部修改。", true)
-                    cloudYaml
-                } else {
-                    logAccountDeployStep(accountId, "尚无已读取的云端配置，改用 APK 内置默认配置。")
-                    readZipEntryText(packaged, "config/config.yaml")
-                }
-                val mergedCookieYaml = HoYoLabCloudConfigAdapter.replaceCookie(baseYaml, pendingCookie, pendingServer)
-                logAccountDeployStep(accountId, "Cookie 已定位并合并到 ${if (pendingServer == "cn") "account.cookie" else "games.os.cookie"}；未输出 Cookie 内容。", true)
                 val selectedGames = try {
-                    val array = org.json.JSONArray(selectedGamesJson)
+                    val array = JSONArray(selectedGamesJson)
                     (0 until array.length()).map { array.getString(it) }.toSet()
                 } catch (e: Exception) { error("游戏选择数据无效，已停止上传。") }
-                val mergedYaml = HoYoLabCloudConfigAdapter.replaceGames(mergedCookieYaml, selectedGames, pendingServer)
-                logAccountDeployStep(accountId, "游戏签到选项已按当前选择更新，正在重新打包 ZIP。", true)
-                val archive = replaceZip(packaged, "config/config.yaml", mergedYaml)
+
+                val allowedPlatforms = setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+                val cached = if (HuaweiCloudSession.lastHoyoAccountsCsv.isBlank()) emptyList()
+                    else PlatformAccountsCsvAdapter.parse(HuaweiCloudSession.lastHoyoAccountsCsv, allowedPlatforms)
+                val managedAccounts = AccountStore(this).all().filter { it.platform in allowedPlatforms }
+                if (managedAccounts.none { it.id == accountId }) {
+                    error("当前账号不在已同步的 HoYoLAB 平台账号表中，已停止上传。")
+                }
+                val csvAccounts = managedAccounts.map { managed ->
+                    val old = cached.firstOrNull { it.accountId == managed.id }
+                    val cookie = if (managed.id == accountId && hasPendingCookie) pendingCookie
+                        else old?.credential.orEmpty()
+                    val fields = if (managed.platform == AccountStore.MIYOUSHE_CN)
+                        HoYoLabCloudConfigAdapter.cookieFields(cookie) else emptyMap()
+                    val identity = managed.platformUserId ?: old?.userId
+                        ?: HoYoAccountIdentity.fromCookie(cookie, managed.platform).orEmpty()
+                    PlatformCsvAccount(
+                        accountId = managed.id,
+                        platform = managed.platform,
+                        name = managed.name,
+                        userId = identity,
+                        credential = cookie,
+                        stuid = if (managed.platform == AccountStore.MIYOUSHE_CN)
+                            fields["stuid"] ?: fields["ltuid"] ?: old?.stuid.orEmpty() else "",
+                        stoken = if (managed.platform == AccountStore.MIYOUSHE_CN)
+                            fields["stoken"] ?: fields["stoken_v2"] ?: old?.stoken.orEmpty() else "",
+                        mid = if (managed.platform == AccountStore.MIYOUSHE_CN)
+                            fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: old?.mid.orEmpty() else "",
+                        games = if (managed.id == accountId) selectedGames else managed.games,
+                        enabled = managed.enabled,
+                        remark = managed.remark
+                    )
+                }
+                val csvText = PlatformAccountsCsvAdapter.encode(csvAccounts, allowedPlatforms)
+                logAccountDeployStep(accountId, "CSV 校验完成：共 " + csvAccounts.size +
+                    " 个账号；当前账号启用 " + selectedGames.size + " 款游戏。未输出 Cookie 原文。", true)
+                val archive = replaceZip(packaged, "config/accounts.csv", csvText, allowCreate = true)
                 logAccountDeployStep(accountId, "函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
                 val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive) { detail, success ->
                     logAccountDeployStep(accountId, detail, success)
@@ -971,13 +1008,15 @@ open class HuaweiCloudActivity : Activity() {
                 deploymentReady = true
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
+                val savedRow = csvAccounts.firstOrNull { it.accountId == accountId }
                 AccountStore(this).update(account.copy(
+                    platformUserId = savedRow?.userId?.takeIf { it.isNotBlank() } ?: account.platformUserId,
                     games = selectedGames,
-                    credentialReady = true
+                    credentialReady = savedRow?.credential?.isNotBlank() == true,
+                    cookieReady = savedRow?.credential?.isNotBlank() == true
                 ))
                 onCloudDeploymentProgress()
-                HuaweiCloudSession.lastConfigYaml = mergedYaml
-                configYaml = mergedYaml
+                HuaweiCloudSession.lastHoyoAccountsCsv = csvText
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
                 val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
@@ -1000,10 +1039,9 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "定时触发器检查完成：$timerSummary", true)
                 val action = if (created) "创建" else "更新"
                 runOnUiThread {
-                    HuaweiCloudSession.lastConfigYaml = mergedYaml
-                    configYaml = mergedYaml
+                    HuaweiCloudSession.lastHoyoAccountsCsv = csvText
                     showAccountDeployMessage(accountId, "HoYoLAB 部署及检查完成",
-                        "最终结果：函数${action}成功。\nCookie 已写入当前账号对应的配置位置。\n云端其余配置均保留。\n测试运行：$testSummary\n定时触发器：$timerSummary", true)
+                        "最终结果：函数" + action + "成功。\n当前平台全部账号已写入 accounts.csv。\n其他账号的凭据与游戏配置均保留。\n测试运行：" + testSummary + "\n定时触发器：" + timerSummary, true)
                 }
             } catch (e: Exception) {
                 runOnUiThread {
