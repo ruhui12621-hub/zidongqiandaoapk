@@ -223,7 +223,7 @@ export default function App() {
       rows.forEach((row: AnyState) => next.delete(row.id));
       return next;
     });
-    callNative("savePlatformAccounts", csvPlatform, JSON.stringify(payload));
+    callNative("savePlatformAccounts", csvPlatform, JSON.stringify(payload), selectedId || "");
     notify("正在保存 CSV 并更新平台云函数");
   };
 
@@ -283,7 +283,7 @@ export default function App() {
     const draft = csvDrafts.find((row: AnyState) => row.id === account.id) || account;
     const isHoyo = account.platform === "hoyolab" || account.platform === "miyoushe_cn";
     // Cookie acquisition is process-session state, never inferred from CSV credentials.
-    const pageCookieReady = !!(state.hoyoPageCookieReady && state.hoyoPageCookieAccountId === account.id);
+    const pageCookieReady = !!account.sessionCookieAcquired;
     const options = getCsvGameOptions(account.platform);
     const selectedGames = new Set((draft.games || []).map((game: AnyState) => game.key || game));
     const details = account.todayDetails || {};
