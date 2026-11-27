@@ -100,6 +100,7 @@ object PlatformAccountsCsvAdapter {
         require(accounts.size <= 100) { "accounts.csv 最多支持 100 个账号。" }
         val ids = mutableSetOf<String>()
         val credentials = mutableSetOf<String>()
+        val platformUsers = mutableSetOf<Pair<String, String>>()
         accounts.forEachIndexed { index, row ->
             require(row.accountId.isNotBlank() && ids.add(row.accountId)) {
                 "账号表第 ${index + 1} 行账号 ID 为空或重复。"
@@ -126,6 +127,14 @@ object PlatformAccountsCsvAdapter {
                     require(row.stuid.isNotBlank() && row.stoken.isNotBlank() && row.mid.isNotBlank()) {
                         "国服账号「${row.name.ifBlank { row.accountId }}」缺少 stuid/stoken/mid。"
                     }
+                }
+            }
+            if (row.userId.isNotBlank()) {
+                val identityScope = if (row.platform == AccountStore.HOYOLAB || row.platform == AccountStore.MIYOUSHE_CN) {
+                    if (row.platform == AccountStore.MIYOUSHE_CN) "hoyolab:cn" else "hoyolab:os"
+                } else "skland"
+                require(platformUsers.add(identityScope to row.userId)) {
+                    "账号表存在重复的平台用户 ID（${identityScope}），拒绝上传。"
                 }
             }
             if (row.credential.isNotBlank()) {
