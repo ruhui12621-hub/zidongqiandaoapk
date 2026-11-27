@@ -80,12 +80,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Record successful Cookie acquisition for this Android process only.
-        // This survives CSV upload clearing the pending Cookie, but is never persisted.
-        val pendingAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId
-        if (HuaweiCloudSession.pendingHoyoCookie.isNotBlank() && pendingAccountId.isNotBlank()) {
-            sessionCookieAcquiredAccountIds.add(pendingAccountId)
-        }
+        // Runtime Cookie status is marked directly by MainActivity at successful detection.
+        // It is never inferred from cloud CSV credentials or pending upload data.
         pushState()
         if (CloudAccountSyncState.get(this) == CloudAccountSyncState.SYNCED) refreshTodayStatuses(force = false)
     }
@@ -294,6 +290,11 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     }
 
     companion object {
+        // Explicit event from the login WebView; this is process-only runtime state.
+        @JvmStatic
+        fun markSessionCookieAcquired(accountId: String) {
+            if (accountId.isNotBlank()) sessionCookieAcquiredAccountIds.add(accountId)
+        }
         // Process-memory only: reset automatically when Android kills the APK process.
         private val sessionCookieAcquiredAccountIds = mutableSetOf<String>()
     }
