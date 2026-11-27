@@ -838,9 +838,8 @@ open class HuaweiCloudActivity : Activity() {
     }
 
     /**
-     * Deploy the Skland function independently from HoYoLAB. The Skland package
-     * stores one token per line in code/INPUT_HYPERGRYPH_TOKEN.txt; replace only
-     * the token belonging to this account and preserve every other cloud token.
+     * Deploy the shared Skland platform function. All account credentials and
+     * per-account game selections are serialized into code/accounts.csv.
      */
     private fun deploySklandAccount(accountId: String, selectedGamesJson: String) {
         AppMessageBus.resetAccountStages(this, accountId)
@@ -878,7 +877,7 @@ open class HuaweiCloudActivity : Activity() {
         }
 
         AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端森空岛函数并准备上传。")
-        showSklandDeployMessage(accountId, "$title 进行中", "正在合并当前账号 Token 与启用游戏；其他账号配置保持不变。", null)
+        showSklandDeployMessage(accountId, "$title 进行中", "正在合并森空岛平台全部账号 CSV；其他平台配置保持不变。", null)
         worker.execute {
             var deploymentReady = false
             try {
@@ -1047,7 +1046,7 @@ open class HuaweiCloudActivity : Activity() {
 
 
         AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "进行中", "正在检查云端函数并准备上传。")
-        showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将当前 Cookie 合并到云端原配置；其他配置保持不变。", null)
+        showAccountDeployMessage(accountId, "$title 进行中", "正在读取 APK 内置 ZIP，并将 HoYoLAB 平台全部账号同步到 accounts.csv。", null)
         worker.execute {
             var deploymentReady = false
             try {
@@ -1106,7 +1105,7 @@ open class HuaweiCloudActivity : Activity() {
                 val urn = function.optString("func_urn")
                 if (urn.isBlank()) error("函数包已上传，但无法读取函数 URN，未执行测试或检查触发器。")
                 // FunctionGraph has accepted the package and reports the function ready.
-                // Keep the selected games and YAML in sync even if later checks fail.
+                // Keep the selected games and CSV snapshot in sync even if later checks fail.
                 deploymentReady = true
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "函数不存在，已新建并确认就绪。" else "函数原已存在，代码覆盖更新并确认就绪。")
