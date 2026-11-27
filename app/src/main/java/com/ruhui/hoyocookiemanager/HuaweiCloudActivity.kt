@@ -171,8 +171,8 @@ open class HuaweiCloudActivity : Activity() {
 
                 val store = AccountStore(this)
                 var imported = 0
-                val hoyoFunction = findFunction(HOYOLAB_FUNCTION)
-                val sklandFunction = findFunction(SKLAND_FUNCTION)
+                val hoyoFunction = findFunctionForSnapshot(HOYOLAB_FUNCTION)
+                val sklandFunction = findFunctionForSnapshot(SKLAND_FUNCTION)
                 if (hoyoFunction == null) {
                     store.reconcileCloudAccounts(setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN), emptySet())
                     HuaweiCloudSession.lastHoyoFunctionExisted = false
