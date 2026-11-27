@@ -298,7 +298,6 @@ export default function App() {
       const catalog = getCsvGameOptions(todayAccount.platform);
       return { key, label: game.label || catalog.find((item: AnyState) => item.key === key)?.label || key };
     });
-    const enabledKeys = new Set((todayAccount.games || []).map((game: AnyState) => game.key || game.id));
     return <>
       {backHeader(todayAccount.name || "未命名账号", "今日签到详情")}
       <section className="surface-card">
@@ -342,7 +341,9 @@ export default function App() {
     const stages = account.cloudUpdateStages || [];
     const visibleStages = stages.filter((stage: AnyState) => stage.key !== "output" && stage.key !== "raw_output");
     const rawOutput = stages.find((stage: AnyState) => stage.key === "raw_output")?.detail || "";
-    const csvPath = csvPlatform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
+    const csvPath = account.platform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
+    const platformDirty = csvDrafts.some((row: AnyState) => csvDirtyIds.has(row.id) && (isHoyo ? row.platform === "hoyolab" || row.platform === "miyoushe_cn" : row.platform === account.platform));
+    const canSavePlatform = !!state.canAddAccount && (platformDirty || pageCredentialReady);
     return <>
       {backHeader(account.name || "未命名账号", platformLabel(account.platform) + " · 账号详情")}
       <section className="surface-card">
@@ -355,7 +356,7 @@ export default function App() {
         </div>
         
         <div className="csv-actions">
-          <button className="primary-button" onClick={saveCsv} disabled={!state.canAddAccount || !csvDrafts.some((row: AnyState) => row.id === account.id)}>
+          <button className="primary-button" onClick={saveCsv} disabled={!canSavePlatform}>
             <Cloud size={16}/> 保存并更新云函数
           </button>
         </div>
@@ -377,7 +378,7 @@ export default function App() {
         <label className="field-label" htmlFor="account-name">账号名称</label>
         <input id="account-name" value={draft.name || ""} onChange={e => updateCsvRow(account.id, {name: e.target.value})}/>
         <div className="info-line"><span>平台</span><strong>{platformLabel(account.platform)}</strong></div>
-        <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "—"}</strong></div>
+        <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "不适用"}</strong></div>
         <div className="info-line"><span>账号标识</span><strong>{account.userId || "尚未识别"}</strong></div>
         <div className="field-label">启用游戏</div>
         <div className="csv-game-options detail-game-options">
