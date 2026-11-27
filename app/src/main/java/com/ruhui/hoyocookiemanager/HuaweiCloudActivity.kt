@@ -1069,6 +1069,8 @@ open class HuaweiCloudActivity : Activity() {
         current.remove("type")
         val rawUserData = current.optString("user_data").trim()
         val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
+        if (userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256") == fingerprint)
+            return "HoYoLAB Cookie 已永久作废；FunctionGraph 中已有相同指纹标记，无需重复写入。"
         userData.put("HOYOLAB_OS_COOKIE_INVALID_SHA256", fingerprint)
         current.put("user_data", userData.toString())
         val update = signedRequest("PUT", configUrl, current.toString())
