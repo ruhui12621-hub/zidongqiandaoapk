@@ -41,8 +41,6 @@ object AppMessageBus {
         runCatching {
             val prefs = context.applicationContext.getSharedPreferences("app_messages", Context.MODE_PRIVATE)
             val previous = prefs.getString("latest_$key", "").orEmpty()
-            val channelLabel = if (key == SKLAND) "森空岛" else "HoYoLAB / 米游社 / 华为云"
-            val unifiedEntry = "【$channelLabel】\n$message"
             val channelCombined = (if (previous.isBlank()) message else "$previous\n\n$message")
                 .split("\n\n").takeLast(40).joinToString("\n\n").takeLast(24000)
             prefs.edit().putString("latest_$key", channelCombined).apply()
