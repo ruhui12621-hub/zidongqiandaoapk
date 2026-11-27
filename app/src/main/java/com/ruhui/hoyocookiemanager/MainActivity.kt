@@ -520,6 +520,7 @@ class MainActivity : HuaweiCloudActivity() {
             HuaweiCloudSession.pendingHoyoCookie = found
             HuaweiCloudSession.pendingHoyoCookieServer = server
             HuaweiCloudSession.pendingHoyoCookieAccountId = account.id
+            HtmlMainActivity.markSessionCookieAcquired(account.id);
             if (lastLoggedCookieAccountId != account.id || lastLoggedCookieServer != server) {
                 lastLoggedCookieAccountId = account.id
                 lastLoggedCookieServer = server
