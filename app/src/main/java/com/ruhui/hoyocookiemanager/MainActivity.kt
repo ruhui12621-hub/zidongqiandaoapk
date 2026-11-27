@@ -500,10 +500,8 @@ class MainActivity : HuaweiCloudActivity() {
             val platformAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(platform))
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
-                credentialReady = true,
-                enabled = true,
-                cookieReady = true,
-                tokenReady = platformAdapter.hasAuthenticationCredential(found)
+                // Runtime Cookie acquisition must not mutate cloud CSV credential status.
+                enabled = true
             )
             store.update(account)
             // This page session is successful once a valid Cookie has been identified and saved.
