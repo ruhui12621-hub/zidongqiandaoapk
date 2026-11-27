@@ -276,6 +276,10 @@ export default function App() {
             const details = row.todayDetails || {};
             const gameDetails = details.games || {};
             const logs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join("\n") : safe(details.allRawMessages);
+            const checkinGames = row.platform === "skland"
+              ? (row.games || []).map((game: AnyState) => ({ key: game.key || game.id, label: game.label || game.key || game.id }))
+              : getCsvGameOptions(row.platform);
+            const enabledGameKeys = new Set((row.games || []).map((game: AnyState) => game.key || game.id));
             return <React.Fragment key={row.id}>
               <tr className="today-account-row" onClick={() => setExpandedTodayAccountId(expanded ? null : row.id)}>
                 <td>{row.name}</td><td>{row.platform === "miyoushe_cn" ? "国服" : row.platform === "hoyolab" ? "国际服" : "—"}</td>
@@ -286,7 +290,7 @@ export default function App() {
                 <div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div>
                 <div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div>
                 <div className="result-table"><table><thead><tr><th>游戏</th><th>状态</th><th>日志判断依据</th></tr></thead><tbody>
-                  {(row.games || []).map((game: AnyState) => {const key = game.key || game.id; const status = row.gameTodayStatuses?.[key] || "unknown"; return <tr key={key}><td>{game.label || key}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。"}</td></tr>;})}
+                  {checkinGames.map((game: AnyState) => {const key = game.key || game.id; const enabled = enabledGameKeys.has(key); const status = enabled ? (row.gameTodayStatuses?.[key] || "unknown") : "unconfigured"; return <tr key={key}><td>{game.label || key}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{enabled ? (gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。") : "该游戏未在此账号配置中启用签到。"}</td></tr>;})}
                 </tbody></table></div>
                 <div className="card-heading"><span>匹配到的云函数原始日志</span><button className="text-action" onClick={() => copyText(logs, "签到日志已复制")}><Copy size={14}/> 复制</button></div>
                 <pre className="log-view">{logs || details.reason || "没有读取到匹配此账号的日志。"}</pre>
