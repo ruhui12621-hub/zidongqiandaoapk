@@ -751,7 +751,7 @@ open class HuaweiCloudActivity : Activity() {
                     val platformLogs = logResults.getValue(platform)!!.logs
                     for (account in platformAccounts) {
                         val matched = if (platformAccounts.size == 1) platformLogs else {
-                            val ids = listOfNotNull(account.platformUserId, account.name)
+                            val ids = listOfNotNull(account.id, account.platformUserId, account.name)
                                 .map { it.trim() }.filter { it.length >= 3 }
                             platformLogs.filter { line -> ids.any { id ->
                                 if (id == account.name) line.contains(id, true)
