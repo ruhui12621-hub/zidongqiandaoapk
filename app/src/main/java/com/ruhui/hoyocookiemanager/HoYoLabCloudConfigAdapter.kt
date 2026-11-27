@@ -7,6 +7,13 @@ package com.ruhui.hoyocookiemanager
  * This adapter understands only the HoYoLAB function's config.yaml schema.
  */
 object HoYoLabCloudConfigAdapter {
+    private val supportedCnGames = linkedSetOf(
+        "genshin", "honkai2", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"
+    )
+    private val supportedOsGames = linkedSetOf(
+        "genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"
+    )
+
     fun cookieFields(cookie: String): Map<String, String> =
         cookie.split(';').mapNotNull { part ->
             val trimmed = part.trim()
