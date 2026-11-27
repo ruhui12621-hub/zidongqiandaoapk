@@ -291,7 +291,7 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { deploySklandAccount(accountId, selectedGamesJson) }
     }
 
-    protected fun htmlSavePlatformAccounts(platform: String, rowsJson: String) {
+    protected fun htmlSavePlatformAccounts(platform: String, rowsJson: String, preferredAccountId: String) {
         runOnUiThread {
             if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                 AppMessageBus.post(this, if (platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
@@ -325,12 +325,13 @@ open class HuaweiCloudActivity : Activity() {
                     updated += next
                 }
                 val anchor = if (platform == AccountStore.SKLAND) {
-                    updated.firstOrNull { it.tokenReady } ?: updated.first()
+                    updated.firstOrNull { it.id == preferredAccountId } ?: updated.first()
                 } else {
                     val allHoyo = store.all().filter {
                         it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN
                     }
-                    allHoyo.firstOrNull { it.id == HuaweiCloudSession.pendingHoyoCookieAccountId }
+                    allHoyo.firstOrNull { it.id == preferredAccountId }
+                        ?: allHoyo.firstOrNull { it.id == HuaweiCloudSession.pendingHoyoCookieAccountId }
                         ?: updated.firstOrNull()
                         ?: allHoyo.firstOrNull()
                         ?: error("HoYoLAB 平台账号为空。")
