@@ -40,6 +40,8 @@ open class HuaweiCloudActivity : Activity() {
         else -> code
     }
     private var projectId = ""
+    // Huawei IAM tenant/account ID (domain_id), distinct from the regional project ID.
+    private var domainId = ""
     private var configYaml = ""
     private var configProvider: (() -> String)? = null
     private var panelService = "hoyolab"
@@ -99,10 +101,13 @@ open class HuaweiCloudActivity : Activity() {
                     .getString("cloud_region", HuaweiCloudSession.region) ?: "cn-east-3"
                 val projects = signedGet("https://iam.$regionValue.myhuaweicloud.com/v3/projects")
                 val rows = projects.optJSONArray("projects") ?: error("IAM 未返回项目列表")
-                projectId = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+                val currentProject = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
                     .firstOrNull { it.optString("name").equals(regionValue, true) }
-                    ?.optString("id").orEmpty()
-                if (projectId.isBlank()) error("未找到 $regionValue 对应的华为云项目")
+                    ?: error("未找到 $regionValue 对应的华为云项目")
+                projectId = currentProject.optString("id").trim()
+                domainId = currentProject.optString("domain_id").trim()
+                if (projectId.isBlank()) error("IAM 项目响应缺少项目 ID")
+                if (domainId.isBlank()) error("IAM 项目响应缺少 domain_id（账号 ID），拒绝继续执行需要账号级身份的委托配置。")
                 HuaweiCloudSession.ak = authAk
                 HuaweiCloudSession.sk = authSk
                 HuaweiCloudSession.region = regionValue
@@ -479,11 +484,17 @@ open class HuaweiCloudActivity : Activity() {
                 val projects = signedGet("https://iam." + r + ".myhuaweicloud.com/v3/projects")
                 val rows = projects.optJSONArray("projects") ?: error("IAM 未返回项目列表")
                 var pid = ""
+                var accountDomainId = ""
                 for (i in 0 until rows.length()) {
                     val p = rows.getJSONObject(i)
-                    if (p.optString("name").equals(r, true)) { pid = p.optString("id"); break }
+                    if (p.optString("name").equals(r, true)) {
+                        pid = p.optString("id").trim()
+                        accountDomainId = p.optString("domain_id").trim()
+                        break
+                    }
                 }
                 if (pid.isBlank()) error("认证成功，但没有找到当前 Region 对应的项目。")
+                if (accountDomainId.isBlank()) error("认证成功，但 IAM 项目响应未提供 domain_id（账号 ID），无法安全配置云服务委托。")
                 var vaultWarning = ""
                 try {
                     AndroidCredentialVault(this).save(a, s)
@@ -494,6 +505,7 @@ open class HuaweiCloudActivity : Activity() {
                     // 登录成功后才保存凭据；Toast 不再承担连接状态提示。
                     configYaml = configProvider?.invoke().orEmpty()
                     projectId = pid
+                    domainId = accountDomainId
                     HuaweiCloudSession.ak = authAk
                     HuaweiCloudSession.sk = authSk
                     HuaweiCloudSession.region = regionValue
