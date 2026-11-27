@@ -19,3 +19,5 @@
 .detail-delete-button{margin-top:14px;padding:8px 11px}
 
 .session-cookie-state{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:11px 12px;border:1px solid #414141;border-radius:12px;background:#343434;font-size:11px}.session-cookie-state span{color:#aaa}.session-cookie-state strong{font-size:12px;font-weight:600}.session-cookie-state strong.good{color:var(--green)}.session-cookie-state strong.muted{color:#c2c2c2}
+
+.platform-toggle{cursor:pointer}.platform-chevron{transition:transform .18s ease}.platform-chevron.expanded{transform:rotate(90deg)}.platform-account-panel{margin-top:9px;margin-bottom:15px;animation:platform-reveal .16s ease-out}@keyframes platform-reveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
