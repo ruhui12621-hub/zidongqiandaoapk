@@ -58,6 +58,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [csvPlatform, setCsvPlatform] = useState("hoyolab");
   const [csvDrafts, setCsvDrafts] = useState<AnyState[]>([]);
+  const [csvDirtyIds, setCsvDirtyIds] = useState<Set<string>>(new Set());
   const accountSnapshot = JSON.stringify((state.accounts || []).map((row: AnyState) => ({ id: row.id, platform: row.platform, name: row.name, userId: row.userId, games: row.games, enabled: row.enabled, remark: row.remark, cookieReady: row.cookieReady, tokenReady: row.tokenReady })));
 
   useEffect(() => {
@@ -65,7 +66,9 @@ export default function App() {
       const previous = new Map<string, AnyState>(old.map((row: AnyState) => [row.id, row] as [string, AnyState]));
       return (state.accounts || []).map((row: AnyState) => {
         const draft = previous.get(row.id);
-        return draft ? { ...row, name: draft.name, games: draft.games, enabled: draft.enabled, remark: draft.remark } : row;
+        return draft && csvDirtyIds.has(row.id)
+          ? { ...row, name: draft.name, games: draft.games, enabled: draft.enabled, remark: draft.remark }
+          : row;
       });
     });
   }, [accountSnapshot]);
@@ -215,6 +218,7 @@ export default function App() {
       : state.gameCatalog?.hoyolab_os || [];
 
   const updateCsvRow = (id: string, patch: AnyState) => {
+    setCsvDirtyIds(old => new Set(old).add(id));
     setCsvDrafts(old => old.map(row => row.id === id ? { ...row, ...patch } : row));
   };
 
@@ -242,6 +246,11 @@ export default function App() {
       enabled: !!row.enabled,
       remark: row.remark || ""
     }));
+    setCsvDirtyIds(old => {
+      const next = new Set(old);
+      rows.forEach((row: AnyState) => next.delete(row.id));
+      return next;
+    });
     callNative("savePlatformAccounts", csvPlatform, JSON.stringify(payload));
     notify("已提交 CSV 校验和云函数更新，请查看运行消息");
   };
@@ -307,7 +316,7 @@ export default function App() {
         </table>
       </div>}
       <div className="csv-actions">
-        <button className="secondary-button" onClick={() => setCsvDrafts(state.accounts || [])} disabled={!state.canAddAccount}>
+        <button className="secondary-button" onClick={() => {setCsvDrafts(state.accounts || []);setCsvDirtyIds(new Set());}} disabled={!state.canAddAccount}>
           <RefreshCw size={16}/> 还原编辑
         </button>
         <button className="secondary-button" onClick={() => state.canAddAccount ? addAccount(csvPlatform) : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}>
