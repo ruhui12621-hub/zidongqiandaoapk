@@ -7,6 +7,7 @@ package com.ruhui.hoyocookiemanager
 data class PlatformCsvAccount(
     val accountId: String,
     val platform: String,
+    val server: String = "",
     val name: String,
     val userId: String,
     val credential: String,
@@ -20,7 +21,7 @@ data class PlatformCsvAccount(
 
 object PlatformAccountsCsvAdapter {
     val header = listOf(
-        "account_id", "platform", "name", "user_id", "credential",
+        "account_id", "platform", "server", "name", "user_id", "credential",
         "stuid", "stoken", "mid", "games", "enabled", "remark"
     )
 
@@ -43,7 +44,14 @@ object PlatformAccountsCsvAdapter {
         val parsed = rows.mapIndexed { index, cells ->
             require(cells.size == header.size) { "accounts.csv 第 ${index + 2} 行列数不正确。" }
             val values = header.zip(cells).toMap()
-            val platform = values.getValue("platform")
+            val csvPlatform = values.getValue("platform")
+            val server = values.getValue("server")
+            val platform = when {
+                csvPlatform == "hoyolab" && server == "cn" -> AccountStore.MIYOUSHE_CN
+                csvPlatform == "hoyolab" && server == "os" -> AccountStore.HOYOLAB
+                csvPlatform == "skland" && server.isBlank() -> AccountStore.SKLAND
+                else -> error("accounts.csv 第 ${index + 2} 行平台或 server 字段无效。")
+            }
             val enabledValue = values.getValue("enabled").trim().lowercase()
             require(enabledValue in setOf("true", "false", "1", "0")) {
                 "accounts.csv 第 ${index + 2} 行启用字段必须是 true/false。"
@@ -54,6 +62,7 @@ object PlatformAccountsCsvAdapter {
             PlatformCsvAccount(
                 accountId = values.getValue("account_id").trim(),
                 platform = platform,
+                server = server,
                 name = values.getValue("name"),
                 userId = values.getValue("user_id").trim(),
                 credential = values.getValue("credential"),
@@ -75,8 +84,11 @@ object PlatformAccountsCsvAdapter {
             append(header.joinToString(",") { encodeCell(it) }).append("\r\n")
             accounts.forEach { row ->
                 val cells = listOf(
-                    row.accountId, row.platform, row.name, row.userId, row.credential,
-                    row.stuid, row.stoken, row.mid, row.games.sorted().joinToString("|"),
+                    row.accountId,
+                    if (row.platform == AccountStore.HOYOLAB || row.platform == AccountStore.MIYOUSHE_CN) "hoyolab" else "skland",
+                    if (row.platform == AccountStore.MIYOUSHE_CN) "cn" else if (row.platform == AccountStore.HOYOLAB) "os" else "",
+                    row.name, row.userId, row.credential, row.stuid, row.stoken, row.mid,
+                    row.games.sorted().joinToString("|"),
                     row.enabled.toString(), row.remark
                 )
                 append(cells.joinToString(",") { encodeCell(it) }).append("\r\n")
