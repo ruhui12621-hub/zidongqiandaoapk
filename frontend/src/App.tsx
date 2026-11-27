@@ -292,7 +292,7 @@ export default function App() {
     const checkinGames = isHoyo ? options : (account.games || []).map((game: AnyState) => ({key: game.key || game.id, label: game.label || game.key || game.id}));
     const enabledGames = new Set((account.games || []).map((game: AnyState) => game.key || game.id));
     const stages = account.cloudUpdateStages || [];
-    const visibleStages = stages.filter((stage: AnyState) => stage.key !== "raw_output");
+    const visibleStages = stages.filter((stage: AnyState) => stage.key !== "output" && stage.key !== "raw_output");
     const rawOutput = stages.find((stage: AnyState) => stage.key === "raw_output")?.detail || "";
     const csvPath = csvPlatform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
     return <>
