@@ -71,8 +71,8 @@ jobs:
           unzip -Z1 "$apk" | grep -Fx 'assets/ui/index.html'
           unzip -Z1 "$apk" | grep -Fx 'assets/ui/login-status.html'
           unzip -Z1 "$apk" | grep -Fx 'assets/ui/skland-status.html'
-          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\\.js$'
-          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\\.css$'
+          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\.js$'
+          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\.css$'
           echo "Verified: cloud-function packages and all React pages are embedded in the APK."
 
       - name: Upload APK for direct download
