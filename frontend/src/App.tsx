@@ -338,7 +338,7 @@ export default function App() {
     return <>
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
-        <div className="card-heading"><span>Cookie 管理</span></div>
+        <div className="card-heading"><span>{isHoyo ? "Cookie 管理" : "登录凭据管理"}</span></div>
         {isHoyo ? <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
           : <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>}
         {isHoyo ? <>
