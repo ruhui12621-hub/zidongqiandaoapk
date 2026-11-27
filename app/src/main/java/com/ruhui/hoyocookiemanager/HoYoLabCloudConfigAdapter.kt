@@ -154,9 +154,9 @@ object HoYoLabCloudConfigAdapter {
                 name = AccountStore.defaultName(AccountStore.MIYOUSHE_CN),
                 userId = HoYoAccountIdentity.fromCookie(cn, AccountStore.MIYOUSHE_CN).orEmpty(),
                 credential = cn,
-                stuid = parsed.cnStuid.ifBlank { fields["stuid"] ?: fields["ltuid"] ?: "" },
-                stoken = parsed.cnStoken.ifBlank { fields["stoken"] ?: fields["stoken_v2"] ?: "" },
-                mid = parsed.cnMid.ifBlank { fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: "" },
+                stuid = parsed.cnStuid.takeUnless { it.equals("null", true) || it == "~" }.orEmpty().ifBlank { fields["stuid"] ?: fields["ltuid"] ?: "" },
+                stoken = parsed.cnStoken.takeUnless { it.equals("null", true) || it == "~" }.orEmpty().ifBlank { fields["stoken"] ?: fields["stoken_v2"] ?: "" },
+                mid = parsed.cnMid.takeUnless { it.equals("null", true) || it == "~" }.orEmpty().ifBlank { fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: "" },
                 games = parsed.enabledCnGames,
                 enabled = true,
                 remark = ""
