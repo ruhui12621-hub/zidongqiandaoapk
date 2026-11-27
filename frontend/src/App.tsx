@@ -234,10 +234,10 @@ export default function App() {
   };
 
   const saveCsv = () => {
-    const visibleRows = csvDrafts.filter((row: AnyState) => row.platform === csvPlatform);
     const rows = csvPlatform === "skland"
       ? csvDrafts.filter((row: AnyState) => row.platform === "skland")
       : csvDrafts.filter((row: AnyState) => row.platform === "hoyolab" || row.platform === "miyoushe_cn");
+    const visibleRows = rows;
     if (!visibleRows.length) { notify("当前平台没有账号行"); return; }
     if (!state.cloudConnected) { notify("请先连接华为云"); return; }
     const payload = rows.map((row: AnyState) => ({
@@ -324,7 +324,7 @@ export default function App() {
               <td><label className="csv-enabled"><input type="checkbox" checked={!!row.enabled} onChange={e => updateCsvRow(row.id, {enabled:e.target.checked})}/><span>{row.enabled ? "启用" : "停用"}</span></label></td>
               <td><input className="csv-cell-input csv-remark-input" value={row.remark || ""} onChange={e => updateCsvRow(row.id, {remark:e.target.value})} placeholder="备注" aria-label="账号备注"/></td>
               <td><div className="csv-row-actions">
-                <button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("home");setGameDraft(null);}}>详情</button>
+                <button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("platform-accounts");setGameDraft(null);}}>详情</button>
                 <button className="csv-delete-button" disabled={!state.canAddAccount} onClick={() => {callNative("deletePlatformAccount", row.id);notify("已提交删除请求");}}>删除</button>
               </div></td>
             </tr>;
