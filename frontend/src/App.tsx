@@ -342,9 +342,12 @@ export default function App() {
         {isHoyo ? <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
           : <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>}
         {isHoyo ? <>
-          <div className="info-line"><span>本次 APK 运行期间 Cookie</span><strong>{pageCookieReady ? "已获取" : "尚未获取"}</strong></div>
-          <p className="helper-text">此状态只表示本次 APK 运行期间是否从登录页面实际获取到当前账号的 Cookie，不会根据云端已有 Cookie 推断。</p>
+          <div className="session-cookie-state">
+            <span>本次应用运行期间获取状态</span>
+            <strong className={pageCookieReady ? "good" : "muted"}>{pageCookieReady ? "已获取" : "尚未获取"}</strong>
+          </div>
           <div className="info-line"><span>云端 CSV Cookie</span><strong>{account.cookieReady ? "已配置" : "未配置"}</strong></div>
+          <p className="helper-text">仅当本次应用运行期间从登录页面实际获取到当前账号的 Cookie 时才显示“已获取”；应用进程结束后自动重置，不读取云端状态或历史记录。</p>
         </> : <>
           <div className="info-line"><span>云端 CSV 登录令牌</span><strong>{account.tokenReady ? "已配置" : "未配置"}</strong></div>
         </>}
