@@ -1070,9 +1070,19 @@ open class HuaweiCloudActivity : Activity() {
         current.remove("type")
         val rawUserData = current.optString("user_data").trim()
         val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
-        if (userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256") == fingerprint)
+        val invalidFingerprints = linkedSetOf<String>()
+        userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256S").split(",")
+            .map { it.trim().lowercase() }.filter { it.matches(Regex("^[0-9a-f]{64}$")) }
+            .forEach(invalidFingerprints::add)
+        // Migrate the earlier single-fingerprint key without losing its tombstone.
+        userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256").trim().lowercase()
+            .takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }?.let(invalidFingerprints::add)
+        if (fingerprint in invalidFingerprints)
             return "HoYoLAB Cookie 已永久作废；FunctionGraph 中已有相同指纹标记，无需重复写入。"
-        userData.put("HOYOLAB_OS_COOKIE_INVALID_SHA256", fingerprint)
+        if (invalidFingerprints.size >= 50)
+            error("FunctionGraph 已保存 50 个过期 Cookie 指纹，达到安全上限；拒绝覆盖旧作废记录。")
+        invalidFingerprints.add(fingerprint)
+        userData.put("HOYOLAB_OS_COOKIE_INVALID_SHA256S", invalidFingerprints.sorted().joinToString(","))
         current.put("user_data", userData.toString())
         val update = signedRequest("PUT", configUrl, current.toString())
         if (update.first !in 200..299)
