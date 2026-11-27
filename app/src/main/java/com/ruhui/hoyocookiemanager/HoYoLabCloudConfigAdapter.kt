@@ -187,6 +187,39 @@ object HoYoLabCloudConfigAdapter {
             .digest(value.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
+    /** Preserve all non-account YAML settings while removing legacy plaintext credentials. */
+    fun clearAccountCredentials(source: String): String {
+        val lines = source.split("\n").toMutableList()
+        var inAccount = false
+        var inGames = false
+        var inOs = false
+        for (index in lines.indices) {
+            val original = lines[index]
+            val line = original.removeSuffix("\r")
+            val trimmed = line.trim()
+            val indent = line.takeWhile { it == ' ' }.length
+            if (indent == 0) {
+                inAccount = trimmed == "account:"
+                inGames = trimmed == "games:"
+                inOs = false
+                continue
+            }
+            var key: String? = null
+            if (inAccount && indent == 2) {
+                key = trimmed.substringBefore(':').takeIf { it in setOf("cookie", "stuid", "stoken", "mid") }
+            } else if (inGames && indent == 2) {
+                inOs = trimmed == "os:"
+            } else if (inGames && inOs && indent == 4) {
+                key = trimmed.substringBefore(':').takeIf { it == "cookie" }
+            }
+            if (key != null) {
+                val ending = if (original.endsWith("\r")) "\r" else ""
+                lines[index] = " ".repeat(indent) + key + ": \"\"" + ending
+            }
+        }
+        return lines.joinToString("\n")
+    }
+
     /** Replace only account.cookie (CN) or games.os.cookie (global); preserve every other YAML line. */
     fun replaceCookie(source: String, cookie: String, server: String): String {
         require(server == "cn" || server == "os") { "未知 HoYoLAB 服务器：$server" }
