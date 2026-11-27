@@ -174,6 +174,8 @@ open class HuaweiCloudActivity : Activity() {
                 val hoyoFunction = findFunction(HOYOLAB_FUNCTION)
                 val sklandFunction = findFunction(SKLAND_FUNCTION)
                 if (hoyoFunction == null) {
+                    HuaweiCloudSession.lastHoyoFunctionExisted = false
+                    HuaweiCloudSession.lastHoyoCsvPresent = false
                     HuaweiCloudSession.lastConfigYaml = ""
                     HuaweiCloudSession.lastHoyoAccountsCsv =
                         PlatformAccountsCsvAdapter.encode(emptyList(), setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))
@@ -181,8 +183,10 @@ open class HuaweiCloudActivity : Activity() {
 
                 if (hoyoFunction != null) {
                     val archive = downloadZip(hoyoFunction, "HoYoLAB")
+                    HuaweiCloudSession.lastHoyoFunctionExisted = true
                     val yaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
                     val cloudCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
+                    HuaweiCloudSession.lastHoyoCsvPresent = cloudCsv != null
                     val rows = if (cloudCsv != null) {
                         PlatformAccountsCsvAdapter.parse(
                             cloudCsv,
@@ -213,13 +217,18 @@ open class HuaweiCloudActivity : Activity() {
                 }
 
                 if (sklandFunction == null) {
+                    HuaweiCloudSession.lastSklandFunctionExisted = false
+                    HuaweiCloudSession.lastSklandCsvPresent = false
+                    HuaweiCloudSession.lastSklandLegacySnapshot = ""
                     HuaweiCloudSession.lastSklandAccountsCsv =
                         PlatformAccountsCsvAdapter.encode(emptyList(), setOf(AccountStore.SKLAND))
                 }
 
                 if (sklandFunction != null) {
                     val archive = downloadZip(sklandFunction, "森空岛")
+                    HuaweiCloudSession.lastSklandFunctionExisted = true
                     val cloudCsv = readZipEntryTextOrNull(archive, SklandCloudConfigAdapter.ACCOUNT_CSV_PATH)
+                    HuaweiCloudSession.lastSklandCsvPresent = cloudCsv != null
                     val rows = if (cloudCsv != null) {
                         SklandCloudConfigAdapter.readCsv(cloudCsv)
                     } else {
@@ -229,11 +238,14 @@ open class HuaweiCloudActivity : Activity() {
                         val legacyTokens = readZipEntryTextOrNull(
                             archive, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH
                         )
+                        HuaweiCloudSession.lastSklandLegacySnapshot =
+                            accountConfig.orEmpty() + "\u0000" + legacyTokens.orEmpty()
                         if (accountConfig == null && legacyTokens == null) {
                             error("森空岛函数包中既没有 CSV、账号配置，也没有旧版 Token 文件；已停止同步。")
                         }
                         SklandCloudConfigAdapter.legacyCsvAccounts(accountConfig, legacyTokens)
                     }
+                    if (cloudCsv != null) HuaweiCloudSession.lastSklandLegacySnapshot = ""
                     HuaweiCloudSession.lastSklandAccountsCsv = SklandCloudConfigAdapter.encodeCsv(rows)
                     rows.forEach { row ->
                         if (row.credential.isNotBlank()) {
