@@ -8,7 +8,7 @@ import java.util.UUID
  * Local account registry. Account identity is scoped by platform; the same numeric UID
  * on HoYoLAB, Miyoushe and Skland never merges records.
  *
- * This registry stores metadata only. Secrets stay in the platform credential vaults.
+ * This registry stores metadata only. The cloud platform CSV is authoritative for credentials;\n * only the Skland local convenience copy is held in an encrypted credential vault.
  */
 data class ManagedAccount(
     val id: String,
@@ -79,6 +79,8 @@ class AccountStore(context: Context) {
             remark = remark
         )
         synchronized(cache) {
+            val sameId = cache.firstOrNull { it.id == id }
+            require(sameId == null || sameId.platform == platform) { "账号 ID 已被其他平台占用" }
             val duplicate = cache.firstOrNull { it.id != id && it.platform == platform && normalized != null && it.platformUserId == normalized }
             require(duplicate == null) { "该平台已存在相同账号 ID" }
             val index = cache.indexOfFirst { it.id == id }
