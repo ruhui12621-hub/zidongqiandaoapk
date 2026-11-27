@@ -438,7 +438,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             selectedAccountId?.let { id ->
                 val store = AccountStore(this)
                 store.find(id)?.let { account ->
-                    store.update(account.copy(credentialReady = true, cookieReady = true, tokenReady = true))
+                    store.update(account.copy(credentialReady = true, cookieReady = true, tokenReady = true, enabled = true))
                 }
             }
             saved = true
