@@ -295,4 +295,9 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             if (channel == "skland") AppMessageBus.current(this@HtmlMainActivity, AppMessageBus.SKLAND)
             else AppMessageBus.current(this@HtmlMainActivity, AppMessageBus.HOYOLAB)
     }
+
+    companion object {
+        // Process-memory only: reset automatically when Android kills the APK process.
+        private val sessionCookieAcquiredAccountIds = mutableSetOf<String>()
+    }
 }
