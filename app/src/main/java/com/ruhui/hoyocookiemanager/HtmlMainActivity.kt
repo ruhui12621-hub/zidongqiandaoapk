@@ -80,6 +80,12 @@ class HtmlMainActivity : HuaweiCloudActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Record successful Cookie acquisition for this Android process only.
+        // This survives CSV upload clearing the pending Cookie, but is never persisted.
+        val pendingAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId
+        if (HuaweiCloudSession.pendingHoyoCookie.isNotBlank() && pendingAccountId.isNotBlank()) {
+            sessionCookieAcquiredAccountIds.add(pendingAccountId)
+        }
         pushState()
         if (CloudAccountSyncState.get(this) == CloudAccountSyncState.SYNCED) refreshTodayStatuses(force = false)
     }
@@ -158,15 +164,14 @@ class HtmlMainActivity : HuaweiCloudActivity() {
     private fun stateJson(): JSONObject {
         val accountsJson = JSONArray()
         AccountStore(this).all().forEach { account ->
-            accountsJson.put(
-                HomeAccountDisplayAssembler.build(
-                    account = account,
-                    todayStatus = todayStatuses[account.id] ?: "今日签到状态未知",
-                    gameTodayStatuses = todayGameStatuses[account.id].orEmpty(),
-                    todayDetailsJson = todayDetails[account.id],
-                    cloudUpdateStages = AppMessageBus.currentAccountStages(this, account.id)
-                )
-            )
+            val display = HomeAccountDisplayAssembler.build(
+                account = account,
+                todayStatus = todayStatuses[account.id] ?: "今日签到状态未知",
+                gameTodayStatuses = todayGameStatuses[account.id].orEmpty(),
+                todayDetailsJson = todayDetails[account.id],
+                cloudUpdateStages = AppMessageBus.currentAccountStages(this, account.id)
+            ).put("sessionCookieAcquired", sessionCookieAcquiredAccountIds.contains(account.id))
+            accountsJson.put(display)
         }
         val sync = CloudAccountSyncState.get(this)
         val savedAkSk = runCatching { AndroidCredentialVault(this).latest() }.getOrNull() != null
@@ -271,8 +276,8 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun savePlatformAccounts(platform: String, rowsJson: String) {
-            htmlSavePlatformAccounts(platform, rowsJson)
+        @JavascriptInterface fun savePlatformAccounts(platform: String, rowsJson: String, anchorAccountId: String) {
+            htmlSavePlatformAccounts(platform, rowsJson, anchorAccountId)
             pushState()
         }
 
