@@ -255,7 +255,9 @@ export default function App() {
     const liveRows = csvPlatform === "skland" ? accounts.filter((item: AnyState) => item.platform === "skland") : accounts.filter((item: AnyState) => item.platform === "hoyolab" || item.platform === "miyoushe_cn");
     const platformLabel = csvPlatform === "hoyolab" ? "HoYoLAB" : "森空岛";
     const csvPath = csvPlatform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
-    const stageOwner = liveRows.find((row: AnyState) => (row.cloudUpdateStages || []).some((stage: AnyState) => stage.status !== "未执行" || stage.detail));
+    const stageOwner = liveRows.map((row: AnyState) => ({ row, updatedAt: Math.max(0, ...(row.cloudUpdateStages || []).map((stage: AnyState) => Number(stage.updatedAt) || 0)) }))
+      .filter((item: AnyState) => item.updatedAt > 0)
+      .sort((a: AnyState, b: AnyState) => b.updatedAt - a.updatedAt)[0]?.row;
     const stages = (stageOwner?.cloudUpdateStages || []).filter((stage: AnyState) => stage.key !== "output");
     return <>
       {backHeader(platformLabel, `${csvPath} · ${rows.length} 个账号`)}
