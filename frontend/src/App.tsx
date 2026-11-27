@@ -327,8 +327,9 @@ export default function App() {
     if (!account) return renderPlatformAccounts();
     const draft = csvDrafts.find((row: AnyState) => row.id === account.id) || account;
     const isHoyo = account.platform === "hoyolab" || account.platform === "miyoushe_cn";
-    // Cookie acquisition is process-session state, never inferred from CSV credentials.
-    const pageCookieReady = !!account.sessionCookieAcquired;
+    // This is process-session state for either platform, never inferred from saved credentials.
+    const pageCredentialReady = !!account.sessionCredentialAcquired;
+    const credentialLabel = isHoyo ? "Cookie" : "Token";
     const options = getCsvGameOptions(account.platform);
     const selectedGames = new Set((draft.games || []).map((game: AnyState) => game.key || game));
     const stages = account.cloudUpdateStages || [];
@@ -341,16 +342,11 @@ export default function App() {
         <div className="card-heading"><span>{isHoyo ? "Cookie 管理" : "登录凭据管理"}</span></div>
         {isHoyo ? <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
           : <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>}
-        {isHoyo ? <>
-          <div className="session-cookie-state">
-            <span>本次应用运行期间获取状态</span>
-            <strong className={pageCookieReady ? "good" : "muted"}>{pageCookieReady ? "已获取" : "尚未获取"}</strong>
-          </div>
-          <div className="info-line"><span>云端 CSV Cookie</span><strong>{account.cookieReady ? "已配置" : "未配置"}</strong></div>
-          <p className="helper-text">仅当本次应用运行期间从登录页面实际获取到当前账号的 Cookie 时才显示“已获取”；应用进程结束后自动重置，不读取云端状态或历史记录。</p>
-        </> : <>
-          <div className="info-line"><span>云端 CSV 登录令牌</span><strong>{account.tokenReady ? "已配置" : "未配置"}</strong></div>
-        </>}
+        <div className="session-cookie-state">
+          <span>本次应用运行期间获取的{credentialLabel}</span>
+          <strong className={pageCredentialReady ? "good" : "muted"}>{pageCredentialReady ? "已获取" : "尚未获取"}</strong>
+        </div>
+        <p className="helper-text">仅当本次应用运行期间，当前账号的登录页面实际解析并成功取得{credentialLabel}后才显示“已获取”；不读取云端 CSV 或本地历史凭据，应用进程结束后自动重置。</p>
         <div className="card-heading">
           <span>{isHoyo ? "更新云端 Cookie" : "保存账号并更新云函数"}</span>
           <span className="subtle-caption">{visibleStages.length ? `${visibleStages.length} 个步骤` : "等待更新"}</span>
