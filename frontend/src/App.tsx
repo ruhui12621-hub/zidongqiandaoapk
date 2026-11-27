@@ -61,7 +61,13 @@ export default function App() {
   const accountSnapshot = JSON.stringify((state.accounts || []).map((row: AnyState) => ({ id: row.id, platform: row.platform, name: row.name, userId: row.userId, games: row.games, enabled: row.enabled, remark: row.remark, cookieReady: row.cookieReady, tokenReady: row.tokenReady })));
 
   useEffect(() => {
-    setCsvDrafts(state.accounts || []);
+    setCsvDrafts(old => {
+      const previous = new Map(old.map((row: AnyState) => [row.id, row]));
+      return (state.accounts || []).map((row: AnyState) => {
+        const draft = previous.get(row.id);
+        return draft ? { ...row, name: draft.name, games: draft.games, enabled: draft.enabled, remark: draft.remark } : row;
+      });
+    });
   }, [accountSnapshot]);
 
   const account = useMemo(() => (state.accounts || []).find((item: AnyState) => item.id === selectedId), [state.accounts, selectedId]);
@@ -301,6 +307,9 @@ export default function App() {
         </table>
       </div>}
       <div className="csv-actions">
+        <button className="secondary-button" onClick={() => setCsvDrafts(state.accounts || [])} disabled={!state.canAddAccount}>
+          <RefreshCw size={16}/> 还原编辑
+        </button>
         <button className="secondary-button" onClick={() => state.canAddAccount ? addAccount(csvPlatform) : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}>
           <Plus size={16}/> 添加行
         </button>
