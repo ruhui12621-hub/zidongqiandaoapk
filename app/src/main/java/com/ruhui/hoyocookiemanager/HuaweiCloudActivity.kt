@@ -1269,7 +1269,7 @@ open class HuaweiCloudActivity : Activity() {
         }
         if (function == null) error("HoYoLAB 云函数在本次同步后已被删除；请重新同步。")
         val archive = downloadFunctionZipForSnapshot(function, "HoYoLAB")
-        val currentYaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
+        val currentYaml = readZipTextFromArchive(archive, "config/config.yaml", "HoYoLAB")
         val sanitizedYaml = HoYoLabCloudConfigAdapter.clearAccountCredentials(currentYaml)
         if (sanitizedYaml != HuaweiCloudSession.lastConfigYaml) {
             error("HoYoLAB 云端基础配置在本次同步后发生变化；已停止上传，请重新同步，避免覆盖其他设置。")
