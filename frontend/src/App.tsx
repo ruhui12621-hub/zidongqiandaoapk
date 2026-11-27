@@ -290,7 +290,10 @@ export default function App() {
               </label>)}</div></td>
               <td><label className="csv-enabled"><input type="checkbox" checked={!!row.enabled} onChange={e => updateCsvRow(row.id, {enabled:e.target.checked})}/><span>{row.enabled ? "启用" : "停用"}</span></label></td>
               <td><input className="csv-cell-input csv-remark-input" value={row.remark || ""} onChange={e => updateCsvRow(row.id, {remark:e.target.value})} placeholder="备注" aria-label="账号备注"/></td>
-              <td><button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("home");setGameDraft(null);}}>详情</button></td>
+              <td><div className="csv-row-actions">
+                <button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("home");setGameDraft(null);}}>详情</button>
+                <button className="csv-delete-button" onClick={() => {callNative("deletePlatformAccount", row.id);notify("已提交删除请求");}}>删除</button>
+              </div></td>
             </tr>;
           })}</tbody>
         </table>
