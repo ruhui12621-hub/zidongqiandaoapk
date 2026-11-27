@@ -305,7 +305,7 @@ export default function App() {
           <Cloud size={16}/> 保存 CSV 并上传
         </button>
       </div>
-      <p className="footnote">凭据在表格中默认隐藏；HoYoLAB 与米游社共用一个平台函数和 CSV，森空岛使用独立 CSV。保存时会重新上传完整 ZIP，但只更新对应平台的账号表。</p>
+      <p className="footnote">凭据在表格中默认隐藏；HoYoLAB 与米游社共用一个平台函数和 CSV，森空岛使用独立 CSV。保存前会核对云端快照；若其他设备已修改则拒绝覆盖。保存时仍需重新上传完整 ZIP。</p>
     </>;
   };
 
