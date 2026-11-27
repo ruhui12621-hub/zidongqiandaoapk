@@ -759,8 +759,8 @@ open class HuaweiCloudActivity : Activity() {
             showSklandDeployMessage(accountId, "$title 失败", "游戏选择数据无效，已停止上传。", false)
             return
         }
-        if (selectedGames.isEmpty() || !SklandCloudConfigAdapter.supportedGames.containsAll(selectedGames)) {
-            showSklandDeployMessage(accountId, "$title 失败", "至少选择一款森空岛支持的游戏。", false)
+        if (!SklandCloudConfigAdapter.supportedGames.containsAll(selectedGames)) {
+            showSklandDeployMessage(accountId, "$title 失败", "游戏选择包含不支持的森空岛项目。", false)
             return
         }
         val token = try {
@@ -785,43 +785,44 @@ open class HuaweiCloudActivity : Activity() {
                 if (!CloudAccountSyncState.allowsAccountChanges(this)) {
                     error("云端账号尚未完成同步，无法安全合并森空岛账号配置。请先重新连接华为云。")
                 }
-                // AccountStore is populated from the authoritative cloud package before editing.
-                // Rebuild the complete Skland account list from its independently encrypted vaults;
-                // never start from the APK's blank template and accidentally drop other cloud accounts.
+                // Rebuild the complete platform CSV from the cloud-synced account registry.
+                // Credentials are read from each account's encrypted local vault; disabled,
+                // not-yet-logged-in rows may remain credential-empty.
                 val managedSklandAccounts = AccountStore(this).all()
                     .filter { it.platform == AccountStore.SKLAND }
                 if (managedSklandAccounts.none { it.id == accountId }) {
                     error("当前森空岛账号不在已同步账号列表中，已停止上传。")
                 }
-                val cloudAccounts = managedSklandAccounts.map { managed ->
+                val csvAccounts = managedSklandAccounts.map { managed ->
                     val managedToken = if (managed.id == accountId) token else {
-                        SklandTokenVault(this, managed.id).latest().orEmpty()
+                        runCatching { SklandTokenVault(this, managed.id).latest().orEmpty() }.getOrDefault("")
                     }
-                    if (managedToken.isBlank() || managedToken.any(Char::isWhitespace)) {
-                        error("账号「${managed.name}」缺少有效的本机加密 Token，无法安全保留全部云端账号。")
+                    if (managed.enabled && managedToken.isBlank()) {
+                        error("启用账号「" + managed.name + "」缺少有效 Token，无法安全上传。")
                     }
-                    SklandCloudConfigAdapter.CloudAccount(
-                        platformUserId = if (managed.id == accountId) sha256(token)
-                            else managed.platformUserId ?: sha256(managedToken),
-                        token = managedToken,
-                        games = if (managed.id == accountId) selectedGames else managed.games
+                    PlatformCsvAccount(
+                        accountId = managed.id,
+                        platform = AccountStore.SKLAND,
+                        name = managed.name,
+                        userId = if (managedToken.isNotBlank()) managed.platformUserId ?: sha256(managedToken)
+                            else managed.platformUserId.orEmpty(),
+                        credential = managedToken,
+                        stuid = "",
+                        stoken = "",
+                        mid = "",
+                        games = if (managed.id == accountId) selectedGames else managed.games,
+                        enabled = managed.enabled,
+                        remark = managed.remark
                     )
                 }
-                val mergedConfig = SklandCloudConfigAdapter.encodeAccounts(cloudAccounts)
-                val mergedLegacyTokens = SklandCloudConfigAdapter.legacyTokenText(mergedConfig)
-                val tokenCount = cloudAccounts.size
-                logSklandDeployStep("账号配置合并完成：共 $tokenCount 个账号；当前账号启用 ${selectedGames.size} 款游戏。未输出 Token 原文。", true)
+                val csvText = PlatformAccountsCsvAdapter.encode(csvAccounts, setOf(AccountStore.SKLAND))
+                val tokenCount = csvAccounts.size
+                logSklandDeployStep("CSV 校验完成：共 " + tokenCount + " 个账号；当前账号启用 " + selectedGames.size + " 款游戏。未输出 Token 原文。", true)
 
-                var archive = replaceZip(
+                val archive = replaceZip(
                     packaged,
-                    SklandCloudConfigAdapter.LEGACY_TOKEN_PATH,
-                    mergedLegacyTokens,
-                    allowCreate = true
-                )
-                archive = replaceZip(
-                    archive,
-                    SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH,
-                    mergedConfig,
+                    SklandCloudConfigAdapter.ACCOUNT_CSV_PATH,
+                    csvText,
                     allowCreate = true
                 )
                 logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
@@ -841,8 +842,11 @@ open class HuaweiCloudActivity : Activity() {
                 AccountStore(this).update(account.copy(
                     platformUserId = sha256(token),
                     games = selectedGames,
-                    credentialReady = true
+                    credentialReady = true,
+                    tokenReady = true,
+                    enabled = true
                 ))
+                HuaweiCloudSession.lastSklandAccountsCsv = csvText
                 onCloudDeploymentProgress()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
