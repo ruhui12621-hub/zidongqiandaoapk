@@ -52,7 +52,6 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedTodayAccountId, setExpandedTodayAccountId] = useState<string | null>(null);
   const [modal, setModal] = useState<"add" | "games" | null>(null);
-  const [gameDraft, setGameDraft] = useState<string[] | null>(null);
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [toast, setToast] = useState("");
@@ -123,7 +122,7 @@ export default function App() {
   }, [page, cloudLoaded]);
 
   const goHome = () => {
-    setPage("home"); setSelectedId(null); setExpandedTodayAccountId(null); setGameDraft(null);
+    setPage("home"); setSelectedId(null); setExpandedTodayAccountId(null); 
     callNative("backToHome");
   };
 
@@ -139,7 +138,7 @@ export default function App() {
     });
     window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
   }, []);
-  const closeModal = () => { if (modal === "games") setGameDraft(null); setModal(null); };
+  const closeModal = () => setModal(null);
   const goBack = () => {
     if (modal) { closeModal(); return; }
     if (selectedId) { setSelectedId(null); setPage("platform-accounts"); setGameDraft(null); return; }
@@ -165,12 +164,6 @@ export default function App() {
 
   const openLogin = () => {
     if (account) callNative("openLogin", account.id);
-  };
-
-  const showGamePicker = () => {
-    if (!account) return;
-    setGameDraft((account.games || []).map((g: AnyState) => g.key));
-    setModal("games");
   };
 
   const submitCloudLogin = () => {
@@ -384,13 +377,7 @@ export default function App() {
     </section>
   </>;
 
-  const options = account
-    ? account.platform === "skland"
-      ? state.gameCatalog?.skland || []
-      : account.platform === "miyoushe_cn"
-        ? state.gameCatalog?.hoyolab_cn || []
-        : state.gameCatalog?.hoyolab_os || []
-    : [];
+
 
   return <div className="app-shell">
     <header className="topbar">
@@ -418,16 +405,7 @@ export default function App() {
       </section>
     </div>}
 
-    {modal === "games" && <div className="modal-backdrop" onClick={closeModal}>
-      <section className="modal-sheet game-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-title"><div><h2>选择要启用的游戏</h2><p>勾选需要参与自动签到的游戏。</p></div><button className="icon-button" onClick={closeModal} aria-label="关闭"><X size={18}/></button></div>
-        <div className="game-options">{options.map((game: AnyState) => <label className="game-option" key={game.key}>
-          <input type="checkbox" checked={(gameDraft || []).includes(game.key)} onChange={e => setGameDraft(old => e.target.checked ? [...(old || []),game.key] : (old || []).filter(x => x !== game.key))}/>
-          <span>{game.label}</span><span className="checkmark"><Check size={14}/></span>
-        </label>)}</div>
-        <div className="modal-actions"><button className="secondary-button" onClick={closeModal}>取消</button><button className="primary-button" onClick={() => {if (account) updateCsvRow(account.id, {games: (gameDraft || []).map(key => ({key, label: options.find((item: AnyState) => item.key === key)?.label || key}))});setModal(null);setGameDraft(null);notify("游戏选择已暂存；返回账号列表保存 CSV 后生效");}}>完成</button></div>
-      </section>
-    </div>}
+
 
     {toast && <div className="toast-message" role="status">{toast}</div>}
   </div>;
