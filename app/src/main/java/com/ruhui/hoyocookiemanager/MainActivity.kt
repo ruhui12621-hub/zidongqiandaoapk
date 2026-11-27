@@ -501,6 +501,7 @@ class MainActivity : HuaweiCloudActivity() {
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
                 credentialReady = true,
+                enabled = true,
                 cookieReady = true,
                 tokenReady = platformAdapter.hasAuthenticationCredential(found)
             )
