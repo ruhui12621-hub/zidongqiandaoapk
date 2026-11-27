@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
-import GlobalManagement from "./GlobalManagement";
 import {
   ArrowLeft, CalendarCheck, Check, CheckCircle2, ChevronRight, Cloud,
-  Copy, FileText, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
+  Copy, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
   Settings2, Users, X, AlertCircle
 } from "lucide-react";
 
@@ -127,22 +125,11 @@ export default function App() {
     callNative("backToHome");
   };
 
-  // Return both the React screen and native account state to the account-list tab.
-  const goToAccountList = useCallback(() => {
-    // Commit the destination immediately; this navigation is React-only and
-    // must not wait for the Android JavaScript bridge.
-    flushSync(() => {
-      setSelectedId(null);
-      setPage("home");
-    });
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
-  }, []);
   const closeModal = () => setModal(null);
   const goBack = () => {
     if (modal) { closeModal(); return; }
     if (selectedTodayId) { setSelectedTodayId(null); setPage("home"); return; }
     if (selectedId) { setSelectedId(null); setPage("home"); return; }
-    if (page === "platform-accounts") { setPage("home"); return; }
     if (page !== "home") { setPage("home"); return; }
     notify("再按一次可退出应用");
   };
@@ -427,13 +414,6 @@ export default function App() {
     </section>
   </>;
 
-  const renderMessages = () => <>
-    {title("运行消息", "查看操作记录与错误信息。")}
-    <section className="surface-card">
-      <div className="card-heading"><span>消息内容</span><button className="icon-button small" onClick={() => copyText(state.allMessages || "", "全部运行消息已复制")}><Copy size={15}/></button></div>
-      <pre className="log-view all-messages">{state.allMessages || "暂无运行消息"}</pre>
-    </section>
-  </>;
 
 
 
@@ -444,13 +424,11 @@ export default function App() {
       {(selectedId || selectedTodayId) && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content">
-      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={goToAccountList} /> : selectedTodayId ? renderTodayDetail() : selectedId ? renderDetail() : page === "platform-accounts" ? renderHome() : renderHome()}
+      {page === "cloud" ? renderCloud() : selectedTodayId ? renderTodayDetail() : selectedId ? renderDetail() : renderHome()}
     </main>
     {!selectedId && !selectedTodayId && <nav className="bottom-nav">
       <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
       <button className={page === "cloud" ? "active" : ""} onClick={() => setPage("cloud")}><Cloud size={19}/><span>华为云</span></button>
-      <button className={page === "messages" ? "active" : ""} onClick={() => setPage("messages")}><FileText size={19}/><span>运行消息</span></button>
-      <button className={page === "management" ? "active" : ""} onClick={() => setPage("management")}><Settings2 size={19}/><span>全局管理</span></button>
     </nav>}
 
     {modal === "add" && <div className="modal-backdrop" onClick={closeModal}>
