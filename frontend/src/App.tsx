@@ -291,7 +291,7 @@ export default function App() {
               <td><input className="csv-cell-input csv-remark-input" value={row.remark || ""} onChange={e => updateCsvRow(row.id, {remark:e.target.value})} placeholder="备注" aria-label="账号备注"/></td>
               <td><div className="csv-row-actions">
                 <button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("home");setGameDraft(null);}}>详情</button>
-                <button className="csv-delete-button" onClick={() => {callNative("deletePlatformAccount", row.id);notify("已提交删除请求");}}>删除</button>
+                <button className="csv-delete-button" disabled={!state.canAddAccount} onClick={() => {callNative("deletePlatformAccount", row.id);notify("已提交删除请求");}}>删除</button>
               </div></td>
             </tr>;
           })}</tbody>
