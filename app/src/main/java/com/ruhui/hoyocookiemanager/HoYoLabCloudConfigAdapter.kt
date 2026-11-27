@@ -11,7 +11,10 @@ object HoYoLabCloudConfigAdapter {
         val cnCookie: String?,
         val osCookie: String?,
         val enabledCnGames: Set<String>,
-        val enabledOsGames: Set<String>
+        val enabledOsGames: Set<String>,
+        val cnStuid: String,
+        val cnStoken: String,
+        val cnMid: String
     )
 
     private val supportedCnGames = linkedSetOf(
@@ -27,6 +30,9 @@ object HoYoLabCloudConfigAdapter {
         var inAccount = false
         var cnCookie: String? = null
         var osCookie: String? = null
+        var cnStuid = ""
+        var cnStoken = ""
+        var cnMid = ""
         source.lineSequence().forEach { line ->
             val indent = line.takeWhile { it == ' ' }.length
             val keyLine = line.trim()
@@ -40,9 +46,15 @@ object HoYoLabCloudConfigAdapter {
                     inOs = false
                 }
             }
-            if (inAccount && indent == 2 && keyLine.startsWith("cookie:")) {
+            if (inAccount && indent == 2) {
                 val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
-                cnCookie = raw.removeSurrounding("\"").removeSurrounding("'").trim()
+                    .removeSurrounding("\\\"").removeSurrounding("'").trim()
+                when {
+                    keyLine.startsWith("cookie:") -> cnCookie = raw
+                    keyLine.startsWith("stuid:") -> cnStuid = raw
+                    keyLine.startsWith("stoken:") -> cnStoken = raw
+                    keyLine.startsWith("mid:") -> cnMid = raw
+                }
             }
             if (inGames && indent == 2 && keyLine == "os:") {
                 inOs = true
@@ -115,7 +127,7 @@ object HoYoLabCloudConfigAdapter {
             }
         }
 
-        return ParsedConfig(cnCookie, osCookie, enabledCnGames, enabledOsGames)
+        return ParsedConfig(cnCookie, osCookie, enabledCnGames, enabledOsGames, cnStuid, cnStoken, cnMid)
     }
 
 
@@ -142,9 +154,9 @@ object HoYoLabCloudConfigAdapter {
                 name = AccountStore.defaultName(AccountStore.MIYOUSHE_CN),
                 userId = HoYoAccountIdentity.fromCookie(cn, AccountStore.MIYOUSHE_CN).orEmpty(),
                 credential = cn,
-                stuid = fields["stuid"] ?: fields["ltuid"] ?: "",
-                stoken = fields["stoken"] ?: fields["stoken_v2"] ?: "",
-                mid = fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: "",
+                stuid = parsed.cnStuid.ifBlank { fields["stuid"] ?: fields["ltuid"] ?: "" },
+                stoken = parsed.cnStoken.ifBlank { fields["stoken"] ?: fields["stoken_v2"] ?: "" },
+                mid = parsed.cnMid.ifBlank { fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: "" },
                 games = parsed.enabledCnGames,
                 enabled = true,
                 remark = ""
