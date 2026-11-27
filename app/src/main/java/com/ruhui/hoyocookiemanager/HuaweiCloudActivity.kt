@@ -1081,7 +1081,10 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "正在读取 APK 内置函数包 cloud/hoyolab.zip。")
                 val packaged = readPackagedZip("cloud/hoyolab.zip")
                 logAccountDeployStep(accountId, "内置函数包读取成功，大小：${packaged.size} 字节。", true)
-                val baseYaml = HuaweiCloudSession.lastConfigYaml
+                val baseYaml = HuaweiCloudSession.lastConfigYaml.ifBlank {
+                    readZipText(packaged, "config/config.yaml", "HoYoLAB")
+                        .let(HoYoLabCloudConfigAdapter::clearAccountCredentials)
+                }
                 val baseArchive = if (baseYaml.isNotBlank()) {
                     replaceZip(packaged, "config/config.yaml", baseYaml, allowCreate = false)
                 } else packaged
