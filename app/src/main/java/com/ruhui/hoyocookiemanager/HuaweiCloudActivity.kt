@@ -1073,7 +1073,7 @@ open class HuaweiCloudActivity : Activity() {
         val invalidFingerprints = linkedSetOf<String>()
         userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256S").split(",")
             .map { it.trim().lowercase() }.filter { it.matches(Regex("^[0-9a-f]{64}$")) }
-            .forEach(invalidFingerprints::add)
+            .forEach { invalidFingerprints.add(it) }
         // Migrate the earlier single-fingerprint key without losing its tombstone.
         userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256").trim().lowercase()
             .takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }?.let(invalidFingerprints::add)
