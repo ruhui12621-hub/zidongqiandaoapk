@@ -34,18 +34,18 @@ object PlatformAccountsCsvAdapter {
         require(source.toByteArray(Charsets.UTF_8).size <= 2 * 1024 * 1024) {
             "accounts.csv 超过 2 MB。"
         }
-        val records = parseRecords(source)
+        val records = parseRecords(source.removePrefix("\uFEFF"))
         require(records.isNotEmpty() && records.first() == header) {
             "accounts.csv 表头不匹配，拒绝读取。"
         }
         val rows = records.drop(1).filter { row -> row.any { it.isNotEmpty() } }
         require(rows.size <= 100) { "accounts.csv 最多支持 100 个账号。" }
         val parsed = rows.mapIndexed { index, cells ->
-            require(cells.size == header.size) { "accounts.csv 第 \${index + 2} 行列数不正确。" }
+            require(cells.size == header.size) { "accounts.csv 第 ${index + 2} 行列数不正确。" }
             val values = header.zip(cells).toMap()
             val platform = values.getValue("platform")
             require(platform in allowedGames && (allowedPlatforms == null || platform in allowedPlatforms)) {
-                "accounts.csv 第 \${index + 2} 行平台不属于当前函数。"
+                "accounts.csv 第 ${index + 2} 行平台不属于当前函数。"
             }
             PlatformCsvAccount(
                 accountId = values.getValue("account_id").trim(),
@@ -87,25 +87,25 @@ object PlatformAccountsCsvAdapter {
         val credentials = mutableSetOf<String>()
         accounts.forEachIndexed { index, row ->
             require(row.accountId.isNotBlank() && ids.add(row.accountId)) {
-                "账号表第 \${index + 1} 行账号 ID 为空或重复。"
+                "账号表第 ${index + 1} 行账号 ID 为空或重复。"
             }
             require(row.platform in allowedGames && (allowedPlatforms == null || row.platform in allowedPlatforms)) {
-                "账号表第 \${index + 1} 行平台不正确。"
+                "账号表第 ${index + 1} 行平台不正确。"
             }
             val supported = allowedGames.getValue(row.platform)
             require(row.games.isNotEmpty() && supported.containsAll(row.games)) {
-                "账号「\${row.name.ifBlank { row.accountId }}」的游戏选择为空或包含不支持的游戏。"
+                "账号「${row.name.ifBlank { row.accountId }}」的游戏选择为空或包含不支持的游戏。"
             }
             require(!row.credential.contains('\n') && !row.credential.contains('\r')) {
-                "账号「\${row.name.ifBlank { row.accountId }}」的凭据包含换行符。"
+                "账号「${row.name.ifBlank { row.accountId }}」的凭据包含换行符。"
             }
             if (row.enabled) {
                 require(row.credential.isNotBlank()) {
-                    "启用账号「\${row.name.ifBlank { row.accountId }}」尚未获取凭据。"
+                    "启用账号「${row.name.ifBlank { row.accountId }}」尚未获取凭据。"
                 }
                 if (row.platform == AccountStore.MIYOUSHE_CN) {
                     require(row.stuid.isNotBlank() && row.stoken.isNotBlank() && row.mid.isNotBlank()) {
-                        "国服账号「\${row.name.ifBlank { row.accountId }}」缺少 stuid/stoken/mid。"
+                        "国服账号「${row.name.ifBlank { row.accountId }}」缺少 stuid/stoken/mid。"
                     }
                 }
             }
@@ -155,6 +155,6 @@ object PlatformAccountsCsvAdapter {
         val quote = value.contains(',') || value.contains('"') ||
             value.contains('\n') || value.contains('\r') ||
             value != value.trim()
-        return if (quote) "\"\${value.replace("\"", "\"\"")}\"" else value
+        return if (quote) "\"${value.replace("\"", "\"\"")}\"" else value
     }
 }
