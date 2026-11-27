@@ -1344,7 +1344,7 @@ open class HuaweiCloudActivity : Activity() {
         val base = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId"
         val groupName = "zidongqiandao-log"
         onStep("正在检查 LTS 日志组 $groupName。", null)
-        val groups = signedGet("$base/groups").optJSONArray("log_groups") ?: error("LTS 未返回日志组列表；请检查 LTS 查询权限。")
+        val groups = signedGet("$base/groups").optJSONArray("log_groups") ?: error("LTS 未返回日志组列表；请检查 LTS 权限。")
         val matches = (0 until groups.length()).mapNotNull { groups.optJSONObject(it) }.filter { it.optString("log_group_name") == groupName }
         if (matches.size > 1) error("发现多个同名日志组 $groupName，已停止。")
         val group = matches.singleOrNull() ?: run {
@@ -1370,65 +1370,24 @@ open class HuaweiCloudActivity : Activity() {
         val streamId = stream.optString("log_stream_id").takeIf { it.isNotBlank() } ?: error("日志流 $platform 缺少 ID。")
         if (stream.has("ttl_in_days") && stream.optInt("ttl_in_days", 7) != 7) error("日志流 $platform 保留期不是 7 天，请先在 LTS 控制台调整；未继续绑定。")
         onStep("日志流检查成功：$platform（保留期 7 天）。", true)
+
+        // FunctionGraph log_config routes the function's own output to the selected
+        // LTS stream. This does not require creating or modifying an execution agency.
+        // Keep xrole/app_xrole and user_data untouched; runtime LTS querying is not used.
         val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/config"
-        onStep("正在读取函数现有委托配置；本次只复用现有委托，不调用 IAM 委托或策略管理接口。", null)
+        onStep("正在将函数日志绑定到独立日志流；不创建或修改 IAM 委托。", null)
         val config = signedGet(configUrl)
-        val configuredExecutionAgency = config.optString("app_xrole").trim()
-            .takeUnless { it.isBlank() || it == "null" }
-        val inheritedAgency = config.optString("xrole").trim()
-            .takeUnless { it.isBlank() || it == "null" }
-        // Huawei documents that app_xrole falls back to xrole when no separate
-        // execution agency is configured. Preserve both fields exactly as found.
-        val executionAgency = configuredExecutionAgency ?: inheritedAgency
-            ?: error("函数尚未配置可复用的执行委托（xrole/app_xrole 均为空）。为避免创建 IAM 资源或改变现有权限，已停止日志绑定。")
-        onStep("已确认复用函数现有执行委托：$executionAgency；不会创建、修改或授权 IAM 委托/策略。", true)
-        // FunctionGraph GET config may include response-only/immutable fields.
-        // In particular, sending the top-level "type" back in UpdateFunctionConfig
-        // is rejected by Huawei with FSS.0400 "Not allow modify type".
-        // Keep the existing writable settings, but never echo this immutable field.
         config.remove("type")
         config.put("log_config", JSONObject().put("group_name", groupName).put("group_id", groupId).put("stream_name", platform).put("stream_id", streamId))
-        // Pass the APK-selected region and this function's isolated LTS IDs to its runtime.
-        // Merge user_data instead of replacing unrelated existing function settings.
-        val rawUserData = config.optString("user_data").trim()
-        val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
-        userData.put("HUAWEI_CLOUD_REGION", regionValue)
-        userData.put("HUAWEI_CLOUD_PROJECT_ID", projectId)
-        userData.put("LTS_LOG_GROUP_ID", groupId)
-        userData.put("LTS_LOG_STREAM_ID", streamId)
-        if (userData.toString().length > 2048)
-            error("FunctionGraph user_data 超过 2048 字符限制，拒绝覆盖现有配置。")
-        config.put("user_data", userData.toString())
         val update = signedRequest("PUT", configUrl, config.toString())
         if (update.first !in 200..299) error("函数日志绑定失败（HTTP ${update.first}）：${update.second.take(800)}")
-        // Read the binding through FunctionGraph's dedicated LTS detail endpoint.
-        // The general function-config GET response does not reliably expose log_config.
         val verifyUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/lts-log-detail"
         val verify = signedGet(verifyUrl)
         if (verify.optString("group_id") != groupId || verify.optString("stream_id") != streamId) {
             error("函数日志绑定回读不一致：期望日志组/流 ID 为 $groupId/$streamId，实际为 ${verify.optString("group_id")}/${verify.optString("stream_id")}。")
         }
-        val verifiedConfig = signedGet(configUrl)
-        val verifiedRawUserData = verifiedConfig.optString("user_data").trim()
-        val verifiedUserData = if (verifiedRawUserData.isBlank() || verifiedRawUserData == "null")
-            JSONObject() else JSONObject(verifiedRawUserData)
-        if (verifiedUserData.optString("HUAWEI_CLOUD_REGION") != regionValue ||
-            verifiedUserData.optString("HUAWEI_CLOUD_PROJECT_ID") != projectId ||
-            verifiedUserData.optString("LTS_LOG_GROUP_ID") != groupId ||
-            verifiedUserData.optString("LTS_LOG_STREAM_ID") != streamId) {
-            error("FunctionGraph 区域或 LTS 运行时元数据回读不一致，已停止后续测试。")
-        }
-        val verifiedAppAgency = verifiedConfig.optString("app_xrole").trim()
-            .takeUnless { it.isBlank() || it == "null" }
-        val verifiedInheritedAgency = verifiedConfig.optString("xrole").trim()
-            .takeUnless { it.isBlank() || it == "null" }
-        val verifiedEffectiveAgency = verifiedAppAgency ?: verifiedInheritedAgency
-        if (verifiedEffectiveAgency != executionAgency)
-            error("函数现有执行委托回读不一致：期望 $executionAgency，实际 ${verifiedEffectiveAgency ?: "未配置"}。")
-        // IAM delegation and policies are intentionally left untouched. The APK
-        // verifies FunctionGraph's binding, not the delegate's LTS policy grants.
-        onStep("函数日志绑定、现有执行委托及运行时元数据均已回读验证：$groupName/$platform。未修改 IAM 权限。", true)
-        return "日志组：$groupName；日志流：$platform；保留期：7 天；复用执行委托：$executionAgency；未创建或修改 IAM 资源。"
+        onStep("函数日志已绑定并回读验证：$groupName/$platform；保留期 7 天；未创建或修改 IAM 委托/策略。", true)
+        return "日志组：$groupName；日志流：$platform；保留期：7 天；仅配置 FunctionGraph 日志路由，未修改 IAM 权限。"
     }
     private fun waitForFunction(name: String): JSONObject {
         val base = "https://functiongraph." + regionValue + ".myhuaweicloud.com/v2/" + projectId + "/fgs/functions"
