@@ -1049,7 +1049,7 @@ open class HuaweiCloudActivity : Activity() {
         }
         val hasPendingCookie = pendingCookie.isNotBlank()
         val pendingAccount = pendingAccountId.takeIf { it.isNotBlank() }?.let { AccountStore(this).find(it) }
-        if (hasPendingCookie && pendingAccount?.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)) {
+        if (hasPendingCookie && (pendingAccount == null || pendingAccount.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))) {
             showAccountDeployMessage(accountId, "$title 失败", "本次获取的 Cookie 无法匹配到有效的 HoYoLAB 账号，已停止上传。", false)
             return
         }
