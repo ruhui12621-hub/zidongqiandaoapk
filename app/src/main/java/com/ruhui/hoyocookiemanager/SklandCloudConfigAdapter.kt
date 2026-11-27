@@ -12,6 +12,7 @@ import java.security.MessageDigest
  */
 object SklandCloudConfigAdapter {
     const val ACCOUNT_CONFIG_PATH = "code/INPUT_HYPERGRYPH_ACCOUNTS.json"
+    const val ACCOUNT_CSV_PATH = "code/accounts.csv"
     const val LEGACY_TOKEN_PATH = "code/INPUT_HYPERGRYPH_TOKEN.txt"
     val supportedGames: Set<String> = linkedSetOf("arknights", "endfield")
 
@@ -57,6 +58,33 @@ object SklandCloudConfigAdapter {
         }
         return result
     }
+
+
+    fun readCsv(source: String): List<PlatformCsvAccount> =
+        PlatformAccountsCsvAdapter.parse(source, setOf(AccountStore.SKLAND))
+
+    fun legacyCsvAccounts(configJson: String?, legacyTokenText: String?): List<PlatformCsvAccount> =
+        readAccounts(configJson, legacyTokenText).map { account ->
+            val id = java.util.UUID.nameUUIDFromBytes(
+                ("skland:" + account.platformUserId).toByteArray(Charsets.UTF_8)
+            ).toString()
+            PlatformCsvAccount(
+                accountId = id,
+                platform = AccountStore.SKLAND,
+                name = AccountStore.defaultName(AccountStore.SKLAND),
+                userId = account.platformUserId,
+                credential = account.token,
+                stuid = "",
+                stoken = "",
+                mid = "",
+                games = account.games,
+                enabled = true,
+                remark = ""
+            )
+        }
+
+    fun encodeCsv(accounts: List<PlatformCsvAccount>): String =
+        PlatformAccountsCsvAdapter.encode(accounts, setOf(AccountStore.SKLAND))
 
     fun legacyTokenText(configJson: String): String =
         readAccounts(configJson, null).joinToString("\n") { it.token }.let {
