@@ -356,7 +356,7 @@ export default function App() {
     return <>
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
-        <div className="card-heading"><span>签到状态</span>{account.platform !== "miyoushe_cn" && <span className="subtle-caption">点击游戏查看详情</span>}</div>
+        <div className="card-heading"><span>签到状态</span><span className="subtle-caption">点击游戏查看详情</span></div>
         {isHoyo ? <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{allOptions.map((g: AnyState) => {
           const enabled = (account.games || []).some((x: AnyState) => x.key === g.key);
           const result = enabled ? (gameStates[g.key] || "unknown") : "unconfigured";
