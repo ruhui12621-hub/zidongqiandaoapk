@@ -39,6 +39,8 @@ object HomeAccountDisplayAssembler {
             .put("platformLabel", platform?.label ?: AccountStore.platformLabel(account.platform))
             .put("userId", account.platformUserId.orEmpty())
             .put("games", games)
+            .put("enabled", account.enabled)
+            .put("remark", account.remark)
             .put("cookieReady", account.cookieReady)
             .put("tokenReady", account.tokenReady)
             .put("cloudUpdateStages", cloudUpdateStages)
