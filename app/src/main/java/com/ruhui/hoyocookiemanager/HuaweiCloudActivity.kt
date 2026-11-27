@@ -1831,7 +1831,11 @@ open class HuaweiCloudActivity : Activity() {
 
     private fun signedGet(url: String): JSONObject {
         val response = signedRequest("GET", url, "")
-        if (response.first !in 200..299) error("华为云请求失败（HTTP " + response.first + "）：" + response.second)
+        if (response.first !in 200..299) {
+            val failedUrl = URL(url)
+            val endpoint = failedUrl.host + failedUrl.path
+            error("华为云请求失败（HTTP ${response.first}）\\n请求接口：GET $endpoint\\n华为云返回：${response.second}")
+        }
         val body = response.second.trim()
         if (body.startsWith("[")) {
             // 统一封装根节点数组，避免 JSONObject(String) 因接口直接返回 [] 而崩溃。
