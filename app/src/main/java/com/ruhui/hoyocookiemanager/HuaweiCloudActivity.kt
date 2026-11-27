@@ -662,29 +662,8 @@ open class HuaweiCloudActivity : Activity() {
                         (result.exceptionOrNull()?.message ?: "未知错误")
                 }
 
-                // Persist only the fingerprint; never store the raw HoYoLAB Cookie.
-                val invalidCookieHashes = logResults[AccountStore.HOYOLAB]?.logs
-                    ?.asSequence()
-                    ?.mapNotNull { Regex("""\[COOKIE_INVALID\]\[sha256=([0-9a-f]{64})\]""").find(it)?.groupValues?.get(1) }
-                    ?.toSet().orEmpty()
-                if (invalidCookieHashes.isNotEmpty()) {
-                    val urn = functionUrns[HOYOLAB_FUNCTION]
-                    summary = if (urn == null) {
-                        "已发现 HoYoLAB Cookie 失效记录，但无法取得函数 URN，未能写入永久作废标记。"
-                    } else {
-                        val outcomes = invalidCookieHashes.map { fingerprint ->
-                            runCatching { persistHoyoLabInvalidCookieFingerprint(urn, fingerprint) }
-                        }
-                        val failures = outcomes.mapNotNull { it.exceptionOrNull()?.let { error -> error.message ?: error.javaClass.simpleName } }
-                        if (failures.isEmpty()) {
-                            "已将今日发现的 " + invalidCookieHashes.size +
-                                " 个 HoYoLAB 过期 Cookie 指纹写入 FunctionGraph，并完成回读验证。"
-                        } else {
-                            "发现 " + invalidCookieHashes.size + " 个过期 Cookie 指纹，但有 " +
-                                failures.size + " 个未能持久化：" + failures.joinToString("；")
-                        }
-                    }
-                }
+                // Credential validity is evaluated by each function from timestamped
+                // reports in its own LTS stream; this UI read path never writes permanent markers.
 
                 // LTS group/stream is the hard boundary. If Huawei returns the same
                 // stream for both functions, fail closed rather than cross-contaminate.
