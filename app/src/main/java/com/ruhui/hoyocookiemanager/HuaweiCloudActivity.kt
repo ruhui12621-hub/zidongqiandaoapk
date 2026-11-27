@@ -570,7 +570,7 @@ open class HuaweiCloudActivity : Activity() {
                         val outcomes = invalidCookieHashes.map { fingerprint ->
                             runCatching { persistHoyoLabInvalidCookieFingerprint(urn, fingerprint) }
                         }
-                        val failures = outcomes.mapNotNull { it.exceptionOrNull()?.message }
+                        val failures = outcomes.mapNotNull { it.exceptionOrNull()?.let { error -> error.message ?: error.javaClass.simpleName } }
                         if (failures.isEmpty()) {
                             "已将今日发现的 " + invalidCookieHashes.size +
                                 " 个 HoYoLAB 过期 Cookie 指纹写入 FunctionGraph，并完成回读验证。"
