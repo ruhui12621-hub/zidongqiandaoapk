@@ -44,6 +44,10 @@ object PlatformAccountsCsvAdapter {
             require(cells.size == header.size) { "accounts.csv 第 ${index + 2} 行列数不正确。" }
             val values = header.zip(cells).toMap()
             val platform = values.getValue("platform")
+            val enabledValue = values.getValue("enabled").trim().lowercase()
+            require(enabledValue in setOf("true", "false", "1", "0")) {
+                "accounts.csv 第 ${index + 2} 行启用字段必须是 true/false。"
+            }
             require(platform in allowedGames && (allowedPlatforms == null || platform in allowedPlatforms)) {
                 "accounts.csv 第 ${index + 2} 行平台不属于当前函数。"
             }
@@ -57,8 +61,7 @@ object PlatformAccountsCsvAdapter {
                 stoken = values.getValue("stoken"),
                 mid = values.getValue("mid"),
                 games = values.getValue("games").split('|').map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
-                enabled = values.getValue("enabled").trim().equals("true", true) ||
-                    values.getValue("enabled").trim() == "1",
+                enabled = enabledValue == "true" || enabledValue == "1",
                 remark = values.getValue("remark")
             )
         }
@@ -98,6 +101,10 @@ object PlatformAccountsCsvAdapter {
             }
             require(!row.credential.contains('\n') && !row.credential.contains('\r')) {
                 "账号「${row.name.ifBlank { row.accountId }}」的凭据包含换行符。"
+            }
+            require(listOf(row.accountId, row.platform, row.name, row.userId, row.stuid, row.stoken, row.mid, row.remark)
+                .none { it.contains('\n') || it.contains('\r') }) {
+                "账号「${row.name.ifBlank { row.accountId }}」的非凭据字段不能包含换行符。"
             }
             if (row.enabled) {
                 require(row.credential.isNotBlank()) {
