@@ -276,6 +276,10 @@ class HtmlMainActivity : HuaweiCloudActivity() {
             pushState()
         }
 
+        @JavascriptInterface fun deletePlatformAccount(id: String) {
+            htmlDeletePlatformAccount(id)
+        }
+
         @JavascriptInterface fun getSavedCloudCredentials(): String {
             val pair = runCatching { AndroidCredentialVault(this@HtmlMainActivity).latest() }.getOrNull()
                 ?: return JSONObject().toString()
