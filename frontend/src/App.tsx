@@ -66,9 +66,9 @@ export default function App() {
       const previous = new Map<string, AnyState>(old.map((row: AnyState) => [row.id, row] as [string, AnyState]));
       return (state.accounts || []).map((row: AnyState) => {
         const draft = previous.get(row.id);
-        return draft && csvDirtyIds.has(row.id)
-          ? { ...row, name: draft.name, games: draft.games, enabled: draft.enabled, remark: draft.remark }
-          : row;
+        if (!draft || !csvDirtyIds.has(row.id)) return row;
+        const credentialJustArrived = (row.cookieReady && !draft.cookieReady) || (row.tokenReady && !draft.tokenReady);
+        return { ...row, name: draft.name, games: draft.games, enabled: credentialJustArrived ? row.enabled : draft.enabled, remark: draft.remark };
       });
     });
   }, [accountSnapshot]);
