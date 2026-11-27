@@ -18,7 +18,9 @@ data class ManagedAccount(
     val games: Set<String>,
     val credentialReady: Boolean = false,
     val cookieReady: Boolean = credentialReady,
-    val tokenReady: Boolean = false
+    val tokenReady: Boolean = false,
+    val enabled: Boolean = true,
+    val remark: String = ""
 )
 
 class AccountStore(context: Context) {
@@ -28,7 +30,7 @@ class AccountStore(context: Context) {
     fun all(): List<ManagedAccount> = synchronized(cache) { cache.toList() }
 
     @Synchronized
-    fun add(platform: String, name: String = "", platformUserId: String? = null, games: Set<String> = emptySet()): ManagedAccount {
+    fun add(platform: String, name: String = "", platformUserId: String? = null, games: Set<String> = emptySet(), enabled: Boolean = false, remark: String = ""): ManagedAccount {
         require(platform in PLATFORMS) { "不支持的账号平台" }
         require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "所选游戏不属于当前平台" }
         val normalized = normalizeUserId(platformUserId)
@@ -41,10 +43,48 @@ class AccountStore(context: Context) {
             platform = platform,
             name = name.trim().ifBlank { defaultName(platform, all().count { it.platform == platform } + 1) },
             platformUserId = normalized,
-            games = if (games.isNotEmpty()) games else if (platform == SKLAND) setOf("endfield") else games
+            games = if (games.isNotEmpty()) games else if (platform == SKLAND) setOf("endfield") else games,
+            enabled = enabled,
+            remark = remark
         )
         synchronized(cache) { cache.add(account) }
         return account
+    }
+
+    @Synchronized
+    fun importCloudAccount(
+        id: String,
+        platform: String,
+        name: String,
+        platformUserId: String?,
+        games: Set<String>,
+        enabled: Boolean,
+        remark: String,
+        credentialReady: Boolean
+    ): ManagedAccount {
+        require(platform in PLATFORMS) { "不支持的账号平台" }
+        require(id.isNotBlank()) { "云端账号缺少稳定 ID" }
+        require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "云端账号包含不属于当前平台的游戏" }
+        val normalized = normalizeUserId(platformUserId)
+        val imported = ManagedAccount(
+            id = id,
+            platform = platform,
+            name = name.trim().ifBlank { defaultName(platform, all().count { it.platform == platform } + 1) },
+            platformUserId = normalized,
+            games = games,
+            credentialReady = credentialReady,
+            cookieReady = if (platform == HOYOLAB || platform == MIYOUSHE_CN) credentialReady else false,
+            tokenReady = platform == SKLAND && credentialReady,
+            enabled = enabled,
+            remark = remark
+        )
+        synchronized(cache) {
+            val duplicate = cache.firstOrNull { it.id != id && it.platform == platform && normalized != null && it.platformUserId == normalized }
+            require(duplicate == null) { "该平台已存在相同账号 ID" }
+            val index = cache.indexOfFirst { it.id == id }
+            if (index >= 0) cache[index] = imported else cache.add(imported)
+        }
+        return imported
     }
 
     @Synchronized
