@@ -497,7 +497,6 @@ class MainActivity : HuaweiCloudActivity() {
                 HuaweiCloudSession.clearPendingHoyoCookie()
                 return
             }
-            val platformAdapter = requireNotNull(PlatformCredentialAdapters.forPlatform(platform))
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
                 // Runtime Cookie acquisition must not mutate cloud CSV credential status.
