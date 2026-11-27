@@ -1419,6 +1419,16 @@ open class HuaweiCloudActivity : Activity() {
         // Keep the existing writable settings, but never echo this immutable field.
         config.remove("type")
         config.put("log_config", JSONObject().put("group_name", groupName).put("group_id", groupId).put("stream_name", platform).put("stream_id", streamId))
+        // Pass the APK-selected region and this function's isolated LTS IDs to its runtime.
+        // Merge user_data instead of replacing unrelated existing function settings.
+        val rawUserData = config.optString("user_data").trim()
+        val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
+        userData.put("HUAWEI_CLOUD_REGION", regionValue)
+        userData.put("LTS_LOG_GROUP_ID", groupId)
+        userData.put("LTS_LOG_STREAM_ID", streamId)
+        if (userData.toString().length > 2048)
+            error("FunctionGraph user_data 超过 2048 字符限制，拒绝覆盖现有配置。")
+        config.put("user_data", userData.toString())
         val update = signedRequest("PUT", configUrl, config.toString())
         if (update.first !in 200..299) error("函数日志绑定失败（HTTP ${update.first}）：${update.second.take(800)}")
         // Read the binding through FunctionGraph's dedicated LTS detail endpoint.
@@ -1474,13 +1484,8 @@ open class HuaweiCloudActivity : Activity() {
         val fullRawOutput = printLog.ifBlank {
             "华为云未返回函数自身打印日志。\n函数调用响应正文：\n$raw"
         }.take(12000)
-        if (functionUrn.contains(HOYOLAB_FUNCTION)) {
-            val invalidHash = Regex("""\[COOKIE_INVALID\]\[sha256=([0-9a-f]{64})\]""")
-                .find(fullRawOutput)?.groupValues?.get(1)
-            if (invalidHash != null) {
-                persistHoyoLabInvalidCookieFingerprint(functionUrn, invalidHash)
-            }
-        }
+        // Cookie validity is now determined by timestamped LTS reports with a 48-hour
+        // trust window. Do not write permanent fingerprint tombstones into user_data.
         if (raw.isBlank()) error("定时触发器格式测试响应体为空（HTTP ${response.first}），无法确认函数返回结果。")
         val result = runCatching { JSONObject(raw) }.getOrNull()
         if (result != null) {
