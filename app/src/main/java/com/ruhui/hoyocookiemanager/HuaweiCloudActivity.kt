@@ -348,6 +348,11 @@ open class HuaweiCloudActivity : Activity() {
 
     protected fun htmlDeletePlatformAccount(accountId: String) {
         runOnUiThread {
+            if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                AppMessageBus.post(this, AppMessageBus.HOYOLAB, "删除失败", "请先成功读取云端账号 CSV。", false)
+                onCloudDeploymentProgress()
+                return@runOnUiThread
+            }
             val store = AccountStore(this)
             val account = store.find(accountId) ?: return@runOnUiThread
             val group = if (account.platform == AccountStore.SKLAND) {
