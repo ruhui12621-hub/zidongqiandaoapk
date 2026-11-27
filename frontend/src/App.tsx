@@ -58,7 +58,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [csvPlatform, setCsvPlatform] = useState("hoyolab");
   const [csvDrafts, setCsvDrafts] = useState<AnyState[]>([]);
-  const accountSnapshot = JSON.stringify(state.accounts || []);
+  const accountSnapshot = JSON.stringify((state.accounts || []).map((row: AnyState) => ({ id: row.id, platform: row.platform, name: row.name, userId: row.userId, games: row.games, enabled: row.enabled, remark: row.remark, cookieReady: row.cookieReady, tokenReady: row.tokenReady })));
 
   useEffect(() => {
     setCsvDrafts(state.accounts || []);
