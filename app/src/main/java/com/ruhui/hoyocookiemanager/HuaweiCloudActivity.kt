@@ -558,20 +558,26 @@ open class HuaweiCloudActivity : Activity() {
                 }
 
                 // Persist only the fingerprint; never store the raw HoYoLAB Cookie.
-                val invalidCookieHash = logResults[AccountStore.HOYOLAB]?.logs
+                val invalidCookieHashes = logResults[AccountStore.HOYOLAB]?.logs
                     ?.asSequence()
                     ?.mapNotNull { Regex("""\[COOKIE_INVALID\]\[sha256=([0-9a-f]{64})\]""").find(it)?.groupValues?.get(1) }
-                    ?.firstOrNull()
-                if (invalidCookieHash != null) {
+                    ?.toSet().orEmpty()
+                if (invalidCookieHashes.isNotEmpty()) {
                     val urn = functionUrns[HOYOLAB_FUNCTION]
                     summary = if (urn == null) {
                         "已发现 HoYoLAB Cookie 失效记录，但无法取得函数 URN，未能写入永久作废标记。"
                     } else {
-                        runCatching { persistHoyoLabInvalidCookieFingerprint(urn, invalidCookieHash) }
-                            .getOrElse { error ->
-                                "已发现 HoYoLAB Cookie 失效记录，但 FunctionGraph 作废标记写入失败：" +
-                                    (error.message ?: error.javaClass.simpleName)
-                            }
+                        val outcomes = invalidCookieHashes.map { fingerprint ->
+                            runCatching { persistHoyoLabInvalidCookieFingerprint(urn, fingerprint) }
+                        }
+                        val failures = outcomes.mapNotNull { it.exceptionOrNull()?.message }
+                        if (failures.isEmpty()) {
+                            "已将今日发现的 " + invalidCookieHashes.size +
+                                " 个 HoYoLAB 过期 Cookie 指纹写入 FunctionGraph，并完成回读验证。"
+                        } else {
+                            "发现 " + invalidCookieHashes.size + " 个过期 Cookie 指纹，但有 " +
+                                failures.size + " 个未能持久化：" + failures.joinToString("；")
+                        }
                     }
                 }
 
