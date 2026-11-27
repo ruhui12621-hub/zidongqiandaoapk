@@ -279,7 +279,7 @@ export default function App() {
     </>;
   };
   const renderDetail = () => {
-    if (!account) return renderHome();
+    if (!account) return renderPlatformAccounts();
     const draft = csvDrafts.find((row: AnyState) => row.id === account.id) || account;
     const isHoyo = account.platform === "hoyolab" || account.platform === "miyoushe_cn";
     // Cookie acquisition is process-session state, never inferred from CSV credentials.
@@ -337,6 +337,7 @@ export default function App() {
         <label className="field-label" htmlFor="account-remark">备注</label>
         <input id="account-remark" value={draft.remark || ""} onChange={e => updateCsvRow(account.id, {remark: e.target.value})} placeholder="添加备注"/>
         <p className="helper-text">修改会先保存在当前编辑状态中；点击下方保存按钮后，整个平台的账号数据会统一写入 CSV。</p>
+        <button className="csv-delete-button detail-delete-button" onClick={() => callNative("deletePlatformAccount", account.id)} disabled={!state.canAddAccount}>删除此账号</button>
       </section>
 
       <section className="surface-card">
