@@ -203,6 +203,10 @@ open class HuaweiCloudActivity : Activity() {
                         setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
                     )
                     store.reconcileCloudAccounts(setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN), rows.map { it.accountId }.toSet())
+                    if (HuaweiCloudSession.pendingHoyoCookieAccountId.isNotBlank() &&
+                        store.find(HuaweiCloudSession.pendingHoyoCookieAccountId) == null) {
+                        HuaweiCloudSession.clearPendingHoyoCookie()
+                    }
                     rows.forEach { row ->
                         store.importCloudAccount(
                             id = row.accountId,
