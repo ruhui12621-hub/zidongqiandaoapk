@@ -329,7 +329,7 @@ export default function App() {
     </>;
   };
   const renderDetail = () => {
-    if (!account) return renderPlatformAccounts();
+    if (!account) return renderHome();
     const draft = csvDrafts.find((row: AnyState) => row.id === account.id) || account;
     const isHoyo = account.platform === "hoyolab" || account.platform === "miyoushe_cn";
     // This is process-session state for either platform, never inferred from saved credentials.
