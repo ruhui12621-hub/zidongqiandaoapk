@@ -458,6 +458,7 @@ open class HuaweiCloudActivity : Activity() {
                 HuaweiCloudSession.projectId = projectId
 
                 data class PlatformLogResult(val state: String, val logs: List<String>, val sourceId: String, val groupName: String, val streamName: String)
+                val functionUrns = linkedMapOf<String, String>()
 
                 fun readTodayLogs(functionName: String): PlatformLogResult {
                     val listUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions?func_name=" +
@@ -471,6 +472,7 @@ open class HuaweiCloudActivity : Activity() {
                     val urn = matches.single().optString("func_urn")
                     if (urn.isBlank())
                         return PlatformLogResult("函数缺少 URN：$functionName", emptyList(), "", "", "")
+                    functionUrns[functionName] = urn
                     val detail = signedGet(
                         "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(urn)}/lts-log-detail"
                     )
@@ -553,6 +555,24 @@ open class HuaweiCloudActivity : Activity() {
                     if (result.isSuccess) logResults[platform] = result.getOrThrow()
                     else logErrors[platform] = "日志查询失败：" +
                         (result.exceptionOrNull()?.message ?: "未知错误")
+                }
+
+                // Persist only the fingerprint; never store the raw HoYoLAB Cookie.
+                val invalidCookieHash = logResults[AccountStore.HOYOLAB]?.logs
+                    ?.asSequence()
+                    ?.mapNotNull { Regex("""\[COOKIE_INVALID\]\[sha256=([0-9a-f]{64})\]""").find(it)?.groupValues?.get(1) }
+                    ?.firstOrNull()
+                if (invalidCookieHash != null) {
+                    val urn = functionUrns[HOYOLAB_FUNCTION]
+                    summary = if (urn == null) {
+                        "已发现 HoYoLAB Cookie 失效记录，但无法取得函数 URN，未能写入永久作废标记。"
+                    } else {
+                        runCatching { persistHoyoLabInvalidCookieFingerprint(urn, invalidCookieHash) }
+                            .getOrElse { error ->
+                                "已发现 HoYoLAB Cookie 失效记录，但 FunctionGraph 作废标记写入失败：" +
+                                    (error.message ?: error.javaClass.simpleName)
+                            }
+                    }
                 }
 
                 // LTS group/stream is the hard boundary. If Huawei returns the same
@@ -1040,6 +1060,28 @@ open class HuaweiCloudActivity : Activity() {
     private fun readZipEntryText(source: ByteArray, wanted: String): String =
         readZipEntryTextOrNull(source, wanted) ?: error("APK 内置 ZIP 中不存在 $wanted。")
 
+    private fun persistHoyoLabInvalidCookieFingerprint(functionUrn: String, fingerprint: String): String {
+        if (!Regex("^[0-9a-f]{64}$").matches(fingerprint))
+            error("HoYoLAB Cookie 指纹格式无效，拒绝写入。")
+        val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/" + enc(functionUrn) + "/config"
+        val current = signedGet(configUrl)
+        // Preserve existing user_data and writable settings; never echo immutable type.
+        current.remove("type")
+        val rawUserData = current.optString("user_data").trim()
+        val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
+        userData.put("HOYOLAB_OS_COOKIE_INVALID_SHA256", fingerprint)
+        current.put("user_data", userData.toString())
+        val update = signedRequest("PUT", configUrl, current.toString())
+        if (update.first !in 200..299)
+            error("FunctionGraph Cookie 作废标记更新失败（HTTP " + update.first + "）：" + update.second.take(600))
+        val verify = signedGet(configUrl)
+        val verifyRaw = verify.optString("user_data").trim()
+        val verifyData = if (verifyRaw.isBlank() || verifyRaw == "null") JSONObject() else JSONObject(verifyRaw)
+        if (verifyData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256") != fingerprint)
+            error("FunctionGraph Cookie 作废标记回读不一致。")
+        return "HoYoLAB Cookie 已确认过期；SHA-256 作废标记已写入 FunctionGraph 并回读验证，后续相同 Cookie 将不再请求 HoYoLAB。"
+    }
+
     private fun ensureLtsIsolation(functionUrn: String, platform: String, onStep: (String, Boolean?) -> Unit = { _, _ -> }): String {
         require(platform == "hoyolab" || platform == "skland") { "未知日志平台：$platform" }
         val base = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId"
@@ -1135,6 +1177,13 @@ open class HuaweiCloudActivity : Activity() {
         val fullRawOutput = printLog.ifBlank {
             "华为云未返回函数自身打印日志。\n函数调用响应正文：\n$raw"
         }.take(12000)
+        if (functionUrn.contains(HOYOLAB_FUNCTION)) {
+            val invalidHash = Regex("""\[COOKIE_INVALID\]\[sha256=([0-9a-f]{64})\]""")
+                .find(fullRawOutput)?.groupValues?.get(1)
+            if (invalidHash != null) {
+                persistHoyoLabInvalidCookieFingerprint(functionUrn, invalidHash)
+            }
+        }
         if (raw.isBlank()) error("定时触发器格式测试响应体为空（HTTP ${response.first}），无法确认函数返回结果。")
         val result = runCatching { JSONObject(raw) }.getOrNull()
         if (result != null) {
