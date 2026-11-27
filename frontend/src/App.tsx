@@ -373,6 +373,29 @@ export default function App() {
         <p className="footnote">保存范围为当前平台的整份 CSV：HoYoLAB 国服与国际服共用一份 CSV，森空岛使用独立 CSV（{csvPath}）。</p>
       </section>
 
+      <section className="surface-card">
+        <div className="card-heading">账号信息</div>
+        <label className="field-label" htmlFor="account-name">账号名称</label>
+        <input id="account-name" value={draft.name || ""} onChange={e => updateCsvRow(account.id, {name: e.target.value})}/>
+        <div className="info-line"><span>平台</span><strong>{account.platformLabel}</strong></div>
+        <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "—"}</strong></div>
+        <div className="info-line"><span>账号标识</span><strong>{account.userId || "尚未识别"}</strong></div>
+        <div className="field-label">启用游戏</div>
+        <div className="csv-game-options detail-game-options">
+          {options.map((game: AnyState) => <label className="csv-game-option" key={game.key}>
+            <input type="checkbox" checked={selectedGames.has(game.key)} onChange={e => updateCsvGame(draft, game.key, e.target.checked)}/>
+            <span>{game.label}</span>
+          </label>)}
+        </div>
+        <label className="csv-enabled detail-enabled">
+          <input type="checkbox" checked={!!draft.enabled} onChange={e => updateCsvRow(account.id, {enabled: e.target.checked})}/>
+          <span>{draft.enabled ? "启用此账号签到" : "停用此账号签到"}</span>
+        </label>
+        <label className="field-label" htmlFor="account-remark">备注</label>
+        <input id="account-remark" value={draft.remark || ""} onChange={e => updateCsvRow(account.id, {remark: e.target.value})} placeholder="添加备注"/>
+        <p className="helper-text">账号资料和游戏设置会在上方点击“保存并更新云函数”时写入平台 CSV。</p>
+        <button className="csv-delete-button detail-delete-button" onClick={() => callNative("deletePlatformAccount", account.id)} disabled={!state.canAddAccount}>删除此账号</button>
+      </section>
     </>;
   };
   const renderCloud = () => <>
