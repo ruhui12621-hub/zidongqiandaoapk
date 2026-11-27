@@ -223,8 +223,11 @@ export default function App() {
   };
 
   const saveCsv = () => {
-    const rows = csvDrafts.filter((row: AnyState) => row.platform === csvPlatform);
-    if (!rows.length) { notify("当前平台没有账号行"); return; }
+    const visibleRows = csvDrafts.filter((row: AnyState) => row.platform === csvPlatform);
+    const rows = csvPlatform === "skland"
+      ? csvDrafts.filter((row: AnyState) => row.platform === "skland")
+      : csvDrafts.filter((row: AnyState) => row.platform === "hoyolab" || row.platform === "miyoushe_cn");
+    if (!visibleRows.length) { notify("当前平台没有账号行"); return; }
     if (!state.cloudConnected) { notify("请先连接华为云"); return; }
     const payload = rows.map((row: AnyState) => ({
       id: row.id,
