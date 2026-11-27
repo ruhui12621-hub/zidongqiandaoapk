@@ -1047,10 +1047,15 @@ open class HuaweiCloudActivity : Activity() {
             showAccountDeployMessage(accountId, "$title 失败", "当前账号不是 HoYoLAB/米游社账号，已停止上传。", false)
             return
         }
-        val expectedServer = if (account.platform == AccountStore.MIYOUSHE_CN) "cn" else "os"
-        val hasPendingCookie = pendingCookie.isNotBlank() && pendingAccountId == accountId
-        if (hasPendingCookie && pendingServer != expectedServer) {
-            showAccountDeployMessage(accountId, "$title 失败", "本次登录 Cookie 所属服务器与当前账号平台不一致，已停止上传。", false)
+        val hasPendingCookie = pendingCookie.isNotBlank()
+        val pendingAccount = pendingAccountId.takeIf { it.isNotBlank() }?.let { AccountStore(this).find(it) }
+        if (hasPendingCookie && pendingAccount?.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)) {
+            showAccountDeployMessage(accountId, "$title 失败", "本次获取的 Cookie 无法匹配到有效的 HoYoLAB 账号，已停止上传。", false)
+            return
+        }
+        val pendingExpectedServer = if (pendingAccount?.platform == AccountStore.MIYOUSHE_CN) "cn" else "os"
+        if (hasPendingCookie && pendingServer != pendingExpectedServer) {
+            showAccountDeployMessage(accountId, "$title 失败", "本次登录 Cookie 所属服务器与其绑定账号不一致，已停止上传。", false)
             return
         }
         val cachedRows = runCatching {
@@ -1063,7 +1068,7 @@ open class HuaweiCloudActivity : Activity() {
             return
         }
         val cachedRow = cachedRows.firstOrNull { it.accountId == accountId }
-        val effectiveCookie = if (hasPendingCookie) pendingCookie else cachedRow?.credential.orEmpty()
+        val effectiveCookie = if (hasPendingCookie && pendingAccountId == accountId) pendingCookie else cachedRow?.credential.orEmpty()
         if (account.enabled && effectiveCookie.isBlank()) {
             showAccountDeployMessage(accountId, "$title 失败", "该账号已启用但没有可用 Cookie。请先登录，或先关闭该账号。", false)
             return
@@ -1100,7 +1105,7 @@ open class HuaweiCloudActivity : Activity() {
                 }
                 val csvAccounts = managedAccounts.map { managed ->
                     val old = cached.firstOrNull { it.accountId == managed.id }
-                    val cookie = if (managed.id == accountId && hasPendingCookie) pendingCookie
+                    val cookie = if (managed.id == pendingAccountId && hasPendingCookie) pendingCookie
                         else old?.credential.orEmpty()
                     val fields = if (managed.platform == AccountStore.MIYOUSHE_CN)
                         HoYoLabCloudConfigAdapter.cookieFields(cookie) else emptyMap()
