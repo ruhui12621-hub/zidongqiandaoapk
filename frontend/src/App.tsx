@@ -57,6 +57,13 @@ export default function App() {
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [toast, setToast] = useState("");
+  const [csvPlatform, setCsvPlatform] = useState("hoyolab");
+  const [csvDrafts, setCsvDrafts] = useState<AnyState[]>([]);
+  const accountSnapshot = JSON.stringify(state.accounts || []);
+
+  useEffect(() => {
+    setCsvDrafts(state.accounts || []);
+  }, [accountSnapshot]);
 
   const account = useMemo(() => (state.accounts || []).find((item: AnyState) => item.id === selectedId), [state.accounts, selectedId]);
 
@@ -166,7 +173,6 @@ export default function App() {
     if (!account.tokenReady) { notify("请先打开本账号森空岛登录页面并成功获取 Token"); return; }
     if (!state.cloudConnected) { notify("请先连接华为云"); return; }
     const selectedGames = gameDraft ?? (account.games || []).map((g: AnyState) => g.key);
-    if (!selectedGames.length) { notify("至少选择一款森空岛游戏"); return; }
     callNative("deploySklandAccount", account.id, JSON.stringify(selectedGames));
     notify("正在同步森空岛账号、游戏选择并上传云函数");
   };
@@ -197,38 +203,107 @@ export default function App() {
     </div>
   );
 
+  const getCsvGameOptions = (platform: string) => platform === "skland"
+    ? state.gameCatalog?.skland || []
+    : platform === "miyoushe_cn"
+      ? state.gameCatalog?.hoyolab_cn || []
+      : state.gameCatalog?.hoyolab_os || [];
+
+  const updateCsvRow = (id: string, patch: AnyState) => {
+    setCsvDrafts(old => old.map(row => row.id === id ? { ...row, ...patch } : row));
+  };
+
+  const updateCsvGame = (row: AnyState, gameKey: string, checked: boolean) => {
+    const current = (row.games || []).map((item: AnyState) => item.key || item);
+    const next = checked ? [...new Set([...current, gameKey])] : current.filter((key: string) => key !== gameKey);
+    const options = getCsvGameOptions(row.platform);
+    updateCsvRow(row.id, { games: next.map(key => ({
+      key,
+      label: options.find((item: AnyState) => item.key === key)?.label || key
+    })) });
+  };
+
+  const saveCsv = () => {
+    const rows = csvDrafts.filter((row: AnyState) => row.platform === csvPlatform);
+    if (!rows.length) { notify("当前平台没有账号行"); return; }
+    if (!state.cloudConnected) { notify("请先连接华为云"); return; }
+    const payload = rows.map((row: AnyState) => ({
+      id: row.id,
+      name: row.name || "",
+      games: (row.games || []).map((game: AnyState) => game.key || game),
+      enabled: !!row.enabled,
+      remark: row.remark || ""
+    }));
+    callNative("savePlatformAccounts", csvPlatform, JSON.stringify(payload));
+    notify("已提交 CSV 校验和云函数更新，请查看运行消息");
+  };
+
   const renderHome = () => {
     const accounts = state.accounts || [];
+    const rows = csvDrafts.filter((item: AnyState) => item.platform === csvPlatform);
+    const platformLabel = csvPlatform === "hoyolab" ? "HoYoLAB" : csvPlatform === "miyoushe_cn" ? "米游社国服" : "森空岛";
+    const csvPath = csvPlatform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
     return <>
-      {title("账号", "管理登录账号与今日签到结果。")}
+      {title("账号管理", "按平台直接编辑云端 accounts.csv。")}
       <button className="cloud-banner" onClick={() => setPage("cloud")}>
         <span className="banner-icon"><Cloud size={21}/></span>
         <span className="banner-copy"><strong>华为云</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
         <span className={"status-pill " + (state.cloudConnected ? "good" : "muted")}>{state.cloudConnected ? "已连接" : state.cloudCredentialsSaved ? "凭据已保存" : "未连接"}</span>
         <ChevronRight size={18} className="subtle-icon"/>
       </button>
+      <div className="csv-toolbar">
+        <div className="csv-platform-tabs" role="tablist" aria-label="账号平台">
+          {[
+            ["hoyolab", "HoYoLAB"],
+            ["miyoushe_cn", "米游社"],
+            ["skland", "森空岛"]
+          ].map(([key, label]) => <button key={key} className={csvPlatform === key ? "active" : ""} onClick={() => setCsvPlatform(key)}>{label}</button>)}
+        </div>
+        <div className="csv-file-label"><FileText size={14}/><span>{csvPath}</span><small>{rows.length} 行</small></div>
+      </div>
       <div className="section-heading">
         <div><span>{accounts.length} 个账号</span></div>
         <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在刷新今日签到状态");}} disabled={state.todayQuerying}>
           {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新签到状态
         </button>
       </div>
-      {accounts.length === 0 ? <div className="empty-state">
+      {rows.length === 0 ? <div className="empty-state">
         <span className="empty-symbol"><Users size={27}/></span>
-        <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : state.syncState === "empty_confirmed" ? "云端尚无账号" : "等待读取云端账号"}</strong>
-        <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : state.syncState === "empty_confirmed" ? "连接已确认，当前云端没有账号配置。" : "先连接华为云，读取现有账号配置后即可添加账号。"}</p>
-      </div> : <div className="account-list">{accounts.map((a: AnyState) => {
-        const aggregate = accountSummary(a.platform, a.games || [], a.gameTodayStatuses || {}, a.todayStatus || "");
-        return <button className="account-row" key={a.id} onClick={() => {setSelectedId(a.id);setPage("home");setGameDraft(null);}}>
-          <span className="account-info"><strong>{a.name}</strong><small>{a.platformLabel}</small></span>
-          <span className={"account-status " + statusTone(aggregate)}>{aggregate}</span>
-          <ChevronRight size={17} className="subtle-icon"/>
-        </button>;
-      })}</div>}
-      <button className="primary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}>
-        <Plus size={18}/> 添加账号
-      </button>
-      <p className="footnote">账号与游戏配置以华为云为准。</p>
+        <strong>{state.syncState === "syncing" ? "正在读取云端 CSV" : state.syncState === "failed" ? "读取云端 CSV 失败" : "当前平台暂无账号行"}</strong>
+        <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加一行账号后，可以在表格中编辑名称、游戏、启用状态和备注。凭据通过对应平台的登录页面获取。"}</p>
+      </div> : <div className="csv-table-wrap">
+        <table className="csv-editor-table">
+          <thead><tr>
+            <th>账号名称</th><th>平台用户 ID</th><th>凭据</th><th>游戏选择</th><th>启用</th><th>备注</th><th>操作</th>
+          </tr></thead>
+          <tbody>{rows.map((row: AnyState) => {
+            const options = getCsvGameOptions(row.platform);
+            const selected = (row.games || []).map((game: AnyState) => game.key || game);
+            const credentialReady = row.platform === "skland" ? !!row.tokenReady : !!row.cookieReady;
+            return <tr key={row.id}>
+              <td><input className="csv-cell-input csv-name-input" value={row.name || ""} onChange={e => updateCsvRow(row.id, {name:e.target.value})} aria-label="账号名称"/></td>
+              <td><span className="csv-user-id">{row.userId || "未识别"}</span></td>
+              <td><span className={"csv-credential " + (credentialReady ? "ready" : "missing")}>{credentialReady ? "已保存" : "未获取"}</span></td>
+              <td><div className="csv-game-options">{options.map((game: AnyState) => <label className="csv-game-option" key={game.key}>
+                <input type="checkbox" checked={selected.includes(game.key)} onChange={e => updateCsvGame(row, game.key, e.target.checked)}/>
+                <span>{game.label}</span>
+              </label>)}</div></td>
+              <td><label className="csv-enabled"><input type="checkbox" checked={!!row.enabled} onChange={e => updateCsvRow(row.id, {enabled:e.target.checked})}/><span>{row.enabled ? "启用" : "停用"}</span></label></td>
+              <td><input className="csv-cell-input csv-remark-input" value={row.remark || ""} onChange={e => updateCsvRow(row.id, {remark:e.target.value})} placeholder="备注" aria-label="账号备注"/></td>
+              <td><button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("home");setGameDraft(null);}}>详情</button></td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>}
+      <div className="csv-actions">
+        <button className="secondary-button" onClick={() => state.canAddAccount ? addAccount(csvPlatform) : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}>
+          <Plus size={16}/> 添加行
+        </button>
+        <button className="primary-button" onClick={saveCsv} disabled={!state.canAddAccount || !rows.length}>
+          <Cloud size={16}/> 保存 CSV 并上传
+        </button>
+      </div>
+      <p className="footnote">凭据在表格中默认隐藏；HoYoLAB 与米游社共用一个平台函数和 CSV，森空岛使用独立 CSV。保存时会重新上传完整 ZIP，但只更新对应平台的账号表。</p>
     </>;
   };
 
