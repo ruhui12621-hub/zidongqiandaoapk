@@ -289,6 +289,63 @@ open class HuaweiCloudActivity : Activity() {
         runOnUiThread { deploySklandAccount(accountId, selectedGamesJson) }
     }
 
+    protected fun htmlSavePlatformAccounts(platform: String, rowsJson: String) {
+        runOnUiThread {
+            if (!CloudAccountSyncState.allowsAccountChanges(this)) {
+                AppMessageBus.post(this, if (platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
+                    "CSV 保存失败", "请先成功读取云端账号 CSV。", false)
+                pushState()
+                return@runOnUiThread
+            }
+            try {
+                require(platform in AccountStore.PLATFORMS) { "不支持的平台 CSV。" }
+                val rows = JSONArray(rowsJson)
+                require(rows.length() > 0) { "当前平台没有账号行；请先添加账号。" }
+                val store = AccountStore(this)
+                val updated = mutableListOf<ManagedAccount>()
+                for (index in 0 until rows.length()) {
+                    val row = rows.optJSONObject(index) ?: error("第 " + (index + 1) + " 行数据无效。")
+                    val id = row.optString("id")
+                    val old = store.find(id) ?: error("账号已不存在，请重新读取 CSV。")
+                    require(old.platform == platform) { "CSV 中混入了其他平台账号。" }
+                    val gameArray = row.optJSONArray("games") ?: JSONArray()
+                    val games = (0 until gameArray.length()).map { gameArray.getString(it) }.toSet()
+                    require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "游戏选择包含不属于当前平台的项目。" }
+                    val next = old.copy(
+                        name = row.optString("name").trim().ifBlank { old.name },
+                        games = games,
+                        enabled = row.optBoolean("enabled", old.enabled),
+                        remark = row.optString("remark")
+                    )
+                    store.update(next)
+                    updated += next
+                }
+                val anchor = if (platform == AccountStore.SKLAND) {
+                    updated.firstOrNull { it.tokenReady } ?: updated.first()
+                } else {
+                    val allHoyo = store.all().filter {
+                        it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN
+                    }
+                    allHoyo.firstOrNull { it.id == HuaweiCloudSession.pendingHoyoCookieAccountId }
+                        ?: updated.firstOrNull()
+                        ?: allHoyo.firstOrNull()
+                        ?: error("HoYoLAB 平台账号为空。")
+                }
+                if (platform == AccountStore.SKLAND) {
+                    deploySklandAccount(anchor.id, JSONArray(anchor.games.sorted()).toString())
+                } else {
+                    deployHoyolabAccount(anchor.id, JSONArray(anchor.games.sorted()).toString())
+                }
+            } catch (error: Exception) {
+                AppMessageBus.post(this,
+                    if (platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
+                    "CSV 保存失败", error.message ?: error.javaClass.simpleName, false)
+                pushState()
+            }
+        }
+    }
+
+
     protected fun htmlCloudBackendReady(): Boolean = true
 
     protected fun updateHuaweiCloudConfig(value: String) {
@@ -769,8 +826,8 @@ open class HuaweiCloudActivity : Activity() {
             showSklandDeployMessage(accountId, "$title 失败", "读取本机加密 Token 失败：${e.message ?: e.javaClass.simpleName}", false)
             return
         }
-        if (token.isBlank() || token.any(Char::isWhitespace)) {
-            showSklandDeployMessage(accountId, "$title 失败", "当前账号尚未成功获取可用 Token。请先打开森空岛登录页面并完成登录。", false)
+        if ((account.enabled && token.isBlank()) || (token.isNotBlank() && token.any(Char::isWhitespace))) {
+            showSklandDeployMessage(accountId, "$title 失败", "启用账号必须先获取有效 Token；请先登录或关闭该账号。", false)
             return
         }
 
@@ -840,11 +897,10 @@ open class HuaweiCloudActivity : Activity() {
                 AppMessageBus.setAccountStage(this, accountId, "function", "云函数", "成功",
                     if (created) "森空岛函数不存在，已新建并确认就绪。" else "森空岛函数原已存在，代码覆盖更新并确认就绪。")
                 AccountStore(this).update(account.copy(
-                    platformUserId = sha256(token),
+                    platformUserId = token.takeIf { it.isNotBlank() }?.let(::sha256) ?: account.platformUserId,
                     games = selectedGames,
-                    credentialReady = true,
-                    tokenReady = true,
-                    enabled = true
+                    credentialReady = token.isNotBlank(),
+                    tokenReady = token.isNotBlank()
                 ))
                 HuaweiCloudSession.lastSklandAccountsCsv = csvText
                 onCloudDeploymentProgress()
