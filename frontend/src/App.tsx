@@ -50,7 +50,6 @@ export default function App() {
   const lastStateRef = useRef("");
   const [page, setPage] = useState("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [expandedTodayAccountId, setExpandedTodayAccountId] = useState<string | null>(null);
   const [modal, setModal] = useState<"add" | null>(null);
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
