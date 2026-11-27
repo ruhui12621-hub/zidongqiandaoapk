@@ -25,6 +25,7 @@ const callNative = (name: string, ...args: string[]) => {
 };
 const safe = (value: any) => String(value ?? "");
 const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取|无法获取/.test(value) ? "bad" : "muted";
+const platformLabel = (platform: string) => platform === "miyoushe_cn" ? "米游社国服" : platform === "hoyolab" ? "HoYoLAB 国际服" : platform === "skland" ? "森空岛" : "未知平台";
 const accountSummary = (platform: string, games: AnyState[], statuses: Record<string, string>, sourceStatus: string) => {
   if (!games.length) return "未启用游戏";
   if (/无法获取|查询失败|读取失败/.test(sourceStatus)) return "无法获取结果";
@@ -240,7 +241,7 @@ export default function App() {
             }}>
               <span className="account-pair-main">
                 <strong>{row.name || "未命名账号"}</strong>
-                <small>{row.platform === "miyoushe_cn" ? "HoYoLAB · 国服" : row.platform === "hoyolab" ? "HoYoLAB · 国际服" : "森空岛"}</small>
+                <small>{platformLabel(row.platform)}</small>
               </span>
               <ChevronRight size={17} className="subtle-icon"/>
             </button>
@@ -264,16 +265,16 @@ export default function App() {
     </section>;
   };
   const renderHome = () => <>
-    {title("选择平台", "展开平台即可管理账号和查看今日签到。")}
-    <button className="cloud-banner" onClick={() => setPage("cloud")}>
+    {title("账号与签到", "管理不同平台的账号，查看今日签到结果。")}
+    <div className="cloud-status-row">
       <span className="banner-icon"><Cloud size={21}/></span>
       <span className="banner-copy"><strong>华为云</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
       <span className={"status-pill " + (state.cloudConnected ? "good" : "muted")}>{state.cloudConnected ? "已连接" : state.cloudCredentialsSaved ? "凭据已保存" : "未连接"}</span>
-      <ChevronRight size={18} className="subtle-icon"/>
-    </button>
+      <span className="cloud-status-hint">在下方导航中管理云端连接</span>
+    </div>
     <button className="cloud-banner platform-toggle" aria-expanded={expandedPlatform === "hoyolab"} onClick={() => setExpandedPlatform(old => old === "hoyolab" ? null : "hoyolab")}>
       <span className="banner-icon"><Gamepad2 size={21}/></span>
-      <span className="banner-copy"><strong>HoYoLAB</strong><small>国服与国际服 · 共用一份 CSV</small></span>
+      <span className="banner-copy"><strong>HoYoLAB 与米游社</strong><small>国际服与国服账号 · 共用一份 CSV</small></span>
       <span className="status-pill muted">{(state.accounts || []).filter((a: AnyState) => a.platform === "hoyolab" || a.platform === "miyoushe_cn").length} 个账号</span>
       <ChevronRight size={18} className={"subtle-icon platform-chevron " + (expandedPlatform === "hoyolab" ? "expanded" : "")}/>
     </button>
@@ -292,10 +293,11 @@ export default function App() {
     const details = todayAccount.todayDetails || {};
     const gameDetails = details.games || {};
     const logs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join(String.fromCharCode(10)) : safe(details.allRawMessages);
-    const games = todayAccount.platform === "skland"
-      ? (todayAccount.games || []).map((game: AnyState) => ({key: game.key || game.id, label: game.label || game.key || game.id}))
-      : getCsvGameOptions(todayAccount.platform);
-    const enabledKeys = new Set((todayAccount.games || []).map((game: AnyState) => game.key || game.id));
+    const games = (todayAccount.games || []).map((game: AnyState) => {
+      const key = game.key || game.id;
+      const catalog = getCsvGameOptions(todayAccount.platform);
+      return { key, label: game.label || catalog.find((item: AnyState) => item.key === key)?.label || key };
+    });
     return <>
       {backHeader(todayAccount.name || "未命名账号", "今日签到详情")}
       <section className="surface-card">
@@ -304,24 +306,22 @@ export default function App() {
           <span className={"result-label " + statusTone(todayAccount.todayStatus || "")}>{todayAccount.todayStatus || "今日状态未知"}</span>
         </div>
         <div className="info-line"><span>账号</span><strong>{todayAccount.name || "未命名账号"}</strong></div>
-        <div className="info-line"><span>平台</span><strong>{todayAccount.platformLabel || (todayAccount.platform === "skland" ? "森空岛" : "HoYoLAB")}</strong></div>
-        <div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div>
-        <div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div>
+        <div className="info-line"><span>平台</span><strong>{platformLabel(todayAccount.platform)}</strong></div>
+        <details className="log-source-details"><summary>日志来源</summary><div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div><div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div></details>
         <div className="card-heading detail-log-heading"><span>各游戏签到情况</span></div>
         {games.length ? <div className="result-table"><table>
           <thead><tr><th>游戏</th><th>状态</th><th>日志判断依据</th></tr></thead>
           <tbody>{games.map((game: AnyState) => {
-            const key = game.key || game.id;
-            const enabled = enabledKeys.has(key);
-            const status = enabled ? (todayAccount.gameTodayStatuses?.[key] || "unknown") : "unconfigured";
-            return <tr key={key}><td>{game.label || key}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{enabled ? (gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。") : "该游戏未在此账号配置中启用签到。"}</td></tr>;
+            const key = game.key;
+            const status = todayAccount.gameTodayStatuses?.[key] || "unknown";
+            return <tr key={key}><td>{game.label}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。"}</td></tr>;
           })}</tbody>
-        </table></div> : <p className="empty-inline">该账号没有配置游戏。</p>}
+        </table></div> : <p className="empty-inline">该账号尚未启用任何游戏签到。</p>}
         <div className="card-heading detail-log-heading">
           <span>云函数原始日志</span>
           <button className="text-action" onClick={() => copyText(logs, "签到日志已复制")}><Copy size={14}/> 复制</button>
         </div>
-        <pre className="log-view">{logs || details.reason || "没有读取到匹配此账号的日志。"}</pre>
+        <details className="raw-log-details"><summary>查看原始日志</summary><pre className="log-view">{logs || details.reason || "没有读取到匹配此账号的日志。"}</pre></details>
         <button className="secondary-button full-button" onClick={() => {callNative("refreshTodayStatuses");notify("正在刷新今日签到结果");}} disabled={state.todayQuerying}>
           {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新今日签到
         </button>
@@ -341,9 +341,11 @@ export default function App() {
     const stages = account.cloudUpdateStages || [];
     const visibleStages = stages.filter((stage: AnyState) => stage.key !== "output" && stage.key !== "raw_output");
     const rawOutput = stages.find((stage: AnyState) => stage.key === "raw_output")?.detail || "";
-    const csvPath = csvPlatform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
+    const csvPath = account.platform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
+    const platformDirty = csvDrafts.some((row: AnyState) => csvDirtyIds.has(row.id) && (isHoyo ? row.platform === "hoyolab" || row.platform === "miyoushe_cn" : row.platform === account.platform));
+    const canSavePlatform = !!state.canAddAccount && (platformDirty || pageCredentialReady);
     return <>
-      {backHeader(account.name, account.platformLabel + " · 账号详情")}
+      {backHeader(account.name || "未命名账号", platformLabel(account.platform) + " · 账号详情")}
       <section className="surface-card">
         <div className="card-heading"><span>{isHoyo ? "Cookie 管理" : "登录凭据管理"}</span></div>
         {isHoyo ? <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
@@ -354,7 +356,7 @@ export default function App() {
         </div>
         
         <div className="csv-actions">
-          <button className="primary-button" onClick={saveCsv} disabled={!state.canAddAccount || !csvDrafts.some((row: AnyState) => row.id === account.id)}>
+          <button className="primary-button" onClick={saveCsv} disabled={!canSavePlatform}>
             <Cloud size={16}/> 保存并更新云函数
           </button>
         </div>
@@ -375,8 +377,8 @@ export default function App() {
         <div className="card-heading">账号信息</div>
         <label className="field-label" htmlFor="account-name">账号名称</label>
         <input id="account-name" value={draft.name || ""} onChange={e => updateCsvRow(account.id, {name: e.target.value})}/>
-        <div className="info-line"><span>平台</span><strong>{account.platformLabel}</strong></div>
-        <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "—"}</strong></div>
+        <div className="info-line"><span>平台</span><strong>{platformLabel(account.platform)}</strong></div>
+        <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "不适用"}</strong></div>
         <div className="info-line"><span>账号标识</span><strong>{account.userId || "尚未识别"}</strong></div>
         <div className="field-label">启用游戏</div>
         <div className="csv-game-options detail-game-options">
@@ -435,8 +437,8 @@ export default function App() {
       <section className="modal-sheet" onClick={e => e.stopPropagation()}>
         <div className="modal-title"><div><h2>添加账号</h2><p>选择需要添加的平台。</p></div><button className="icon-button" onClick={closeModal} aria-label="关闭"><X size={18}/></button></div>
         {csvPlatform === "hoyolab" ? <>
-          <button className="choice-row" onClick={() => addAccount("miyoushe_cn")}><span><strong>HoYoLAB 国服</strong><small>国服账号（server=cn）</small></span><ChevronRight size={17}/></button>
-          <button className="choice-row" onClick={() => addAccount("hoyolab")}><span><strong>HoYoLAB 国际服</strong><small>国际服账号（server=os）</small></span><ChevronRight size={17}/></button>
+          <button className="choice-row" onClick={() => addAccount("miyoushe_cn")}><span><strong>米游社国服</strong><small>使用米游社账号登录</small></span><ChevronRight size={17}/></button>
+          <button className="choice-row" onClick={() => addAccount("hoyolab")}><span><strong>HoYoLAB 国际服</strong><small>使用 HoYoLAB 账号登录</small></span><ChevronRight size={17}/></button>
         </> : <button className="choice-row" onClick={() => addAccount("skland")}><span><strong>森空岛</strong><small>明日方舟 / 终末地</small></span><ChevronRight size={17}/></button>}
       </section>
     </div>}
