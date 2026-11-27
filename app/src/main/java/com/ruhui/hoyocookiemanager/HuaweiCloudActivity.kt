@@ -947,6 +947,9 @@ open class HuaweiCloudActivity : Activity() {
                     SklandCloudConfigAdapter.LEGACY_TOKEN_PATH,
                     "TOKEN.txt"
                 ))
+                logSklandDeployStep("正在核对云端账号 CSV 是否被其他设备更新……", true)
+                verifySklandCsvSnapshotUnchanged()
+                logSklandDeployStep("云端 CSV 快照一致，继续上传。", true)
                 logSklandDeployStep("旧版 JSON/Token 账号文件已清理，CSV 是唯一账号数据源。", true)
                 logSklandDeployStep("森空岛函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
 
@@ -969,6 +972,9 @@ open class HuaweiCloudActivity : Activity() {
                     tokenReady = token.isNotBlank()
                 ))
                 HuaweiCloudSession.lastSklandAccountsCsv = csvText
+                HuaweiCloudSession.lastSklandFunctionExisted = true
+                HuaweiCloudSession.lastSklandCsvPresent = true
+                HuaweiCloudSession.lastSklandLegacySnapshot = ""
                 onCloudDeploymentProgress()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
@@ -1120,6 +1126,8 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "CSV 校验完成：共 " + csvAccounts.size +
                     " 个账号；当前账号启用 " + selectedGames.size + " 款游戏。未输出 Cookie 原文。", true)
                 val archive = replaceZip(baseArchive, "config/accounts.csv", csvText, allowCreate = true)
+                logAccountDeployStep(accountId, "正在核对云端账号 CSV 是否被其他设备更新……", true)
+                verifyHoyoCsvSnapshotUnchanged()
                 logAccountDeployStep(accountId, "函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
                 val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive) { detail, success ->
                     logAccountDeployStep(accountId, detail, success)
@@ -1143,6 +1151,8 @@ open class HuaweiCloudActivity : Activity() {
                 ))
                 onCloudDeploymentProgress()
                 HuaweiCloudSession.lastHoyoAccountsCsv = csvText
+                HuaweiCloudSession.lastHoyoFunctionExisted = true
+                HuaweiCloudSession.lastHoyoCsvPresent = true
                 if (baseYaml.isNotBlank()) {
                     HuaweiCloudSession.lastConfigYaml = baseYaml
                     configYaml = baseYaml
@@ -1197,6 +1207,85 @@ open class HuaweiCloudActivity : Activity() {
                         if (deploymentReady) "云函数代码已上传并确认就绪，账号配置已同步；失败仅发生在后续测试/触发器检查阶段。$reason"
                         else reason, false)
                 }
+            }
+        }
+    }
+
+    private fun verifyHoyoCsvSnapshotUnchanged() {
+        val function = findFunction(HOYOLAB_FUNCTION)
+        if (!HuaweiCloudSession.lastHoyoFunctionExisted) {
+            if (function != null) error("HoYoLAB 云函数在本次同步后被创建；为避免覆盖其他账号，请先重新同步。")
+            return
+        }
+        if (function == null) error("HoYoLAB 云函数在本次同步后已被删除；请重新同步。")
+        val archive = downloadZip(function, "HoYoLAB")
+        val currentYaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
+        val sanitizedYaml = HoYoLabCloudConfigAdapter.clearAccountCredentials(currentYaml)
+        if (sanitizedYaml != HuaweiCloudSession.lastConfigYaml) {
+            error("HoYoLAB 云端基础配置在本次同步后发生变化；已停止上传，请重新同步，避免覆盖其他设置。")
+        }
+        val currentCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
+        if (currentCsv == null) {
+            if (HuaweiCloudSession.lastHoyoCsvPresent) {
+                error("HoYoLAB 云端 accounts.csv 在本次同步后被移除；已停止上传，请重新同步。")
+            }
+            val currentLegacy = PlatformAccountsCsvAdapter.encode(
+                HoYoLabCloudConfigAdapter.legacyCsvAccounts(currentYaml),
+                setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+            )
+            val expectedLegacy = PlatformAccountsCsvAdapter.encode(
+                PlatformAccountsCsvAdapter.parse(
+                    HuaweiCloudSession.lastHoyoAccountsCsv,
+                    setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+                ),
+                setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+            )
+            if (currentLegacy != expectedLegacy) {
+                error("HoYoLAB 旧版账号配置在本次同步后发生变化；已停止上传，请重新同步。")
+            }
+        } else {
+            if (!HuaweiCloudSession.lastHoyoCsvPresent) {
+                error("HoYoLAB 云端已新增 accounts.csv；已停止上传，请重新同步。")
+            }
+            val allowed = setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+            val current = PlatformAccountsCsvAdapter.encode(PlatformAccountsCsvAdapter.parse(currentCsv, allowed), allowed)
+            val expected = PlatformAccountsCsvAdapter.encode(
+                PlatformAccountsCsvAdapter.parse(HuaweiCloudSession.lastHoyoAccountsCsv, allowed), allowed
+            )
+            if (current != expected) {
+                error("HoYoLAB 云端账号 CSV 已被其他设备修改；已停止上传，请重新同步后再编辑。")
+            }
+        }
+    }
+
+    private fun verifySklandCsvSnapshotUnchanged() {
+        val function = findFunction(SKLAND_FUNCTION)
+        if (!HuaweiCloudSession.lastSklandFunctionExisted) {
+            if (function != null) error("森空岛云函数在本次同步后被创建；为避免覆盖其他账号，请先重新同步。")
+            return
+        }
+        if (function == null) error("森空岛云函数在本次同步后已被删除；请重新同步。")
+        val archive = downloadZip(function, "森空岛")
+        val currentCsv = readZipEntryTextOrNull(archive, SklandCloudConfigAdapter.ACCOUNT_CSV_PATH)
+        if (currentCsv == null) {
+            if (HuaweiCloudSession.lastSklandCsvPresent) {
+                error("森空岛云端 accounts.csv 在本次同步后被移除；已停止上传，请重新同步。")
+            }
+            val currentLegacy = readZipEntryTextOrNull(archive, SklandCloudConfigAdapter.ACCOUNT_CONFIG_PATH).orEmpty() +
+                "\u0000" + readZipEntryTextOrNull(archive, SklandCloudConfigAdapter.LEGACY_TOKEN_PATH).orEmpty()
+            if (currentLegacy != HuaweiCloudSession.lastSklandLegacySnapshot) {
+                error("森空岛旧版账号配置在本次同步后发生变化；已停止上传，请重新同步。")
+            }
+        } else {
+            if (!HuaweiCloudSession.lastSklandCsvPresent) {
+                error("森空岛云端已新增 accounts.csv；已停止上传，请重新同步。")
+            }
+            val current = SklandCloudConfigAdapter.encodeCsv(SklandCloudConfigAdapter.readCsv(currentCsv))
+            val expected = SklandCloudConfigAdapter.encodeCsv(
+                SklandCloudConfigAdapter.readCsv(HuaweiCloudSession.lastSklandAccountsCsv)
+            )
+            if (current != expected) {
+                error("森空岛云端账号 CSV 已被其他设备修改；已停止上传，请重新同步后再编辑。")
             }
         }
     }
