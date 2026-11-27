@@ -203,6 +203,18 @@ object DesktopWebView {
 
 /** One isolated, temporary WebView profile per managed account login session. */
 object LoginWebSession {
+    // Activity recreation must reuse the same account profile during this app process.
+    // A new process gets a fresh set and clears the profile once before first use.
+    private val preparedProfiles = mutableSetOf<String>()
+
+    @Synchronized
+    fun isProfilePrepared(profileName: String): Boolean = profileName in preparedProfiles
+
+    @Synchronized
+    fun markProfilePrepared(profileName: String) {
+        preparedProfiles.add(profileName)
+    }
+
     fun profileName(accountId: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(accountId.toByteArray(Charsets.UTF_8))
