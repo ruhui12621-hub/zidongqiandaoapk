@@ -28,7 +28,6 @@ const callNative = (name: string, ...args: string[]) => {
 const safe = (value: any) => String(value ?? "");
 const statusTone = (value: string) => /成功|已连接|已获取|已同步|已完成/.test(value) ? "good" : /失败|错误|未获取|无法获取/.test(value) ? "bad" : "muted";
 const accountSummary = (platform: string, games: AnyState[], statuses: Record<string, string>, sourceStatus: string) => {
-  if (platform === "miyoushe_cn") return "云端签到暂未接入";
   if (!games.length) return "未启用游戏";
   if (/无法获取|查询失败|读取失败/.test(sourceStatus)) return "无法获取结果";
   const results = games.map(game => statuses[game.key || game.id] || "unknown");
@@ -358,7 +357,7 @@ export default function App() {
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
         <div className="card-heading"><span>签到状态</span>{account.platform !== "miyoushe_cn" && <span className="subtle-caption">点击游戏查看详情</span>}</div>
-        {account.platform === "miyoushe_cn" ? <p className="explanation">当前尚未接入米游社国服的云端签到结果查询；登录凭据和云函数配置仍可管理。</p> : isHoyo ? <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{allOptions.map((g: AnyState) => {
+        {isHoyo ? <div className="result-table"><table><thead><tr><th>游戏</th><th>今日状态</th></tr></thead><tbody>{allOptions.map((g: AnyState) => {
           const enabled = (account.games || []).some((x: AnyState) => x.key === g.key);
           const result = enabled ? (gameStates[g.key] || "unknown") : "unconfigured";
           return <tr key={g.key} onClick={() => {setTodayGame({key:g.key,label:g.label});setPage("today-detail");}}>
