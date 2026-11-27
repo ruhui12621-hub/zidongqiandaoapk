@@ -435,6 +435,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
             }
             val selectedAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
             SklandTokenVault(this, selectedAccountId).save(token)
+            selectedAccountId?.let { HtmlMainActivity.markSessionTokenAcquired(it) }
             selectedAccountId?.let { id ->
                 val store = AccountStore(this)
                 store.find(id)?.let { account ->
