@@ -118,6 +118,63 @@ object HoYoLabCloudConfigAdapter {
         return ParsedConfig(cnCookie, osCookie, enabledCnGames, enabledOsGames)
     }
 
+
+    fun cookieFields(cookie: String): Map<String, String> =
+        cookie.split(';').mapNotNull { part ->
+            val trimmed = part.trim()
+            val split = trimmed.indexOf('=')
+            if (split <= 0) null else trimmed.substring(0, split).trim() to trimmed.substring(split + 1).trim()
+        }.toMap()
+
+    fun legacyCsvAccounts(source: String): List<PlatformCsvAccount> {
+        val parsed = read(source)
+        val result = mutableListOf<PlatformCsvAccount>()
+        fun stableId(platform: String, userId: String?, cookie: String): String {
+            val identity = userId?.takeIf { it.isNotBlank() } ?: sha256(cookie)
+            return java.util.UUID.nameUUIDFromBytes("$platform:$identity".toByteArray(Charsets.UTF_8)).toString()
+        }
+        val cn = parsed.cnCookie.orEmpty().trim()
+        if (cn.isNotBlank() && cn !in setOf("null", "~", "__HOYOLAB_COOKIE__")) {
+            val fields = cookieFields(cn)
+            result += PlatformCsvAccount(
+                accountId = stableId(AccountStore.MIYOUSHE_CN, HoYoAccountIdentity.fromCookie(cn, AccountStore.MIYOUSHE_CN), cn),
+                platform = AccountStore.MIYOUSHE_CN,
+                name = AccountStore.defaultName(AccountStore.MIYOUSHE_CN),
+                userId = HoYoAccountIdentity.fromCookie(cn, AccountStore.MIYOUSHE_CN).orEmpty(),
+                credential = cn,
+                stuid = fields["stuid"] ?: fields["ltuid"] ?: "",
+                stoken = fields["stoken"] ?: fields["stoken_v2"] ?: "",
+                mid = fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: "",
+                games = parsed.enabledCnGames,
+                enabled = true,
+                remark = ""
+            )
+        }
+        val os = parsed.osCookie.orEmpty().trim()
+        if (os.isNotBlank() && os !in setOf("null", "~", "__HOYOLAB_COOKIE__")) {
+            val userId = HoYoAccountIdentity.fromCookie(os, AccountStore.HOYOLAB).orEmpty()
+            result += PlatformCsvAccount(
+                accountId = stableId(AccountStore.HOYOLAB, userId, os),
+                platform = AccountStore.HOYOLAB,
+                name = AccountStore.defaultName(AccountStore.HOYOLAB),
+                userId = userId,
+                credential = os,
+                stuid = "",
+                stoken = "",
+                mid = "",
+                games = parsed.enabledOsGames,
+                enabled = true,
+                remark = ""
+            )
+        }
+        return result
+    }
+
+    private fun sha256(value: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
     /** Replace only account.cookie (CN) or games.os.cookie (global); preserve every other YAML line. */
     fun replaceCookie(source: String, cookie: String, server: String): String {
         require(server == "cn" || server == "os") { "未知 HoYoLAB 服务器：$server" }
