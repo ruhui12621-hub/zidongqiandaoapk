@@ -56,6 +56,7 @@ export default function App() {
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [toast, setToast] = useState("");
   const [csvPlatform, setCsvPlatform] = useState("hoyolab");
+  const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
   const [csvDrafts, setCsvDrafts] = useState<AnyState[]>([]);
   const [csvDirtyIds, setCsvDirtyIds] = useState<Set<string>>(new Set());
   const accountSnapshot = JSON.stringify((state.accounts || []).map((row: AnyState) => ({ id: row.id, platform: row.platform, name: row.name, userId: row.userId, games: row.games, enabled: row.enabled, remark: row.remark, cookieReady: row.cookieReady, tokenReady: row.tokenReady })));
@@ -139,8 +140,8 @@ export default function App() {
   const closeModal = () => setModal(null);
   const goBack = () => {
     if (modal) { closeModal(); return; }
-    if (selectedTodayId) { setSelectedTodayId(null); setPage("platform-accounts"); return; }
-    if (selectedId) { setSelectedId(null); setPage("platform-accounts"); return; }
+    if (selectedTodayId) { setSelectedTodayId(null); setPage("home"); return; }
+    if (selectedId) { setSelectedId(null); setPage("home"); return; }
     if (page === "platform-accounts") { setPage("home"); return; }
     if (page !== "home") { setPage("home"); return; }
     notify("再按一次可退出应用");
@@ -229,80 +230,78 @@ export default function App() {
     notify("正在保存 CSV 并更新平台云函数");
   };
 
+  const renderPlatformAccounts = (platform: string) => {
+    const accounts = state.accounts || [];
+    const liveRows = platform === "skland"
+      ? accounts.filter((item: AnyState) => item.platform === "skland")
+      : accounts.filter((item: AnyState) => item.platform === "hoyolab" || item.platform === "miyoushe_cn");
+    return <section className="surface-card platform-account-panel">
+      <div className="card-heading">
+        <span>账号与今日签到</span>
+        <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在读取今日云函数日志");}} disabled={state.todayQuerying}>
+          {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新
+        </button>
+      </div>
+      <p className="helper-text">{state.todayQuerying ? "正在读取并分析今日云函数日志…" : state.todaySummary || "左侧进入账号详情，右侧查看该账号今日签到详情。"}</p>
+      {liveRows.length ? <div className="account-pair-list">
+        {liveRows.map((row: AnyState) => (
+          <div className="account-pair-row" key={row.id}>
+            <button className="account-pair-name" onClick={() => {
+              setCsvPlatform(row.platform === "skland" ? "skland" : "hoyolab");
+              setSelectedTodayId(null);
+              setSelectedId(row.id);
+            }}>
+              <span className="account-pair-main">
+                <strong>{row.name || "未命名账号"}</strong>
+                <small>{row.platform === "miyoushe_cn" ? "HoYoLAB · 国服" : row.platform === "hoyolab" ? "HoYoLAB · 国际服" : "森空岛"}</small>
+              </span>
+              <ChevronRight size={17} className="subtle-icon"/>
+            </button>
+            <button className={"account-pair-status " + statusTone(row.todayStatus || "")} onClick={() => {
+              setSelectedId(null);
+              setSelectedTodayId(row.id);
+              window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+            }}>
+              <span>{row.todayStatus || "状态未知"}</span>
+              <ChevronRight size={16}/>
+            </button>
+          </div>
+        ))}
+      </div> : <div className="empty-state">
+        <span className="empty-symbol"><Users size={27}/></span>
+        <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : "当前平台暂无账号"}</strong>
+        <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加账号后，可分别点击账号名称或今日签到情况进入对应详情。"}</p>
+        <button className="primary-button full-button" onClick={() => {setCsvPlatform(platform);state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置");}} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>
+      </div>}
+      {liveRows.length > 0 && <button className="secondary-button full-button" onClick={() => {setCsvPlatform(platform);state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置");}} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>}
+    </section>;
+  };
   const renderHome = () => <>
-    {title("选择平台", "选择平台后管理该平台的全部账号。")}
+    {title("选择平台", "展开平台即可管理账号和查看今日签到。")}
     <button className="cloud-banner" onClick={() => setPage("cloud")}>
       <span className="banner-icon"><Cloud size={21}/></span>
       <span className="banner-copy"><strong>华为云</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
       <span className={"status-pill " + (state.cloudConnected ? "good" : "muted")}>{state.cloudConnected ? "已连接" : state.cloudCredentialsSaved ? "凭据已保存" : "未连接"}</span>
       <ChevronRight size={18} className="subtle-icon"/>
     </button>
-    <button className="cloud-banner" onClick={() => {setCsvPlatform("hoyolab");setPage("platform-accounts");}}>
+    <button className="cloud-banner platform-toggle" aria-expanded={expandedPlatform === "hoyolab"} onClick={() => setExpandedPlatform(old => old === "hoyolab" ? null : "hoyolab")}>
       <span className="banner-icon"><Gamepad2 size={21}/></span>
       <span className="banner-copy"><strong>HoYoLAB</strong><small>国服与国际服 · 共用一份 CSV</small></span>
       <span className="status-pill muted">{(state.accounts || []).filter((a: AnyState) => a.platform === "hoyolab" || a.platform === "miyoushe_cn").length} 个账号</span>
-      <ChevronRight size={18} className="subtle-icon"/>
+      <ChevronRight size={18} className={"subtle-icon platform-chevron " + (expandedPlatform === "hoyolab" ? "expanded" : "")}/>
     </button>
-    <button className="cloud-banner" onClick={() => {setCsvPlatform("skland");setPage("platform-accounts");}}>
+    {expandedPlatform === "hoyolab" && renderPlatformAccounts("hoyolab")}
+    <button className="cloud-banner platform-toggle" aria-expanded={expandedPlatform === "skland"} onClick={() => setExpandedPlatform(old => old === "skland" ? null : "skland")}>
       <span className="banner-icon"><Gamepad2 size={21}/></span>
       <span className="banner-copy"><strong>森空岛</strong><small>明日方舟 / 终末地</small></span>
       <span className="status-pill muted">{(state.accounts || []).filter((a: AnyState) => a.platform === "skland").length} 个账号</span>
-      <ChevronRight size={18} className="subtle-icon"/>
+      <ChevronRight size={18} className={"subtle-icon platform-chevron " + (expandedPlatform === "skland" ? "expanded" : "")}/>
     </button>
+    {expandedPlatform === "skland" && renderPlatformAccounts("skland")}
   </>;
-  const renderPlatformAccounts = () => {
-    const accounts = state.accounts || [];
-    const liveRows = csvPlatform === "skland"
-      ? accounts.filter((item: AnyState) => item.platform === "skland")
-      : accounts.filter((item: AnyState) => item.platform === "hoyolab" || item.platform === "miyoushe_cn");
-    const platformLabel = csvPlatform === "hoyolab" ? "HoYoLAB" : "森空岛";
-    return <>
-      {backHeader(platformLabel, String(liveRows.length) + " 个账号")}
-      <section className="surface-card">
-        <div className="card-heading">
-          <span>账号与今日签到</span>
-          <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在读取今日云函数日志");}} disabled={state.todayQuerying}>
-            {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新
-          </button>
-        </div>
-        <p className="helper-text">{state.todayQuerying ? "正在读取并分析今日云函数日志…" : state.todaySummary || "左侧进入账号详情，右侧查看该账号今日签到详情。"}</p>
-        {liveRows.length ? <div className="account-pair-list">
-          {liveRows.map((row: AnyState) => (
-            <div className="account-pair-row" key={row.id}>
-              <button className="account-pair-name" onClick={() => {
-                setCsvPlatform(row.platform === "skland" ? "skland" : "hoyolab");
-                setSelectedTodayId(null);
-                setSelectedId(row.id);
-              }}>
-                <span className="account-pair-main">
-                  <strong>{row.name || "未命名账号"}</strong>
-                  <small>{row.platform === "miyoushe_cn" ? "HoYoLAB · 国服" : row.platform === "hoyolab" ? "HoYoLAB · 国际服" : "森空岛"}</small>
-                </span>
-                <ChevronRight size={17} className="subtle-icon"/>
-              </button>
-              <button className={"account-pair-status " + statusTone(row.todayStatus || "")} onClick={() => {
-                setSelectedId(null);
-                setSelectedTodayId(row.id);
-                window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
-              }}>
-                <span>{row.todayStatus || "状态未知"}</span>
-                <ChevronRight size={16}/>
-              </button>
-            </div>
-          ))}
-        </div> : <div className="empty-state">
-          <span className="empty-symbol"><Users size={27}/></span>
-          <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : "当前平台暂无账号"}</strong>
-          <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加账号后，可分别点击账号名称或今日签到情况进入对应详情。"}</p>
-          <button className="primary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>
-        </div>}
-        {liveRows.length > 0 && <button className="secondary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>}
-      </section>
-    </>;
-  };
   const renderTodayDetail = () => {
     const todayAccount = (state.accounts || []).find((item: AnyState) => item.id === selectedTodayId);
-    if (!todayAccount) return renderPlatformAccounts();
+    if (!todayAccount) return renderHome();
     const details = todayAccount.todayDetails || {};
     const gameDetails = details.games || {};
     const logs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join(String.fromCharCode(10)) : safe(details.allRawMessages);
@@ -445,7 +444,7 @@ export default function App() {
       {(selectedId || selectedTodayId) && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content">
-      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={goToAccountList} /> : selectedTodayId ? renderTodayDetail() : selectedId ? renderDetail() : page === "platform-accounts" ? renderPlatformAccounts() : renderHome()}
+      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={goToAccountList} /> : selectedTodayId ? renderTodayDetail() : selectedId ? renderDetail() : page === "platform-accounts" ? renderHome() : renderHome()}
     </main>
     {!selectedId && !selectedTodayId && <nav className="bottom-nav">
       <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
