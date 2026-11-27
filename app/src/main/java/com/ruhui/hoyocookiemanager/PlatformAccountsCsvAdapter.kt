@@ -93,7 +93,7 @@ object PlatformAccountsCsvAdapter {
                 "账号表第 ${index + 1} 行平台不正确。"
             }
             val supported = allowedGames.getValue(row.platform)
-            require(row.games.isNotEmpty() && supported.containsAll(row.games)) {
+            require(supported.containsAll(row.games)) {
                 "账号「${row.name.ifBlank { row.accountId }}」的游戏选择为空或包含不支持的游戏。"
             }
             require(!row.credential.contains('\n') && !row.credential.contains('\r')) {
