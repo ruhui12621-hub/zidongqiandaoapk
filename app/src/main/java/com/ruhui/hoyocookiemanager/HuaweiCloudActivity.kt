@@ -1341,44 +1341,6 @@ open class HuaweiCloudActivity : Activity() {
     private fun readZipEntryText(source: ByteArray, wanted: String): String =
         readZipEntryTextOrNull(source, wanted) ?: error("APK 内置 ZIP 中不存在 $wanted。")
 
-    private fun persistHoyoLabInvalidCookieFingerprint(functionUrn: String, fingerprint: String): String {
-        if (!Regex("^[0-9a-f]{64}$").matches(fingerprint))
-            error("HoYoLAB Cookie 指纹格式无效，拒绝写入。")
-        val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/" + enc(functionUrn) + "/config"
-        val current = signedGet(configUrl)
-        // Preserve existing user_data and writable settings; never echo immutable type.
-        // The cloud side canonicalizes Cookie fields before hashing, so harmless header reordering cannot bypass the marker.
-        current.remove("type")
-        val rawUserData = current.optString("user_data").trim()
-        val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
-        val invalidFingerprints = linkedSetOf<String>()
-        userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256S").split(",")
-            .map { it.trim().lowercase() }.filter { it.matches(Regex("^[0-9a-f]{64}$")) }
-            .forEach { invalidFingerprints.add(it) }
-        // Migrate the earlier single-fingerprint key without losing its tombstone.
-        userData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256").trim().lowercase()
-            .takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }?.let(invalidFingerprints::add)
-        if (fingerprint in invalidFingerprints)
-            return "HoYoLAB Cookie 已永久作废；FunctionGraph 中已有相同指纹标记，无需重复写入。"
-        if (invalidFingerprints.size >= 25)
-            error("FunctionGraph 已保存 25 个过期 Cookie 指纹，达到安全上限；拒绝覆盖旧作废记录。")
-        invalidFingerprints.add(fingerprint)
-        userData.put("HOYOLAB_OS_COOKIE_INVALID_SHA256S", invalidFingerprints.sorted().joinToString(","))
-        val serializedUserData = userData.toString()
-        if (serializedUserData.length > 2048)
-            error("FunctionGraph user_data 超过 2048 字符环境变量限制；拒绝覆盖旧作废记录。")
-        current.put("user_data", serializedUserData)
-        val update = signedRequest("PUT", configUrl, current.toString())
-        if (update.first !in 200..299)
-            error("FunctionGraph Cookie 作废标记更新失败（HTTP " + update.first + "）：" + update.second.take(600))
-        val verify = signedGet(configUrl)
-        val verifyRaw = verify.optString("user_data").trim()
-        val verifyData = if (verifyRaw.isBlank() || verifyRaw == "null") JSONObject() else JSONObject(verifyRaw)
-        if (verifyData.optString("HOYOLAB_OS_COOKIE_INVALID_SHA256") != fingerprint)
-            error("FunctionGraph Cookie 作废标记回读不一致。")
-        return "HoYoLAB Cookie 已确认过期；SHA-256 作废标记已写入 FunctionGraph 并回读验证，后续相同 Cookie 将不再请求 HoYoLAB。"
-    }
-
     private fun ensureLtsIsolation(functionUrn: String, platform: String, onStep: (String, Boolean?) -> Unit = { _, _ -> }): String {
         require(platform == "hoyolab" || platform == "skland") { "未知日志平台：$platform" }
         val base = "https://lts.$regionValue.myhuaweicloud.com/v2/$projectId"
@@ -1439,7 +1401,17 @@ open class HuaweiCloudActivity : Activity() {
         if (verify.optString("group_id") != groupId || verify.optString("stream_id") != streamId) {
             error("函数日志绑定回读不一致：期望日志组/流 ID 为 $groupId/$streamId，实际为 ${verify.optString("group_id")}/${verify.optString("stream_id")}。")
         }
-        onStep("函数日志绑定成功并已回读验证：$groupName/$platform。", true)
+        val verifiedConfig = signedGet(configUrl)
+        val verifiedRawUserData = verifiedConfig.optString("user_data").trim()
+        val verifiedUserData = if (verifiedRawUserData.isBlank() || verifiedRawUserData == "null")
+            JSONObject() else JSONObject(verifiedRawUserData)
+        if (verifiedUserData.optString("HUAWEI_CLOUD_REGION") != regionValue ||
+            verifiedUserData.optString("HUAWEI_CLOUD_PROJECT_ID") != projectId ||
+            verifiedUserData.optString("LTS_LOG_GROUP_ID") != groupId ||
+            verifiedUserData.optString("LTS_LOG_STREAM_ID") != streamId) {
+            error("FunctionGraph 区域或 LTS 运行时元数据回读不一致，已停止后续测试。")
+        }
+        onStep("函数日志绑定及运行时区域/LTS 元数据均已回读验证：$groupName/$platform。", true)
         return "日志组：$groupName；日志流：$platform；保留期：7 天；函数绑定已验证。"
     }
     private fun waitForFunction(name: String): JSONObject {
