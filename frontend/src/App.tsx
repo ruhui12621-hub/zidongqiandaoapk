@@ -285,7 +285,7 @@ export default function App() {
     const platformLabel = csvPlatform === "hoyolab" ? "HoYoLAB" : "森空岛";
     const csvPath = csvPlatform === "skland" ? "code/accounts.csv" : "config/accounts.csv";
     return <>
-      {title("账号管理", "按平台直接编辑云端 accounts.csv。")}
+      {backHeader(platformLabel, `${csvPath} · ${rows.length} 个账号`)}
       <button className="cloud-banner" onClick={() => setPage("cloud")}>
         <span className="banner-icon"><Cloud size={21}/></span>
         <span className="banner-copy"><strong>华为云</strong><small>{state.syncLabel || "等待连接华为云"}</small></span>
