@@ -1371,17 +1371,96 @@ open class HuaweiCloudActivity : Activity() {
         if (stream.has("ttl_in_days") && stream.optInt("ttl_in_days", 7) != 7) error("日志流 $platform 保留期不是 7 天，请先在 LTS 控制台调整；未继续绑定。")
         onStep("日志流检查成功：$platform（保留期 7 天）。", true)
         val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/${enc(functionUrn)}/config"
-        onStep("正在读取函数现有委托配置；本次只复用现有委托，不调用 IAM 委托或策略管理接口。", null)
+        onStep("正在读取函数委托配置；优先复用已有委托。", null)
         val config = signedGet(configUrl)
-        val configuredExecutionAgency = config.optString("app_xrole").trim()
+        val rawUserData = config.optString("user_data").trim()
+        val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
+        val configuredAgency = config.optString("xrole").trim()
             .takeUnless { it.isBlank() || it == "null" }
-        val inheritedAgency = config.optString("xrole").trim()
+        val executionAgencyOnly = config.optString("app_xrole").trim()
             .takeUnless { it.isBlank() || it == "null" }
-        // Huawei documents that app_xrole falls back to xrole when no separate
-        // execution agency is configured. Preserve both fields exactly as found.
-        val executionAgency = configuredExecutionAgency ?: inheritedAgency
-            ?: error("函数尚未配置可复用的执行委托（xrole/app_xrole 均为空）。为避免创建 IAM 资源或改变现有权限，已停止日志绑定。")
-        onStep("已确认复用函数现有执行委托：$executionAgency；不会创建、修改或授权 IAM 委托/策略。", true)
+
+        // A pre-existing user-configured agency is preserved. When no agency exists,
+        // create one directly and persist its IDs in user_data. This avoids the
+        // global IAM list endpoint that previously failed with HTTP 403.
+        val agencyName = "zidongqiandao-lts-reader-$platform"
+        val agencyIdKey = "LTS_${platform.uppercase(Locale.ROOT)}_AGENCY_ID"
+        val roleIdKey = "LTS_${platform.uppercase(Locale.ROOT)}_ROLE_ID"
+        val grantedKey = "LTS_${platform.uppercase(Locale.ROOT)}_ROLE_GRANTED"
+        val iam = "https://iam.$regionValue.myhuaweicloud.com/v3.0"
+
+        fun persistAgencyMetadata() {
+            if (userData.toString().length > 2048)
+                error("FunctionGraph user_data 超过 2048 字符限制，无法安全保存委托信息。")
+            config.put("user_data", userData.toString())
+            config.remove("type")
+            val saved = signedRequest("PUT", configUrl, config.toString())
+            if (saved.first !in 200..299)
+                error("保存 FunctionGraph 委托信息失败（HTTP ${saved.first}）：${saved.second.take(800)}")
+        }
+
+        val executionAgency = if (configuredAgency != null || executionAgencyOnly != null) {
+            configuredAgency ?: executionAgencyOnly!!
+        } else {
+            if (domainId.isBlank()) error("缺少 IAM domain_id，无法创建 FunctionGraph 执行委托。")
+            var agencyId = userData.optString(agencyIdKey).trim()
+            if (agencyId.isBlank()) {
+                onStep("函数没有现有委托，正在直接创建 $platform 专属 FunctionGraph 委托（不查询 IAM 委托列表）。", null)
+                val body = JSONObject().put("agency", JSONObject()
+                    .put("name", agencyName)
+                    .put("domain_id", domainId)
+                    .put("trust_domain_name", "op_svc_cff")
+                    .put("duration", "FOREVER")
+                    .put("description", "仅供自动签到 $platform 函数查询其独立 LTS 日志流"))
+                val created = signedRequest("POST", "$iam/OS-AGENCY/agencies", body.toString())
+                if (created.first !in 200..299)
+                    error("创建 $platform FunctionGraph 委托失败（HTTP ${created.first}）。需要 IAM 创建委托权限；接口返回：${created.second.take(800)}")
+                val agencyObject = runCatching { JSONObject(created.second).optJSONObject("agency") }.getOrNull()
+                agencyId = agencyObject?.optString("id").orEmpty()
+                if (agencyId.isBlank()) error("委托创建成功，但响应中没有 agency ID，无法安全继续授权。")
+                userData.put(agencyIdKey, agencyId)
+                config.put("xrole", agencyName)
+                persistAgencyMetadata()
+            } else {
+                config.put("xrole", agencyName)
+            }
+
+            var roleId = userData.optString(roleIdKey).trim()
+            if (roleId.isBlank()) {
+                onStep("正在为 $platform 创建仅允许查询本平台日志流的 LTS 最小权限策略。", null)
+                val expectedResource = "lts:$regionValue:$domainId:logStream:$groupId/$streamId"
+                val policyBody = JSONObject().put("role", JSONObject()
+                    .put("display_name", "zidongqiandao-lts-$platform-reader")
+                    .put("type", "XA")
+                    .put("description", "仅允许自动签到 $platform 函数查询指定 LTS 日志流")
+                    .put("description_cn", "自动签到 $platform 日志流只读查询权限")
+                    .put("policy", JSONObject()
+                        .put("Version", "1.1")
+                        .put("Statement", JSONArray().put(JSONObject()
+                            .put("Effect", "Allow")
+                            .put("Action", JSONArray().put("lts:logStream:searchLog"))
+                            .put("Resource", JSONArray().put(expectedResource))))))
+                val created = signedRequest("POST", "$iam/OS-ROLE/roles", policyBody.toString())
+                if (created.first !in 200..299)
+                    error("创建 $platform LTS 最小权限策略失败（HTTP ${created.first}）。需要 IAM 创建自定义策略权限；接口返回：${created.second.take(800)}")
+                roleId = runCatching { JSONObject(created.second).optJSONObject("role")?.optString("id").orEmpty() }.getOrDefault("")
+                if (roleId.isBlank()) error("LTS 策略创建成功，但响应中没有 role ID，无法安全继续授权。")
+                userData.put(roleIdKey, roleId)
+                persistAgencyMetadata()
+            }
+
+            if (!userData.optBoolean(grantedKey, false)) {
+                onStep("正在将 $platform 专属 LTS 查询权限授予其独立委托。", null)
+                val grantUrl = "$iam/OS-AGENCY/projects/${enc(projectId)}/agencies/${enc(agencyId)}/roles/${enc(roleId)}"
+                val granted = signedRequest("PUT", grantUrl, "")
+                if (granted.first !in 200..299 && granted.first != 204)
+                    error("授予 $platform 委托 LTS 权限失败（HTTP ${granted.first}）。需要 IAM 项目委托授权权限；接口返回：${granted.second.take(800)}")
+                userData.put(grantedKey, true)
+                persistAgencyMetadata()
+            }
+            onStep("$platform 专属委托及最小 LTS 查询权限已配置；后续部署将复用保存的 ID，不再查询 IAM 委托列表。", true)
+            agencyName
+        }
         // FunctionGraph GET config may include response-only/immutable fields.
         // In particular, sending the top-level "type" back in UpdateFunctionConfig
         // is rejected by Huawei with FSS.0400 "Not allow modify type".
