@@ -34,10 +34,9 @@ The APK build workflow automatically downloads the latest sanitized HoYoLAB and 
 - Only a successful query confirming that both configured functions do not exist is treated as a first-time empty cloud state.
 - Existing-cloud multi-account add/delete write-back and read-after-write verification are not yet enabled; local-only destructive changes remain blocked.
 
-## 云函数 Cookie/Token 有效性校验
+## 请求保护
 
-HoYoLAB 与森空岛函数使用各自独立的 LTS 日志流记录凭据状态。APK 部署时会把当前华为云区域、项目 ID、日志组 ID 和平台专属日志流 ID 合并写入 FunctionGraph `user_data`，并回读验证；不会在云函数源码中写死区域。
-
-云函数按平台、CSV 账号 ID 和凭据 SHA-256 指纹匹配最近 48 小时的状态报告。最新报告为失效时跳过该账号的全部外部请求，并用新时间戳续报；最新报告为有效、没有匹配报告、报告超过 48 小时或当前凭据指纹已变化时，允许正常请求。日志只保存指纹，不保存 Cookie/Token 原文。
-
-运行时查询 LTS 需要 FunctionGraph 执行委托提供临时 IAM Token，并授予最小权限 `lts:logStream:searchLog`（限制到对应平台日志流）。若未配置该委托或查询失败，函数会打印 `QUERY_UNAVAILABLE` 并按要求允许正常请求，因此配置委托后才能启用跨运行的失效拦截。
+- 同一账号凭据在账号 CSV 中不允许重复配置，避免同一凭据被重复执行。
+- HoYoLAB 请求关闭传输层自动重试；明确认证失效时停止该账号后续游戏请求。
+- Cookie/Token 刷新仅在接口明确返回认证失效时进行，且最多尝试一次；签到状态已确认完成时不再发送奖励查询或签到提交。
+- 不依赖 LTS 历史日志进行 48 小时跨运行有效性判断；LTS 仅保留原有日志记录用途。
