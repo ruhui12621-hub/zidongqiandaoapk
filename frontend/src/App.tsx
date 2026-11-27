@@ -373,58 +373,6 @@ export default function App() {
         <p className="footnote">保存范围为当前平台的整份 CSV：HoYoLAB 国服与国际服共用一份 CSV，森空岛使用独立 CSV（{csvPath}）。</p>
       </section>
 
-      <section className="surface-card">
-        <div className="card-heading">
-          <span>今日签到情况</span>
-          <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在读取今日云函数日志");}} disabled={state.todayQuerying}>
-            {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新
-          </button>
-        </div>
-        <div className="info-line"><span>今日结果</span><strong>{account.todayStatus || "今日状态未知"}</strong></div>
-        <div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div>
-        <div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div>
-        <div className="result-table"><table>
-          <thead><tr><th>游戏</th><th>状态</th><th>日志判断依据</th></tr></thead>
-          <tbody>{checkinGames.map((game: AnyState) => {
-            const key = game.key || game.id;
-            const enabled = enabledGames.has(key);
-            const status = enabled ? (account.gameTodayStatuses?.[key] || "unknown") : "unconfigured";
-            return <tr key={key}>
-              <td>{game.label || key}</td>
-              <td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td>
-              <td>{enabled ? (gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。") : "该游戏未在此账号配置中启用签到。"}</td>
-            </tr>;
-          })}</tbody>
-        </table></div>
-        <div className="card-heading detail-log-heading">
-          <span>云函数原始日志</span>
-          <button className="text-action" onClick={() => copyText(rawLogs, "签到日志已复制")}><Copy size={14}/> 复制</button>
-        </div>
-        <pre className="log-view">{rawLogs || details.reason || "没有读取到匹配此账号的日志。"}</pre>
-      </section>
-
-      <section className="surface-card">
-        <div className="card-heading">
-          <span>云函数更新与执行情况</span>
-          <span className="subtle-caption">{visibleStages.length ? `${visibleStages.length} 个步骤` : "等待更新"}</span>
-        </div>
-        <p className="helper-text">保存 CSV 时会更新当前平台云函数，并检查日志隔离、定时触发器和函数运行结果。</p>
-        {visibleStages.length ? <div className="stage-list">{visibleStages.map((stage: AnyState, index: number) => <div className="stage-row" key={stage.key || index}>
-          <span className="stage-index">{index + 1}</span>
-          <div className="stage-copy"><strong>{stage.label || "执行阶段"}</strong><small>{stage.detail || "暂无详细信息"}</small></div>
-          <span className={"status-pill " + statusTone(stage.status || "")}>{stage.status || "未执行"}</span>
-        </div>)}</div> : <p className="empty-inline">尚无此账号的云函数更新记录。</p>}
-        {rawOutput && <>
-          <div className="card-heading detail-log-heading"><span>函数原始输出</span><button className="text-action" onClick={() => copyText(rawOutput, "函数输出已复制")}><Copy size={14}/> 复制</button></div>
-          <pre className="log-view">{rawOutput}</pre>
-        </>}
-        <div className="csv-actions">
-          <button className="primary-button" onClick={saveCsv} disabled={!state.canAddAccount || !csvDrafts.some((row: AnyState) => row.id === account.id)}>
-            <Cloud size={16}/> 保存 CSV 并更新云函数
-          </button>
-        </div>
-        <p className="footnote">保存范围为当前平台的整份 CSV：HoYoLAB 国服与国际服共用一份 CSV，森空岛使用独立 CSV（{csvPath}）。</p>
-      </section>
     </>;
   };
   const renderCloud = () => <>
