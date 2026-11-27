@@ -1066,6 +1066,7 @@ open class HuaweiCloudActivity : Activity() {
         val configUrl = "https://functiongraph.$regionValue.myhuaweicloud.com/v2/$projectId/fgs/functions/" + enc(functionUrn) + "/config"
         val current = signedGet(configUrl)
         // Preserve existing user_data and writable settings; never echo immutable type.
+        // The cloud side canonicalizes Cookie fields before hashing, so harmless header reordering cannot bypass the marker.
         current.remove("type")
         val rawUserData = current.optString("user_data").trim()
         val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
