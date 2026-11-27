@@ -107,9 +107,8 @@ class MainActivity : HuaweiCloudActivity() {
                 loginChrome.removeJavascriptInterface("LoginUi")
                 loginChrome.destroy()
             }
-            // Clear this account's temporary profile after the login Activity ends.
-            sessionCookieManager?.removeAllCookies { sessionCookieManager?.flush() }
-            sessionWebStorage?.deleteAllData()
+            // Keep this isolated profile for the lifetime of the app process.
+            // The next process clears it once before first use; the user can also clear it explicitly.
         } catch (_: Exception) {
             // Ignore WebView teardown failures; no credential data is written by this Activity.
         }
@@ -321,10 +320,16 @@ class MainActivity : HuaweiCloudActivity() {
             val targetUrl = if (activePlatform == AccountStore.MIYOUSHE_CN) "https://www.miyoushe.com/" else "https://www.hoyolab.com/"
             if (!loginProfilePrepared) {
                 loginProfilePrepared = true
-                sessionWebStorage?.deleteAllData()
-                sessionCookieManager?.removeAllCookies {
-                    sessionCookieManager?.flush()
-                    if (!isFinishing && !isDestroyed) webView.loadUrl(targetUrl)
+                if (LoginWebSession.isProfilePrepared(loginProfileName)) {
+                    webView.loadUrl(targetUrl)
+                } else {
+                    // Clear only once per account profile per app process, not on every Activity opening.
+                    sessionWebStorage?.deleteAllData()
+                    sessionCookieManager?.removeAllCookies {
+                        sessionCookieManager?.flush()
+                        LoginWebSession.markProfilePrepared(loginProfileName)
+                        if (!isFinishing && !isDestroyed) webView.loadUrl(targetUrl)
+                    }
                 }
             } else {
                 webView.loadUrl(targetUrl)
