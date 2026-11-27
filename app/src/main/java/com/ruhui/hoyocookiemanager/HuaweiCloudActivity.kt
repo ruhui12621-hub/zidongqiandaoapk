@@ -346,6 +346,52 @@ open class HuaweiCloudActivity : Activity() {
     }
 
 
+    protected fun htmlDeletePlatformAccount(accountId: String) {
+        runOnUiThread {
+            val store = AccountStore(this)
+            val account = store.find(accountId) ?: return@runOnUiThread
+            val group = if (account.platform == AccountStore.SKLAND) {
+                store.all().filter { it.platform == AccountStore.SKLAND }
+            } else {
+                store.all().filter { it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN }
+            }
+            if (group.size <= 1) {
+                AppMessageBus.post(this, if (account.platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
+                    "无法删除账号", "这是该平台函数中的最后一个账号。请先停用它；保留 CSV 文件结构。", false)
+                pushState()
+                return@runOnUiThread
+            }
+            android.app.AlertDialog.Builder(this)
+                .setTitle("删除账号")
+                .setMessage("删除「" + account.name + "」后，将从平台 CSV 中移除该行。其他账号不受影响。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除") { _, _ ->
+                    store.delete(accountId)
+                    if (account.platform == AccountStore.SKLAND) {
+                        runCatching { SklandTokenVault(this, accountId).delete() }
+                    } else {
+                        runCatching { HoYoCookieVault(this, accountId).delete() }
+                        if (HuaweiCloudSession.pendingHoyoCookieAccountId == accountId) {
+                            HuaweiCloudSession.clearPendingHoyoCookie()
+                        }
+                    }
+                    val remaining = if (account.platform == AccountStore.SKLAND) {
+                        store.all().filter { it.platform == AccountStore.SKLAND }
+                    } else {
+                        store.all().filter { it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN }
+                    }
+                    val anchorAccount = remaining.first()
+                    if (account.platform == AccountStore.SKLAND) {
+                        deploySklandAccount(anchorAccount.id, JSONArray(anchorAccount.games.sorted()).toString())
+                    } else {
+                        deployHoyolabAccount(anchorAccount.id, JSONArray(anchorAccount.games.sorted()).toString())
+                    }
+                    pushState()
+                }
+                .show()
+        }
+    }
+
     protected fun htmlCloudBackendReady(): Boolean = true
 
     protected fun updateHuaweiCloudConfig(value: String) {
