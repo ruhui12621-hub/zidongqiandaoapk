@@ -62,7 +62,7 @@ export default function App() {
 
   useEffect(() => {
     setCsvDrafts(old => {
-      const previous = new Map(old.map((row: AnyState) => [row.id, row]));
+      const previous = new Map<string, AnyState>(old.map((row: AnyState) => [row.id, row] as [string, AnyState]));
       return (state.accounts || []).map((row: AnyState) => {
         const draft = previous.get(row.id);
         return draft ? { ...row, name: draft.name, games: draft.games, enabled: draft.enabled, remark: draft.remark } : row;
