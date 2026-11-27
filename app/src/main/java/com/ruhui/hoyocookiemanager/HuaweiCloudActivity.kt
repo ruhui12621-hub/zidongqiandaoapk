@@ -319,7 +319,9 @@ open class HuaweiCloudActivity : Activity() {
                     val row = rows.optJSONObject(index) ?: error("第 " + (index + 1) + " 行数据无效。")
                     val id = row.optString("id")
                     val old = store.find(id) ?: error("账号已不存在，请重新读取 CSV。")
-                    require(old.platform == platform) { "CSV 中混入了其他平台账号。" }
+                    val allowedPlatforms = if (platform == AccountStore.SKLAND) setOf(AccountStore.SKLAND)
+                        else setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
+                    require(old.platform in allowedPlatforms) { "CSV 中混入了其他函数平台账号。" }
                     val gameArray = row.optJSONArray("games") ?: JSONArray()
                     val games = (0 until gameArray.length()).map { gameArray.getString(it) }.toSet()
                     require(games.all { GlobalModuleRegistry.isGameAllowed(platform, it) }) { "游戏选择包含不属于当前平台的项目。" }
