@@ -1469,8 +1469,8 @@ open class HuaweiCloudActivity : Activity() {
         config.put("log_config", JSONObject().put("group_name", groupName).put("group_id", groupId).put("stream_name", platform).put("stream_id", streamId))
         // Pass the APK-selected region and this function's isolated LTS IDs to its runtime.
         // Merge user_data instead of replacing unrelated existing function settings.
-        val rawUserData = config.optString("user_data").trim()
-        val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
+        // Reuse the same user_data object that stores the isolated agency IDs above.
+        // Re-parsing here would both discard the in-memory changes and redeclare locals.
         userData.put("HUAWEI_CLOUD_REGION", regionValue)
         userData.put("HUAWEI_CLOUD_PROJECT_ID", projectId)
         userData.put("LTS_LOG_GROUP_ID", groupId)
