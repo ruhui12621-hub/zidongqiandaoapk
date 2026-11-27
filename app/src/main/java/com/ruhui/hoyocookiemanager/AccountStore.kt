@@ -53,6 +53,14 @@ class AccountStore(context: Context) {
     }
 
     @Synchronized
+    fun reconcileCloudAccounts(platforms: Set<String>, incomingIds: Set<String>) {
+        require(platforms.isNotEmpty() && platforms.all { it in PLATFORMS }) { "云端账号同步的平台范围无效" }
+        synchronized(cache) {
+            cache.removeAll { it.platform in platforms && it.id !in incomingIds }
+        }
+    }
+
+    @Synchronized
     fun importCloudAccount(
         id: String,
         platform: String,
