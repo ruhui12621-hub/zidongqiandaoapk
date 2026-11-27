@@ -50,6 +50,7 @@ export default function App() {
   const lastStateRef = useRef("");
   const [page, setPage] = useState("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedTodayAccountId, setExpandedTodayAccountId] = useState<string | null>(null);
   const [modal, setModal] = useState<"add" | null>(null);
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
@@ -258,6 +259,50 @@ export default function App() {
       {backHeader(platformLabel, `${liveRows.length} 个账号`)}
       <section className="surface-card">
         <div className="card-heading">
+          <span>今日签到情况</span>
+          <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在读取今日云函数日志");}} disabled={state.todayQuerying}>
+            {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新
+          </button>
+        </div>
+        <p className="helper-text">{state.todayQuerying ? "正在读取并分析今日云函数日志…" : state.todaySummary || "结果来自当前平台云函数的今日运行日志。"}</p>
+        {liveRows.length ? <div className="result-table"><table>
+          <thead><tr><th>账号</th><th>服区</th><th>今日签到</th><th>游戏</th></tr></thead>
+          <tbody>{liveRows.map((row: AnyState) => {
+            const expanded = expandedTodayAccountId === row.id;
+            const details = row.todayDetails || {};
+            const gameDetails = details.games || {};
+            const logs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join(String.fromCharCode(10)) : safe(details.allRawMessages);
+            const games = row.platform === "skland"
+              ? (row.games || []).map((game: AnyState) => ({key: game.key || game.id, label: game.label || game.key || game.id}))
+              : getCsvGameOptions(row.platform);
+            const enabledKeys = new Set((row.games || []).map((game: AnyState) => game.key || game.id));
+            return <React.Fragment key={row.id}>
+              <tr className="today-account-row" onClick={() => setExpandedTodayAccountId(expanded ? null : row.id)}>
+                <td>{row.name || "未命名账号"}</td>
+                <td>{row.platform === "miyoushe_cn" ? "国服" : row.platform === "hoyolab" ? "国际服" : "—"}</td>
+                <td><span className={"result-label " + statusTone(row.todayStatus || "")}>{row.todayStatus || "今日状态未知"}</span></td>
+                <td>{(row.games || []).length} 款 · {expanded ? "收起" : "查看"}</td>
+              </tr>
+              {expanded && <tr><td colSpan={4}><div className="today-account-detail">
+                <div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div>
+                <div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div>
+                <div className="result-table"><table><thead><tr><th>游戏</th><th>状态</th><th>日志判断依据</th></tr></thead><tbody>
+                  {games.map((game: AnyState) => {
+                    const key = game.key || game.id;
+                    const enabled = enabledKeys.has(key);
+                    const status = enabled ? (row.gameTodayStatuses?.[key] || "unknown") : "unconfigured";
+                    return <tr key={key}><td>{game.label || key}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{enabled ? (gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。") : "该游戏未在此账号配置中启用签到。"}</td></tr>;
+                  })}
+                </tbody></table></div>
+                <div className="card-heading"><span>匹配到的云函数原始日志</span><button className="text-action" onClick={() => copyText(logs, "签到日志已复制")}><Copy size={14}/> 复制</button></div>
+                <pre className="log-view">{logs || details.reason || "没有读取到匹配此账号的日志。"}</pre>
+              </div></td></tr>}
+            </React.Fragment>;
+          })}</tbody>
+        </table></div> : <p className="empty-inline">当前平台暂无账号，添加账号后会在这里显示签到结果。</p>}
+      </section>
+      <section className="surface-card">
+        <div className="card-heading">
           <span>账号列表</span>
           <button className="text-action" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>
         </div>
@@ -272,7 +317,7 @@ export default function App() {
         </div> : <div className="empty-state">
           <span className="empty-symbol"><Users size={27}/></span>
           <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : "当前平台暂无账号"}</strong>
-          <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加账号后，点击账号条目进入详情，查看和修改全部信息。"}</p>
+          <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加账号后，点击账号名称进入详情，查看和修改账号信息。"}</p>
           <button className="primary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>
         </div>}
       </section>
@@ -286,11 +331,6 @@ export default function App() {
     const pageCookieReady = !!account.sessionCookieAcquired;
     const options = getCsvGameOptions(account.platform);
     const selectedGames = new Set((draft.games || []).map((game: AnyState) => game.key || game));
-    const details = account.todayDetails || {};
-    const gameDetails = details.games || {};
-    const rawLogs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join(String.fromCharCode(10)) : safe(details.allRawMessages);
-    const checkinGames = isHoyo ? options : (account.games || []).map((game: AnyState) => ({key: game.key || game.id, label: game.label || game.key || game.id}));
-    const enabledGames = new Set((account.games || []).map((game: AnyState) => game.key || game.id));
     const stages = account.cloudUpdateStages || [];
     const visibleStages = stages.filter((stage: AnyState) => stage.key !== "output" && stage.key !== "raw_output");
     const rawOutput = stages.find((stage: AnyState) => stage.key === "raw_output")?.detail || "";
@@ -298,46 +338,39 @@ export default function App() {
     return <>
       {backHeader(account.name, account.platformLabel + " · 账号详情")}
       <section className="surface-card">
-        <div className="card-heading">
-          <span>登录凭据</span>
-          <span className={"status-pill " + (isHoyo ? (pageCookieReady ? "good" : "muted") : (account.tokenReady ? "good" : "muted"))}>
-            {isHoyo ? (pageCookieReady ? "本次运行已获取" : "本次运行未获取") : (account.tokenReady ? "令牌已配置" : "令牌未配置")}
-          </span>
-        </div>
+        <div className="card-heading"><span>登录页面</span></div>
+        {isHoyo ? <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
+          : <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>}
         {isHoyo ? <>
-          <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开 {account.platform === "miyoushe_cn" ? "米游社" : "HoYoLAB"} 登录页面</button>
-          <div className="inline-status">
-            {pageCookieReady ? <><CheckCircle2 size={14}/> 本次 APK 运行期间已成功获取此账号 Cookie</> : <><AlertCircle size={14}/> 本次 APK 运行期间尚未获取此账号 Cookie</>}
-          </div>
+          <div className="info-line"><span>云端 CSV Cookie</span><strong>{account.cookieReady ? "已配置" : "未配置"}</strong></div>
+          <div className="info-line"><span>本次 APK 运行 Cookie</span><strong>{pageCookieReady ? "已获取" : "尚未获取"}</strong></div>
+          <p className="helper-text">以上是两个独立状态：云端 CSV 状态来自已同步的账号配置；运行状态只表示本次 APK 进程中是否成功获取过 Cookie。</p>
         </> : <>
-          <button className="primary-button full-button" onClick={openLogin}><LogIn size={17}/> 打开森空岛登录页面</button>
-          <div className="inline-status">{account.tokenReady ? "云端 CSV 中已有登录令牌配置" : "尚未配置登录令牌"}</div>
+          <div className="info-line"><span>云端 CSV 登录令牌</span><strong>{account.tokenReady ? "已配置" : "未配置"}</strong></div>
         </>}
       </section>
 
       <section className="surface-card">
-        <div className="card-heading">账号信息</div>
-        <label className="field-label" htmlFor="account-name">账号名称</label>
-        <input id="account-name" value={draft.name || ""} onChange={e => updateCsvRow(account.id, {name: e.target.value})}/>
-        <div className="info-line"><span>平台</span><strong>{account.platformLabel}</strong></div>
-        <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "—"}</strong></div>
-        <div className="info-line"><span>账号标识</span><strong>{account.userId || "尚未识别"}</strong></div>
-        <div className="info-line"><span>云端凭据配置</span><strong>{isHoyo ? (account.cookieReady ? "已配置" : "未配置") : (account.tokenReady ? "已配置" : "未配置")}</strong></div>
-        <div className="field-label">启用游戏</div>
-        <div className="csv-game-options detail-game-options">
-          {options.map((game: AnyState) => <label className="csv-game-option" key={game.key}>
-            <input type="checkbox" checked={selectedGames.has(game.key)} onChange={e => updateCsvGame(draft, game.key, e.target.checked)}/>
-            <span>{game.label}</span>
-          </label>)}
+        <div className="card-heading">
+          <span>保存并更新云函数</span>
+          <span className="subtle-caption">{visibleStages.length ? `${visibleStages.length} 个步骤` : "等待更新"}</span>
         </div>
-        <label className="csv-enabled detail-enabled">
-          <input type="checkbox" checked={!!draft.enabled} onChange={e => updateCsvRow(account.id, {enabled: e.target.checked})}/>
-          <span>{draft.enabled ? "启用此账号签到" : "停用此账号签到"}</span>
-        </label>
-        <label className="field-label" htmlFor="account-remark">备注</label>
-        <input id="account-remark" value={draft.remark || ""} onChange={e => updateCsvRow(account.id, {remark: e.target.value})} placeholder="添加备注"/>
-        <p className="helper-text">修改会先保存在当前编辑状态中；点击下方保存按钮后，整个平台的账号数据会统一写入 CSV。</p>
-        <button className="csv-delete-button detail-delete-button" onClick={() => callNative("deletePlatformAccount", account.id)} disabled={!state.canAddAccount}>删除此账号</button>
+        <p className="helper-text">保存当前账号修改，并将当前平台的全部账号统一写入 CSV，随后更新并检查对应云函数。</p>
+        {visibleStages.length ? <div className="stage-list">{visibleStages.map((stage: AnyState, index: number) => <div className="stage-row" key={stage.key || index}>
+          <span className="stage-index">{index + 1}</span>
+          <div className="stage-copy"><strong>{stage.label || "执行阶段"}</strong><small>{stage.detail || "暂无详细信息"}</small></div>
+          <span className={"status-pill " + statusTone(stage.status || "")}>{stage.status || "未执行"}</span>
+        </div>)}</div> : <p className="empty-inline">尚无此账号的云函数更新记录。</p>}
+        {rawOutput && <>
+          <div className="card-heading detail-log-heading"><span>函数原始输出</span><button className="text-action" onClick={() => copyText(rawOutput, "函数输出已复制")}><Copy size={14}/> 复制</button></div>
+          <pre className="log-view">{rawOutput}</pre>
+        </>}
+        <div className="csv-actions">
+          <button className="primary-button" onClick={saveCsv} disabled={!state.canAddAccount || !csvDrafts.some((row: AnyState) => row.id === account.id)}>
+            <Cloud size={16}/> 保存并更新云函数
+          </button>
+        </div>
+        <p className="footnote">保存范围为当前平台的整份 CSV：HoYoLAB 国服与国际服共用一份 CSV，森空岛使用独立 CSV（{csvPath}）。</p>
       </section>
 
       <section className="surface-card">
