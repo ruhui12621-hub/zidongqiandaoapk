@@ -182,7 +182,6 @@ open class HuaweiCloudActivity : Activity() {
                 if (hoyoFunction != null) {
                     val archive = downloadZip(hoyoFunction, "HoYoLAB")
                     val yaml = readZipText(archive, "config/config.yaml", "HoYoLAB")
-                    HuaweiCloudSession.lastConfigYaml = yaml
                     val cloudCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
                     val rows = if (cloudCsv != null) {
                         PlatformAccountsCsvAdapter.parse(
@@ -193,6 +192,7 @@ open class HuaweiCloudActivity : Activity() {
                         // One-time migration from the previous single-CN/single-OS YAML structure.
                         HoYoLabCloudConfigAdapter.legacyCsvAccounts(yaml)
                     }
+                    HuaweiCloudSession.lastConfigYaml = HoYoLabCloudConfigAdapter.clearAccountCredentials(yaml)
                     HuaweiCloudSession.lastHoyoAccountsCsv = PlatformAccountsCsvAdapter.encode(
                         rows,
                         setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
