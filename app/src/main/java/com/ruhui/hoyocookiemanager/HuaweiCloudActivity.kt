@@ -787,10 +787,15 @@ open class HuaweiCloudActivity : Activity() {
                                     .containsMatchIn(line)
                             } }
                         }
+                        val accountFailureLine = matched.firstOrNull {
+                            it.contains("[签到结果][其他]") || it.contains("[账号异常]")
+                        }
                         val perGame = linkedMapOf<String, String>()
                         for (game in account.games) {
                             val lines = gameLogLines(GameCatalog.label(game), GameCatalog.aliases(game), matched)
-                            perGame[game] = lines.firstOrNull(::isOutcome)?.let(::outcome) ?: "unknown"
+                            perGame[game] = lines.firstOrNull(::isOutcome)?.let(::outcome)
+                                ?: accountFailureLine?.let(::outcome)
+                                ?: "unknown"
                         }
                         gameStatuses[account.id] = perGame
                         val accountStatus = when {
@@ -810,7 +815,7 @@ open class HuaweiCloudActivity : Activity() {
                                     "failed" -> "今日签到失败"
                                     else -> "未获取到明确结果"
                                 })
-                                .put("reason", outcomeLine ?: if (lines.isEmpty())
+                                .put("reason", outcomeLine ?: accountFailureLine ?: if (lines.isEmpty())
                                     "没有找到包含此游戏名称的本平台签到日志，不能据此认定签到失败。"
                                 else "已找到相关日志，但没有识别到明确的成功或失败标记。")
                             )
