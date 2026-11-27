@@ -50,7 +50,7 @@ export default function App() {
   const lastStateRef = useRef("");
   const [page, setPage] = useState("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [expandedTodayAccountId, setExpandedTodayAccountId] = useState<string | null>(null);
+  const [selectedTodayId, setSelectedTodayId] = useState<string | null>(null);
   const [modal, setModal] = useState<"add" | null>(null);
   const [cloudDraft, setCloudDraft] = useState({ region: "cn-east-3", ak: "", sk: "" });
   const [cloudLoaded, setCloudLoaded] = useState(false);
@@ -139,6 +139,7 @@ export default function App() {
   const closeModal = () => setModal(null);
   const goBack = () => {
     if (modal) { closeModal(); return; }
+    if (selectedTodayId) { setSelectedTodayId(null); setPage("platform-accounts"); return; }
     if (selectedId) { setSelectedId(null); setPage("platform-accounts"); return; }
     if (page === "platform-accounts") { setPage("home"); return; }
     if (page !== "home") { setPage("home"); return; }
@@ -256,70 +257,88 @@ export default function App() {
       : accounts.filter((item: AnyState) => item.platform === "hoyolab" || item.platform === "miyoushe_cn");
     const platformLabel = csvPlatform === "hoyolab" ? "HoYoLAB" : "森空岛";
     return <>
-      {backHeader(platformLabel, `${liveRows.length} 个账号`)}
+      {backHeader(platformLabel, String(liveRows.length) + " 个账号")}
       <section className="surface-card">
         <div className="card-heading">
-          <span>今日签到情况</span>
+          <span>账号与今日签到</span>
           <button className="text-action" onClick={() => {callNative("refreshTodayStatuses");notify("正在读取今日云函数日志");}} disabled={state.todayQuerying}>
             {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新
           </button>
         </div>
-        <p className="helper-text">{state.todayQuerying ? "正在读取并分析今日云函数日志…" : state.todaySummary || "结果来自当前平台云函数的今日运行日志。"}</p>
-        {liveRows.length ? <div className="result-table"><table>
-          <thead><tr><th>账号</th><th>服区</th><th>今日签到</th><th>游戏</th></tr></thead>
-          <tbody>{liveRows.map((row: AnyState) => {
-            const expanded = expandedTodayAccountId === row.id;
-            const details = row.todayDetails || {};
-            const gameDetails = details.games || {};
-            const logs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join(String.fromCharCode(10)) : safe(details.allRawMessages);
-            const games = row.platform === "skland"
-              ? (row.games || []).map((game: AnyState) => ({key: game.key || game.id, label: game.label || game.key || game.id}))
-              : getCsvGameOptions(row.platform);
-            const enabledKeys = new Set((row.games || []).map((game: AnyState) => game.key || game.id));
-            return <React.Fragment key={row.id}>
-              <tr className="today-account-row" onClick={() => setExpandedTodayAccountId(expanded ? null : row.id)}>
-                <td>{row.name || "未命名账号"}</td>
-                <td>{row.platform === "miyoushe_cn" ? "国服" : row.platform === "hoyolab" ? "国际服" : "—"}</td>
-                <td><span className={"result-label " + statusTone(row.todayStatus || "")}>{row.todayStatus || "今日状态未知"}</span></td>
-                <td>{(row.games || []).length} 款 · {expanded ? "收起" : "查看"}</td>
-              </tr>
-              {expanded && <tr><td colSpan={4}><div className="today-account-detail">
-                <div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div>
-                <div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div>
-                <div className="result-table"><table><thead><tr><th>游戏</th><th>状态</th><th>日志判断依据</th></tr></thead><tbody>
-                  {games.map((game: AnyState) => {
-                    const key = game.key || game.id;
-                    const enabled = enabledKeys.has(key);
-                    const status = enabled ? (row.gameTodayStatuses?.[key] || "unknown") : "unconfigured";
-                    return <tr key={key}><td>{game.label || key}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{enabled ? (gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。") : "该游戏未在此账号配置中启用签到。"}</td></tr>;
-                  })}
-                </tbody></table></div>
-                <div className="card-heading"><span>匹配到的云函数原始日志</span><button className="text-action" onClick={() => copyText(logs, "签到日志已复制")}><Copy size={14}/> 复制</button></div>
-                <pre className="log-view">{logs || details.reason || "没有读取到匹配此账号的日志。"}</pre>
-              </div></td></tr>}
-            </React.Fragment>;
-          })}</tbody>
-        </table></div> : <p className="empty-inline">当前平台暂无账号，添加账号后会在这里显示签到结果。</p>}
-      </section>
-      <section className="surface-card">
-        <div className="card-heading">
-          <span>账号列表</span>
-          <button className="text-action" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>
-        </div>
-        {liveRows.length ? <div className="account-list">
-          {liveRows.map((row: AnyState) => <button className="account-row" key={row.id} onClick={() => {
-            setCsvPlatform(row.platform === "skland" ? "skland" : "hoyolab");
-            setSelectedId(row.id);
-          }}>
-            <span className="account-info"><strong>{row.name || "未命名账号"}</strong></span>
-            <ChevronRight size={18} className="subtle-icon"/>
-          </button>)}
+        <p className="helper-text">{state.todayQuerying ? "正在读取并分析今日云函数日志…" : state.todaySummary || "左侧进入账号详情，右侧查看该账号今日签到详情。"}</p>
+        {liveRows.length ? <div className="account-pair-list">
+          {liveRows.map((row: AnyState) => (
+            <div className="account-pair-row" key={row.id}>
+              <button className="account-pair-name" onClick={() => {
+                setCsvPlatform(row.platform === "skland" ? "skland" : "hoyolab");
+                setSelectedTodayId(null);
+                setSelectedId(row.id);
+              }}>
+                <span className="account-pair-main">
+                  <strong>{row.name || "未命名账号"}</strong>
+                  <small>{row.platform === "miyoushe_cn" ? "HoYoLAB · 国服" : row.platform === "hoyolab" ? "HoYoLAB · 国际服" : "森空岛"}</small>
+                </span>
+                <ChevronRight size={17} className="subtle-icon"/>
+              </button>
+              <button className={"account-pair-status " + statusTone(row.todayStatus || "")} onClick={() => {
+                setSelectedId(null);
+                setSelectedTodayId(row.id);
+                window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+              }}>
+                <span>{row.todayStatus || "状态未知"}</span>
+                <ChevronRight size={16}/>
+              </button>
+            </div>
+          ))}
         </div> : <div className="empty-state">
           <span className="empty-symbol"><Users size={27}/></span>
           <strong>{state.syncState === "syncing" ? "正在读取云端账号" : state.syncState === "failed" ? "读取云端账号失败" : "当前平台暂无账号"}</strong>
-          <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加账号后，点击账号名称进入详情，查看和修改账号信息。"}</p>
+          <p>{state.syncState === "failed" ? (state.syncLabel || "请检查华为云连接和函数配置。") : "添加账号后，可分别点击账号名称或今日签到情况进入对应详情。"}</p>
           <button className="primary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>
         </div>}
+        {liveRows.length > 0 && <button className="secondary-button full-button" onClick={() => state.canAddAccount ? setModal("add") : notify("请先成功读取云端配置")} disabled={!state.canAddAccount}><Plus size={16}/> 添加账号</button>}
+      </section>
+    </>;
+  };
+  const renderTodayDetail = () => {
+    const todayAccount = (state.accounts || []).find((item: AnyState) => item.id === selectedTodayId);
+    if (!todayAccount) return renderPlatformAccounts();
+    const details = todayAccount.todayDetails || {};
+    const gameDetails = details.games || {};
+    const logs = Array.isArray(details.allRawMessages) ? details.allRawMessages.join(String.fromCharCode(10)) : safe(details.allRawMessages);
+    const games = todayAccount.platform === "skland"
+      ? (todayAccount.games || []).map((game: AnyState) => ({key: game.key || game.id, label: game.label || game.key || game.id}))
+      : getCsvGameOptions(todayAccount.platform);
+    const enabledKeys = new Set((todayAccount.games || []).map((game: AnyState) => game.key || game.id));
+    return <>
+      {backHeader(todayAccount.name || "未命名账号", "今日签到详情")}
+      <section className="surface-card">
+        <div className="card-heading">
+          <span>今日签到结果</span>
+          <span className={"result-label " + statusTone(todayAccount.todayStatus || "")}>{todayAccount.todayStatus || "今日状态未知"}</span>
+        </div>
+        <div className="info-line"><span>账号</span><strong>{todayAccount.name || "未命名账号"}</strong></div>
+        <div className="info-line"><span>平台</span><strong>{todayAccount.platformLabel || (todayAccount.platform === "skland" ? "森空岛" : "HoYoLAB")}</strong></div>
+        <div className="info-line"><span>日志组</span><strong>{details.logGroupName || "未获取"}</strong></div>
+        <div className="info-line"><span>日志流</span><strong>{details.logStreamName || "未获取"}</strong></div>
+        <div className="card-heading detail-log-heading"><span>各游戏签到情况</span></div>
+        {games.length ? <div className="result-table"><table>
+          <thead><tr><th>游戏</th><th>状态</th><th>日志判断依据</th></tr></thead>
+          <tbody>{games.map((game: AnyState) => {
+            const key = game.key || game.id;
+            const enabled = enabledKeys.has(key);
+            const status = enabled ? (todayAccount.gameTodayStatuses?.[key] || "unknown") : "unconfigured";
+            return <tr key={key}><td>{game.label || key}</td><td><span className={"result-label " + gameTone(status)}>{gameStatusText(status)}</span></td><td>{enabled ? (gameDetails[key]?.reason || "没有获取到明确的游戏级日志结果。") : "该游戏未在此账号配置中启用签到。"}</td></tr>;
+          })}</tbody>
+        </table></div> : <p className="empty-inline">该账号没有配置游戏。</p>}
+        <div className="card-heading detail-log-heading">
+          <span>云函数原始日志</span>
+          <button className="text-action" onClick={() => copyText(logs, "签到日志已复制")}><Copy size={14}/> 复制</button>
+        </div>
+        <pre className="log-view">{logs || details.reason || "没有读取到匹配此账号的日志。"}</pre>
+        <button className="secondary-button full-button" onClick={() => {callNative("refreshTodayStatuses");notify("正在刷新今日签到结果");}} disabled={state.todayQuerying}>
+          {state.todayQuerying ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} 刷新今日签到
+        </button>
       </section>
     </>;
   };
@@ -430,12 +449,12 @@ export default function App() {
     <header className="topbar">
       <div className="brand-mark"><CalendarCheck size={19}/></div>
       <div className="brand-copy"><strong>游戏自动签到</strong></div>
-      {selectedId && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
+      {(selectedId || selectedTodayId) && <button className="icon-button header-back" onClick={goBack} aria-label="返回"><ArrowLeft size={18}/></button>}
     </header>
     <main className="main-content">
-      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={goToAccountList} /> : selectedId ? renderDetail() : page === "platform-accounts" ? renderPlatformAccounts() : renderHome()}
+      {page === "cloud" ? renderCloud() : page === "messages" ? renderMessages() : page === "management" ? <GlobalManagement accounts={state.accounts || []} gameCatalog={state.gameCatalog || {}} onGoToAccountList={goToAccountList} /> : selectedTodayId ? renderTodayDetail() : selectedId ? renderDetail() : page === "platform-accounts" ? renderPlatformAccounts() : renderHome()}
     </main>
-    {!selectedId && <nav className="bottom-nav">
+    {!selectedId && !selectedTodayId && <nav className="bottom-nav">
       <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><Users size={19}/><span>账号</span></button>
       <button className={page === "cloud" ? "active" : ""} onClick={() => setPage("cloud")}><Cloud size={19}/><span>华为云</span></button>
       <button className={page === "messages" ? "active" : ""} onClick={() => setPage("messages")}><FileText size={19}/><span>运行消息</span></button>
