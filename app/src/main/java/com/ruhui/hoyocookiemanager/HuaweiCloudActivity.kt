@@ -1097,7 +1097,7 @@ open class HuaweiCloudActivity : Activity() {
                 val csvText = PlatformAccountsCsvAdapter.encode(csvAccounts, allowedPlatforms)
                 logAccountDeployStep(accountId, "CSV 校验完成：共 " + csvAccounts.size +
                     " 个账号；当前账号启用 " + selectedGames.size + " 款游戏。未输出 Cookie 原文。", true)
-                val archive = replaceZip(packaged, "config/accounts.csv", csvText, allowCreate = true)
+                val archive = replaceZip(baseArchive, "config/accounts.csv", csvText, allowCreate = true)
                 logAccountDeployStep(accountId, "函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
                 val created = createOrUpdateFunction(functionName, HOYOLAB_HANDLER, archive) { detail, success ->
                     logAccountDeployStep(accountId, detail, success)
@@ -1121,6 +1121,10 @@ open class HuaweiCloudActivity : Activity() {
                 ))
                 onCloudDeploymentProgress()
                 HuaweiCloudSession.lastHoyoAccountsCsv = csvText
+                if (baseYaml.isNotBlank()) {
+                    HuaweiCloudSession.lastConfigYaml = baseYaml
+                    configYaml = baseYaml
+                }
                 if (hasPendingCookie) HuaweiCloudSession.clearPendingHoyoCookie()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
