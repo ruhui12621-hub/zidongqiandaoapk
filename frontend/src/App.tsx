@@ -132,8 +132,6 @@ export default function App() {
     // must not wait for the Android JavaScript bridge.
     flushSync(() => {
       setSelectedId(null);
-      setTodayGame({ key: null, label: null });
-      setGameDraft(null);
       setPage("home");
     });
     window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
@@ -141,7 +139,7 @@ export default function App() {
   const closeModal = () => setModal(null);
   const goBack = () => {
     if (modal) { closeModal(); return; }
-    if (selectedId) { setSelectedId(null); setPage("platform-accounts"); setGameDraft(null); return; }
+    if (selectedId) { setSelectedId(null); setPage("platform-accounts"); return; }
     if (page === "platform-accounts") { setPage("home"); return; }
     if (page !== "home") { setPage("home"); return; }
     notify("再按一次可退出应用");
@@ -316,7 +314,7 @@ export default function App() {
             <td><div className="csv-game-options">{options.map((game: AnyState) => <label className="csv-game-option" key={game.key}><input type="checkbox" checked={selected.includes(game.key)} onChange={e => updateCsvGame(row, game.key, e.target.checked)}/><span>{game.label}</span></label>)}</div></td>
             <td><label className="csv-enabled"><input type="checkbox" checked={!!row.enabled} onChange={e => updateCsvRow(row.id, {enabled:e.target.checked})}/><span>{row.enabled ? "启用" : "停用"}</span></label></td>
             <td><input className="csv-cell-input csv-remark-input" value={row.remark || ""} onChange={e => updateCsvRow(row.id, {remark:e.target.value})} placeholder="备注" aria-label="账号备注"/></td>
-            <td><div className="csv-row-actions"><button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("platform-accounts");setGameDraft(null);}}>详情</button><button className="csv-delete-button" disabled={!state.canAddAccount} onClick={() => {callNative("deletePlatformAccount", row.id);notify("已提交删除请求");}}>删除</button></div></td>
+            <td><div className="csv-row-actions"><button className="csv-detail-button" onClick={() => {setSelectedId(row.id);setPage("platform-accounts");}}>详情</button><button className="csv-delete-button" disabled={!state.canAddAccount} onClick={() => {callNative("deletePlatformAccount", row.id);notify("已提交删除请求");}}>删除</button></div></td>
           </tr>;})}
         </tbody></table>
       </div>}
