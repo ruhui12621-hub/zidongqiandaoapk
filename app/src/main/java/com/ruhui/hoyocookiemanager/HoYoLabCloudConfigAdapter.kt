@@ -48,7 +48,7 @@ object HoYoLabCloudConfigAdapter {
             }
             if (inAccount && indent == 2) {
                 val raw = keyLine.substringAfter(':').substringBefore(" #").trim()
-                    .removeSurrounding("\\\"").removeSurrounding("'").trim()
+                    .removeSurrounding("\"").removeSurrounding("'").trim()
                 when {
                     keyLine.startsWith("cookie:") -> cnCookie = raw
                     keyLine.startsWith("stuid:") -> cnStuid = raw
