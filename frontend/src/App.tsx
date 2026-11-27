@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft, CalendarCheck, Check, CheckCircle2, ChevronRight, Cloud,
   Copy, Gamepad2, LoaderCircle, LogIn, Plus, RefreshCw,
-  Settings2, Users, X, AlertCircle
+  Settings2, Users, X
 } from "lucide-react";
 
 type AnyState = any;
