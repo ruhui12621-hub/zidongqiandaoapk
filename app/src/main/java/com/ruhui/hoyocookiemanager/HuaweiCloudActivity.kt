@@ -1424,6 +1424,7 @@ open class HuaweiCloudActivity : Activity() {
         val rawUserData = config.optString("user_data").trim()
         val userData = if (rawUserData.isBlank() || rawUserData == "null") JSONObject() else JSONObject(rawUserData)
         userData.put("HUAWEI_CLOUD_REGION", regionValue)
+        userData.put("HUAWEI_CLOUD_PROJECT_ID", projectId)
         userData.put("LTS_LOG_GROUP_ID", groupId)
         userData.put("LTS_LOG_STREAM_ID", streamId)
         if (userData.toString().length > 2048)
