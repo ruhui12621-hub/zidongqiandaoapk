@@ -967,7 +967,10 @@ open class HuaweiCloudActivity : Activity() {
                 onCloudDeploymentProgress()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置森空岛专属日志流。")
-                val ltsSummary = ensureLtsIsolation(urn, "skland") { detail, success -> logSklandDeployStep(detail, success) }
+                val ltsSummary = ensureLtsIsolation(urn, "skland") { detail, success ->
+                    logSklandDeployStep(detail, success)
+                    if (success == null) AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", detail)
+                }
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
 
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用森空岛函数。")
@@ -1159,7 +1162,10 @@ open class HuaweiCloudActivity : Activity() {
                 if (hasPendingCookie) HuaweiCloudSession.clearPendingHoyoCookie()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
-                val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
+                val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success ->
+                    logAccountDeployStep(accountId, detail, success)
+                    if (success == null) AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", detail)
+                }
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "成功", ltsSummary)
                 logAccountDeployStep(accountId, "部署阶段已完成：函数已存在且就绪，账号配置已同步；现在开始独立测试。", true)
                 AppMessageBus.setAccountStage(this, accountId, "test", "函数运行测试", "进行中", "正在使用 TIMER 定时触发器事件格式调用函数。")
@@ -1193,6 +1199,7 @@ open class HuaweiCloudActivity : Activity() {
                         val label = when (activeStage) {
                             "function" -> "云函数"
                             "trigger" -> "定时触发器"
+                            "lts" -> "LTS 日志隔离"
                             "test" -> "函数运行测试"
                             else -> "函数运行测试"
                         }
