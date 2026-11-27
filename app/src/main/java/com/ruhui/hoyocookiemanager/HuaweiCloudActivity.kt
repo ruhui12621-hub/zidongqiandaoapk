@@ -718,7 +718,11 @@ open class HuaweiCloudActivity : Activity() {
                 }
 
                 for ((platform, _) in bindings) {
-                    val platformAccounts = accounts.filter { it.platform == platform }
+                    val platformAccounts = if (platform == AccountStore.HOYOLAB) {
+                        accounts.filter { it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN }
+                    } else {
+                        accounts.filter { it.platform == platform }
+                    }
                     if (platformAccounts.isEmpty()) continue
                     val reason = when {
                         platform in logErrors -> logErrors.getValue(platform)
@@ -794,13 +798,6 @@ open class HuaweiCloudActivity : Activity() {
                     }
                 }
 
-                accounts.filter { it.platform == AccountStore.MIYOUSHE_CN }.forEach { account ->
-                    gameStatuses[account.id] = account.games.associateWith { "unknown" }
-                    statuses[account.id] = "无法获取签到结果"
-                    val reason = "当前未接入此平台的云端签到函数"
-                    details[account.id] = JSONObject().put("reason", reason)
-                        .put("allRawMessages", reason).toString()
-                }
             } catch (e: Exception) {
                 summary = "今日签到日志读取失败：" + (e.message ?: e.javaClass.simpleName)
                 accounts.filter { it.id !in statuses }.forEach { account ->
