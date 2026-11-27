@@ -174,6 +174,7 @@ open class HuaweiCloudActivity : Activity() {
                 val hoyoFunction = findFunction(HOYOLAB_FUNCTION)
                 val sklandFunction = findFunction(SKLAND_FUNCTION)
                 if (hoyoFunction == null) {
+                    store.reconcileCloudAccounts(setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN), emptySet())
                     HuaweiCloudSession.lastHoyoFunctionExisted = false
                     HuaweiCloudSession.lastHoyoCsvPresent = false
                     HuaweiCloudSession.lastConfigYaml = ""
@@ -201,6 +202,7 @@ open class HuaweiCloudActivity : Activity() {
                         rows,
                         setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
                     )
+                    store.reconcileCloudAccounts(setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN), rows.map { it.accountId }.toSet())
                     rows.forEach { row ->
                         store.importCloudAccount(
                             id = row.accountId,
@@ -217,6 +219,7 @@ open class HuaweiCloudActivity : Activity() {
                 }
 
                 if (sklandFunction == null) {
+                    store.reconcileCloudAccounts(setOf(AccountStore.SKLAND), emptySet())
                     HuaweiCloudSession.lastSklandFunctionExisted = false
                     HuaweiCloudSession.lastSklandCsvPresent = false
                     HuaweiCloudSession.lastSklandLegacySnapshot = ""
@@ -247,6 +250,7 @@ open class HuaweiCloudActivity : Activity() {
                     }
                     if (cloudCsv != null) HuaweiCloudSession.lastSklandLegacySnapshot = ""
                     HuaweiCloudSession.lastSklandAccountsCsv = SklandCloudConfigAdapter.encodeCsv(rows)
+                    store.reconcileCloudAccounts(setOf(AccountStore.SKLAND), rows.map { it.accountId }.toSet())
                     rows.forEach { row ->
                         if (row.credential.isNotBlank()) {
                             SklandTokenVault(this, row.accountId).save(row.credential)
