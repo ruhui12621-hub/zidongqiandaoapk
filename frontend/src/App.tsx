@@ -291,7 +291,7 @@ export default function App() {
             return <tr key={row.id}>
               <td><input className="csv-cell-input csv-name-input" value={row.name || ""} onChange={e => updateCsvRow(row.id, {name:e.target.value})} aria-label="账号名称"/></td>
               <td><span className="csv-user-id">{row.userId || "未识别"}</span></td>
-              <td><span className={"csv-credential " + (credentialReady ? "ready" : "missing")}>{credentialReady ? "已保存" : "未获取"}</span></td>
+              <td><span className={"csv-credential " + (credentialReady ? "ready" : "missing")}>{credentialReady ? "已配置" : "未获取"}</span></td>
               <td><div className="csv-game-options">{options.map((game: AnyState) => <label className="csv-game-option" key={game.key}>
                 <input type="checkbox" checked={selected.includes(game.key)} onChange={e => updateCsvGame(row, game.key, e.target.checked)}/>
                 <span>{game.label}</span>
