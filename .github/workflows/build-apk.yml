@@ -54,7 +54,7 @@ jobs:
           curl -fL --retry 5 --retry-all-errors --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" "$skland_url" -o app/src/main/assets/cloud/skland.zip
           unzip -t app/src/main/assets/cloud/hoyolab.zip >/dev/null
           unzip -t app/src/main/assets/cloud/skland.zip >/dev/null
-          jq -r '"release_tag=" + .tag_name + "\nrelease_commit=" + .target_commitish + "\npublished_at=" + .published_at' <<< "$release_json" > app/src/main/assets/cloud/manifest.txt
+          jq -r '"release_tag=" + .tag_name + "\\nrelease_commit=" + .target_commitish + "\\npublished_at=" + .published_at' <<< "$release_json" > app/src/main/assets/cloud/manifest.txt
           echo "Embedded cloud-function package manifest:"
           cat app/src/main/assets/cloud/manifest.txt
           ls -lh app/src/main/assets/cloud/
@@ -71,11 +71,12 @@ jobs:
           unzip -Z1 "$apk" | grep -Fx 'assets/ui/index.html'
           unzip -Z1 "$apk" | grep -Fx 'assets/ui/login-status.html'
           unzip -Z1 "$apk" | grep -Fx 'assets/ui/skland-status.html'
-          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\.js$'
-          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\.css$'
+          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\\.js$'
+          unzip -Z1 "$apk" | grep -E '^assets/ui/static/.*\\.css$'
           echo "Verified: cloud-function packages and all React pages are embedded in the APK."
 
       - name: Upload APK for direct download
+        id: upload-apk
         uses: actions/upload-artifact@v4
         with:
           name: HoyoCookieManager-debug
@@ -83,13 +84,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Show APK download location
+      - name: Add prominent APK download link
         if: success()
+        env:
+          ARTIFACT_URL: ${{ steps.upload-apk.outputs.artifact-url }}
         run: |
           {
             echo "## APK 下载"
             echo
-            echo "构建产物已上传。请在本次 Actions 运行页面底部的 **Artifacts** 区域下载 **HoyoCookieManager-debug**。"
+            echo "[**⬇ 点击下载 APK（GitHub Actions）**]($ARTIFACT_URL)"
             echo
-            echo "文件名：`app-debug.apk`"
+            echo "下载内容为 GitHub Artifact ZIP，解压后得到 `app-debug.apk`。"
           } >> "$GITHUB_STEP_SUMMARY"
