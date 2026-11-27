@@ -95,7 +95,8 @@ object AppMessageBus {
             val json = org.json.JSONObject(prefs.getString(key, "{}").orEmpty())
             json.put(stage, org.json.JSONObject()
                 .put("key", stage).put("label", label).put("status", status)
-                .put("detail", sanitize(detail, if (stage == "raw_output") 12000 else 500)))
+                .put("detail", sanitize(detail, if (stage == "raw_output") 12000 else 500))
+                .put("updatedAt", System.currentTimeMillis()))
             prefs.edit().putString(key, json.toString()).apply()
         }
     }
