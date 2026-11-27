@@ -10,6 +10,8 @@ object HuaweiCloudSession {
     var region: String = "cn-east-3"
     var projectId: String = ""
     var lastConfigYaml: String = ""
+    var lastHoyoAccountsCsv: String = ""
+    var lastSklandAccountsCsv: String = ""
 
     // Current browser-session Cookie, never persisted. Kept separate from cloud YAML.
     @Volatile var pendingHoyoCookie: String = ""
