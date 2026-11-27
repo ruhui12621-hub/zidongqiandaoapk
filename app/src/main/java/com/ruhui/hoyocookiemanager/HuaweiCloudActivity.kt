@@ -1115,6 +1115,7 @@ open class HuaweiCloudActivity : Activity() {
                 ))
                 onCloudDeploymentProgress()
                 HuaweiCloudSession.lastHoyoAccountsCsv = csvText
+                if (hasPendingCookie) HuaweiCloudSession.clearPendingHoyoCookie()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
                 val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success -> logAccountDeployStep(accountId, detail, success) }
