@@ -69,3 +69,45 @@
   .account-pair-main strong{font-size:13px}
   .main-content{padding-left:14px;padding-right:14px}
 }
+
+/* Home account overview: show all platforms and account essentials without accordion navigation. */
+.platform-account-panel{padding:15px;margin-top:12px}
+.platform-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 1px 13px}
+.platform-section-copy{min-width:0}
+.platform-section-copy h2{margin:0 0 4px;font-size:15px;font-weight:650;letter-spacing:-.2px}
+.platform-section-copy p{margin:0;color:#969696;font-size:11px;line-height:1.45}
+.account-pair-list{gap:7px}
+.account-overview-row{display:flex;align-items:stretch;gap:7px;padding:8px;border:1px solid #414141;border-radius:13px;background:#303030;min-width:0}
+.account-overview-main{display:flex;flex:1;min-width:0;flex-direction:column;align-items:stretch;gap:6px;padding:2px 1px;border:0;background:transparent;text-align:left}
+.account-overview-title{display:flex;align-items:center;gap:8px;min-width:0}
+.account-overview-title strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:620;color:#ededed}
+.account-enabled{flex:0 0 auto;padding:3px 6px;border-radius:6px;font-size:9px;line-height:1.3}
+.account-enabled.is-enabled{background:rgba(100,170,120,.13);color:#9bc9a7}
+.account-enabled.is-disabled{background:#414141;color:#a5a5a5}
+.account-overview-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0;color:#9b9b9b;font-size:10px;line-height:1.45}
+.credential-mini{padding:2px 5px;border-radius:5px;background:#414141;font-size:9px}
+.credential-mini.ready{color:#9bc9a7;background:rgba(100,170,120,.12)}
+.credential-mini.missing{color:#c5a0a0;background:rgba(170,90,90,.12)}
+.account-remark{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#858585}
+.account-overview-status{display:flex;flex:0 0 104px;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:7px 5px;border:1px solid #484848;border-radius:10px;background:#383838;color:#d0d0d0;text-align:center}
+.account-overview-status .account-status-label{font-size:11px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.account-overview-status small{font-size:9px;color:#929292}
+.account-overview-status svg{color:#858585}
+.account-overview-status.good{border-color:rgba(70,150,100,.32);background:rgba(70,150,100,.08);color:#a4d1ae}
+.account-overview-status.bad{border-color:rgba(190,75,75,.32);background:rgba(190,75,75,.08);color:#e3a0a0}
+.account-overview-status.muted{color:#c2c2c2}
+.home-overview-strip{display:flex;align-items:center;gap:0;padding:11px 8px;margin:0 0 8px;border:1px solid #3e3e3e;border-radius:13px;background:#292929}
+.home-overview-strip>div{display:flex;flex:1;min-width:0;flex-direction:column;align-items:center;gap:3px;border-right:1px solid #414141}
+.home-overview-strip>div strong{font-size:17px;font-weight:650;line-height:1.1;color:#ededed;font-variant-numeric:tabular-nums}
+.home-overview-strip>div span{font-size:9px;color:#999;white-space:nowrap}
+.overview-refresh{display:flex;flex:0 0 70px;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:transparent;color:#c7c7c7;font-size:9px}
+.home-today-summary{margin:7px 3px 10px;color:#929292;font-size:10px;line-height:1.5}
+.compact-empty{padding:17px 12px}
+.platform-add-button{min-height:39px;margin-top:10px;font-size:11px}
+@media(max-width:360px){
+ .account-overview-status{flex-basis:88px}
+ .account-overview-title strong{font-size:12px}
+ .account-overview-meta{font-size:9px}
+ .home-overview-strip>div strong{font-size:15px}
+ .home-overview-strip>div span{font-size:8px}
+}
