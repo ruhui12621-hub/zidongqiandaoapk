@@ -895,7 +895,7 @@ open class HuaweiCloudActivity : Activity() {
                 // Credentials are read from each account's encrypted local vault; disabled,
                 // not-yet-logged-in rows may remain credential-empty.
                 val managedSklandAccounts = AccountStore(this).all()
-                    .filter { it.platform == AccountStore.SKLAND }
+                    .filter { it.platform == AccountStore.SKLAND && it.cloudEligible }
                 if (managedSklandAccounts.none { it.id == accountId }) {
                     error("当前森空岛账号不在已同步账号列表中，已停止上传。")
                 }
@@ -973,6 +973,7 @@ open class HuaweiCloudActivity : Activity() {
                     tokenReady = token.isNotBlank()
                 ))
                 HuaweiCloudSession.lastSklandAccountsCsv = csvText
+                AccountStore(this).markCloudBacked(csvAccounts.map { it.accountId }.toSet())
                 HuaweiCloudSession.lastSklandFunctionExisted = true
                 HuaweiCloudSession.lastSklandCsvPresent = true
                 HuaweiCloudSession.lastSklandLegacySnapshot = ""
@@ -1044,9 +1045,10 @@ open class HuaweiCloudActivity : Activity() {
             showAccountDeployMessage(accountId, "$title 失败", "华为云尚未连接，请先在华为云页面登录。", false)
             return
         }
-        val pendingCookie = HuaweiCloudSession.pendingHoyoCookie
-        val pendingServer = HuaweiCloudSession.pendingHoyoCookieServer
-        val pendingAccountId = HuaweiCloudSession.pendingHoyoCookieAccountId
+        val acquiredCookie = HuaweiCloudSession.hoyoCookieFor(accountId)
+        val pendingCookie = acquiredCookie?.first.orEmpty()
+        val pendingServer = acquiredCookie?.second.orEmpty()
+        val pendingAccountId = accountId.takeIf { acquiredCookie != null }.orEmpty()
         val account = AccountStore(this).find(accountId)
             ?: run { showAccountDeployMessage(accountId, "$title 失败", "当前账号已不存在，请重新读取云端信息。", false); return }
         if (account.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)) {
@@ -1055,7 +1057,7 @@ open class HuaweiCloudActivity : Activity() {
         }
         // A process-session Cookie belongs only to the account that acquired it.
         // Updating another account must never copy or consume that Cookie.
-        val hasPendingCookie = pendingCookie.isNotBlank() && pendingAccountId == accountId
+        val hasPendingCookie = acquiredCookie != null
         val pendingAccount = if (hasPendingCookie) AccountStore(this).find(pendingAccountId) else null
         if (hasPendingCookie && (pendingAccount == null || pendingAccount.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))) {
             showAccountDeployMessage(accountId, "$title 失败", "本次获取的 Cookie 无法匹配到有效的 HoYoLAB 账号，已停止上传。", false)
@@ -1076,7 +1078,7 @@ open class HuaweiCloudActivity : Activity() {
             return
         }
         val cachedRow = cachedRows.firstOrNull { it.accountId == accountId }
-        val effectiveCookie = if (hasPendingCookie && pendingAccountId == accountId) pendingCookie else cachedRow?.credential.orEmpty()
+        val effectiveCookie = acquiredCookie?.first ?: cachedRow?.credential.orEmpty()
         if (account.enabled && effectiveCookie.isBlank()) {
             showAccountDeployMessage(accountId, "$title 失败", "该账号已启用但没有可用 Cookie。请先登录，或先关闭该账号。", false)
             return
@@ -1107,14 +1109,14 @@ open class HuaweiCloudActivity : Activity() {
                 val allowedPlatforms = setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
                 val cached = if (HuaweiCloudSession.lastHoyoAccountsCsv.isBlank()) emptyList()
                     else PlatformAccountsCsvAdapter.parse(HuaweiCloudSession.lastHoyoAccountsCsv, allowedPlatforms)
-                val managedAccounts = AccountStore(this).all().filter { it.platform in allowedPlatforms }
+                val managedAccounts = AccountStore(this).all().filter { it.platform in allowedPlatforms && it.cloudEligible }
                 if (managedAccounts.none { it.id == accountId }) {
                     error("当前账号不在已同步的 HoYoLAB 平台账号表中，已停止上传。")
                 }
                 val csvAccounts = managedAccounts.map { managed ->
                     val old = cached.firstOrNull { it.accountId == managed.id }
-                    val cookie = if (managed.id == pendingAccountId && hasPendingCookie) pendingCookie
-                        else old?.credential.orEmpty()
+                    val cookie = HuaweiCloudSession.hoyoCookieFor(managed.id)?.first
+                        ?: old?.credential.orEmpty()
                     val fields = if (managed.platform == AccountStore.MIYOUSHE_CN)
                         HoYoLabCloudConfigAdapter.cookieFields(cookie) else emptyMap()
                     val identity = managed.platformUserId ?: old?.userId
@@ -1173,13 +1175,14 @@ open class HuaweiCloudActivity : Activity() {
                 ))
                 onCloudDeploymentProgress()
                 HuaweiCloudSession.lastHoyoAccountsCsv = csvText
+                AccountStore(this).markCloudBacked(csvAccounts.map { it.accountId }.toSet())
+                HuaweiCloudSession.removeUploadedHoyoCookies(csvAccounts.map { it.accountId }.toSet())
                 HuaweiCloudSession.lastHoyoFunctionExisted = true
                 HuaweiCloudSession.lastHoyoCsvPresent = true
                 if (baseYaml.isNotBlank()) {
                     HuaweiCloudSession.lastConfigYaml = baseYaml
                     configYaml = baseYaml
                 }
-                if (hasPendingCookie) HuaweiCloudSession.clearPendingHoyoCookie()
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
                 val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success ->
