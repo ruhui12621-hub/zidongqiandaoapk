@@ -501,8 +501,10 @@ class MainActivity : HuaweiCloudActivity() {
             }
             account = account.copy(
                 platformUserId = identity ?: account.platformUserId,
-                // Runtime Cookie acquisition must not mutate cloud CSV credential status.
-                enabled = true
+                // A newly created account becomes upload-eligible only after this Cookie
+                // has been recognized and bound to its platform identity.
+                enabled = true,
+                cloudEligible = true
             )
             store.update(account)
             // This page session is successful once a valid Cookie has been identified and saved.
@@ -520,6 +522,7 @@ class MainActivity : HuaweiCloudActivity() {
             HuaweiCloudSession.pendingHoyoCookie = found
             HuaweiCloudSession.pendingHoyoCookieServer = server
             HuaweiCloudSession.pendingHoyoCookieAccountId = account.id
+            HuaweiCloudSession.recordHoyoCookie(account.id, found, server)
             HtmlMainActivity.markSessionCookieAcquired(account.id);
             if (lastLoggedCookieAccountId != account.id || lastLoggedCookieServer != server) {
                 lastLoggedCookieAccountId = account.id
