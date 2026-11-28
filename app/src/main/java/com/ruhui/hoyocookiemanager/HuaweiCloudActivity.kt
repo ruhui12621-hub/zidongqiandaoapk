@@ -899,7 +899,12 @@ open class HuaweiCloudActivity : Activity() {
                 if (managedSklandAccounts.none { it.id == accountId }) {
                     error("当前森空岛账号不在已同步账号列表中，已停止上传。")
                 }
+                val cachedSklandRows = HuaweiCloudSession.lastSklandAccountsCsv
+                    .takeIf { it.isNotBlank() }
+                    ?.let { SklandCloudConfigAdapter.readCsv(it) }.orEmpty()
                 val csvAccounts = managedSklandAccounts.map { managed ->
+                    val old = cachedSklandRows.firstOrNull { it.accountId == managed.id }
+                    val deviceInfo = DeviceInfoProvider.forAccount(managed.id)
                     val managedToken = if (managed.id == accountId) token else {
                         runCatching { SklandTokenVault(this, managed.id).latest().orEmpty() }.getOrDefault("")
                     }
@@ -918,7 +923,14 @@ open class HuaweiCloudActivity : Activity() {
                         mid = "",
                         games = if (managed.id == accountId) selectedGames else managed.games,
                         enabled = managed.enabled,
-                        remark = managed.remark
+                        remark = managed.remark,
+                        deviceManufacturer = deviceInfo?.manufacturer ?: old?.deviceManufacturer.orEmpty(),
+                        deviceModel = deviceInfo?.model ?: old?.deviceModel.orEmpty(),
+                        deviceCode = deviceInfo?.deviceCode ?: old?.deviceCode.orEmpty(),
+                        androidVersion = deviceInfo?.androidVersion ?: old?.androidVersion.orEmpty(),
+                        androidSdk = deviceInfo?.androidSdk ?: old?.androidSdk.orEmpty(),
+                        deviceFingerprint = deviceInfo?.fingerprint ?: old?.deviceFingerprint.orEmpty(),
+                        appInstallId = deviceInfo?.appInstallId ?: old?.appInstallId.orEmpty()
                     )
                 }
                 val csvText = PlatformAccountsCsvAdapter.encode(csvAccounts, setOf(AccountStore.SKLAND))
@@ -1107,6 +1119,7 @@ open class HuaweiCloudActivity : Activity() {
                         HoYoLabCloudConfigAdapter.cookieFields(cookie) else emptyMap()
                     val identity = managed.platformUserId ?: old?.userId
                         ?: HoYoAccountIdentity.fromCookie(cookie, managed.platform).orEmpty()
+                    val deviceInfo = DeviceInfoProvider.forAccount(managed.id)
                     PlatformCsvAccount(
                         accountId = managed.id,
                         platform = managed.platform,
@@ -1121,7 +1134,14 @@ open class HuaweiCloudActivity : Activity() {
                             fields["mid"] ?: fields["account_mid_v2"] ?: fields["account_mid"] ?: old?.mid.orEmpty() else "",
                         games = if (managed.id == accountId) selectedGames else managed.games,
                         enabled = managed.enabled,
-                        remark = managed.remark
+                        remark = managed.remark,
+                        deviceManufacturer = deviceInfo?.manufacturer ?: old?.deviceManufacturer.orEmpty(),
+                        deviceModel = deviceInfo?.model ?: old?.deviceModel.orEmpty(),
+                        deviceCode = deviceInfo?.deviceCode ?: old?.deviceCode.orEmpty(),
+                        androidVersion = deviceInfo?.androidVersion ?: old?.androidVersion.orEmpty(),
+                        androidSdk = deviceInfo?.androidSdk ?: old?.androidSdk.orEmpty(),
+                        deviceFingerprint = deviceInfo?.fingerprint ?: old?.deviceFingerprint.orEmpty(),
+                        appInstallId = deviceInfo?.appInstallId ?: old?.appInstallId.orEmpty()
                     )
                 }
                 val csvText = PlatformAccountsCsvAdapter.encode(csvAccounts, allowedPlatforms)
