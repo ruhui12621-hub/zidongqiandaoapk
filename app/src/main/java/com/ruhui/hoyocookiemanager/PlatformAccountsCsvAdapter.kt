@@ -16,14 +16,24 @@ data class PlatformCsvAccount(
     val mid: String,
     val games: Set<String>,
     val enabled: Boolean,
-    val remark: String
+    val remark: String,
+    val deviceManufacturer: String = "",
+    val deviceModel: String = "",
+    val deviceCode: String = "",
+    val androidVersion: String = "",
+    val androidSdk: String = "",
+    val deviceFingerprint: String = "",
+    val appInstallId: String = ""
 )
 
 object PlatformAccountsCsvAdapter {
     val header = listOf(
         "account_id", "platform", "server", "name", "user_id", "credential",
-        "stuid", "stoken", "mid", "games", "enabled", "remark"
+        "stuid", "stoken", "mid", "games", "enabled", "remark",
+        "device_manufacturer", "device_model", "device_code", "android_version",
+        "android_sdk", "device_fingerprint", "app_install_id"
     )
+    private val legacyHeader = header.take(12)
 
     private val allowedGames = mapOf(
         AccountStore.HOYOLAB to setOf("genshin", "honkai3rd", "tears_of_themis", "honkai_sr", "zzz"),
@@ -36,14 +46,15 @@ object PlatformAccountsCsvAdapter {
             "accounts.csv 超过 2 MB。"
         }
         val records = parseRecords(source.removePrefix("\uFEFF"))
-        require(records.isNotEmpty() && records.first() == header) {
+        require(records.isNotEmpty() && (records.first() == header || records.first() == legacyHeader)) {
             "accounts.csv 表头不匹配，拒绝读取。"
         }
+        val inputHeader = records.first()
         val rows = records.drop(1).filter { row -> row.any { it.isNotEmpty() } }
         require(rows.size <= 100) { "accounts.csv 最多支持 100 个账号。" }
         val parsed = rows.mapIndexed { index, cells ->
-            require(cells.size == header.size) { "accounts.csv 第 ${index + 2} 行列数不正确。" }
-            val values = header.zip(cells).toMap()
+            require(cells.size == inputHeader.size) { "accounts.csv 第 ${index + 2} 行列数不正确。" }
+            val values = inputHeader.zip(cells).toMap()
             val csvPlatform = values.getValue("platform")
             val server = values.getValue("server")
             val platform = when {
@@ -71,7 +82,14 @@ object PlatformAccountsCsvAdapter {
                 mid = values.getValue("mid"),
                 games = values.getValue("games").split('|').map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
                 enabled = enabledValue == "true" || enabledValue == "1",
-                remark = values.getValue("remark")
+                remark = values.getValue("remark"),
+                deviceManufacturer = values["device_manufacturer"].orEmpty(),
+                deviceModel = values["device_model"].orEmpty(),
+                deviceCode = values["device_code"].orEmpty(),
+                androidVersion = values["android_version"].orEmpty(),
+                androidSdk = values["android_sdk"].orEmpty(),
+                deviceFingerprint = values["device_fingerprint"].orEmpty(),
+                appInstallId = values["app_install_id"].orEmpty()
             )
         }
         validate(parsed, allowedPlatforms)
@@ -89,7 +107,9 @@ object PlatformAccountsCsvAdapter {
                     if (row.platform == AccountStore.MIYOUSHE_CN) "cn" else if (row.platform == AccountStore.HOYOLAB) "os" else "",
                     row.name, row.userId, row.credential, row.stuid, row.stoken, row.mid,
                     row.games.sorted().joinToString("|"),
-                    row.enabled.toString(), row.remark
+                    row.enabled.toString(), row.remark,
+                    row.deviceManufacturer, row.deviceModel, row.deviceCode,
+                    row.androidVersion, row.androidSdk, row.deviceFingerprint, row.appInstallId
                 )
                 append(cells.joinToString(",") { encodeCell(it) }).append("\r\n")
             }
