@@ -135,8 +135,11 @@ object PlatformAccountsCsvAdapter {
             require(!row.credential.contains('\n') && !row.credential.contains('\r')) {
                 "账号「${row.name.ifBlank { row.accountId }}」的凭据包含换行符。"
             }
-            require(listOf(row.accountId, row.platform, row.name, row.userId, row.stuid, row.stoken, row.mid, row.remark)
-                .none { it.contains('\n') || it.contains('\r') }) {
+            require(listOf(
+                row.accountId, row.platform, row.name, row.userId, row.stuid, row.stoken, row.mid, row.remark,
+                row.deviceManufacturer, row.deviceModel, row.deviceCode, row.androidVersion,
+                row.androidSdk, row.deviceFingerprint, row.appInstallId
+            ).none { it.contains('\n') || it.contains('\r') }) {
                 "账号「${row.name.ifBlank { row.accountId }}」的非凭据字段不能包含换行符。"
             }
             if (row.enabled) {
