@@ -11,7 +11,6 @@ object HuaweiCloudSession {
     var sk: String = ""
     var region: String = "cn-east-3"
     var projectId: String = ""
-    var lastConfigYaml: String = ""
     var lastHoyoAccountsCsv: String = ""
     var lastSklandAccountsCsv: String = ""
     var lastHoyoFunctionExisted: Boolean = false
@@ -20,7 +19,7 @@ object HuaweiCloudSession {
     var lastSklandCsvPresent: Boolean = false
     var lastSklandLegacySnapshot: String = ""
 
-    // Current browser-session Cookie, never persisted. Kept separate from cloud YAML.
+    // Current browser-session Cookie, never persisted; stored separately per account.
     @Volatile var pendingHoyoCookie: String = ""
     @Volatile var pendingHoyoCookieServer: String = ""
     @Volatile var pendingHoyoCookieAccountId: String = ""
