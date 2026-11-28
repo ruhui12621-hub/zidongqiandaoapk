@@ -43,6 +43,8 @@ object HomeAccountDisplayAssembler {
             .put("remark", account.remark)
             .put("cookieReady", account.cookieReady)
             .put("tokenReady", account.tokenReady)
+            .put("cloudEligible", account.cloudEligible)
+            .put("cloudBacked", account.cloudBacked)
             .put("cloudUpdateStages", cloudUpdateStages)
             .put("todayStatus", todayStatus)
             .put("gameTodayStatuses", perGameStatuses)
