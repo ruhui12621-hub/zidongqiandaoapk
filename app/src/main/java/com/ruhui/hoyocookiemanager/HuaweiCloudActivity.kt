@@ -374,9 +374,29 @@ open class HuaweiCloudActivity : Activity() {
             } else {
                 store.all().filter { it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN }
             }
-            if (group.size <= 1) {
+            if (!account.cloudBacked) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("删除本地账号")
+                    .setMessage("「" + account.name + "」尚未进入云端 CSV，删除只会清除此设备内的暂存账号，不会更新云函数。")
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("删除") { _, _ ->
+                        store.delete(accountId)
+                        if (account.platform == AccountStore.SKLAND) runCatching { SklandTokenVault(this, accountId).delete() }
+                        else {
+                            runCatching { HoYoCookieVault(this, accountId).delete() }
+                            HuaweiCloudSession.forgetHoyoCookie(accountId)
+                        }
+                        AppMessageBus.post(this, if (account.platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
+                            "本地账号已删除", "暂存账号已从本机移除，未向云端发送更新。", true)
+                        onCloudDeploymentProgress()
+                    }
+                    .show()
+                return@runOnUiThread
+            }
+            val remainingEligible = group.filter { it.id != accountId && it.cloudEligible }
+            if (remainingEligible.isEmpty()) {
                 AppMessageBus.post(this, if (account.platform == AccountStore.SKLAND) AppMessageBus.SKLAND else AppMessageBus.HOYOLAB,
-                    "无法删除账号", "这是该平台函数中的最后一个账号。请先停用它；保留 CSV 文件结构。", false)
+                    "无法删除账号", "删除后将没有可写入云端 CSV 的账号；请先完成另一个账号的登录。", false)
                 onCloudDeploymentProgress()
                 return@runOnUiThread
             }
@@ -394,12 +414,16 @@ open class HuaweiCloudActivity : Activity() {
                             HuaweiCloudSession.clearPendingHoyoCookie()
                         }
                     }
-                    val remaining = if (account.platform == AccountStore.SKLAND) {
-                        store.all().filter { it.platform == AccountStore.SKLAND }
-                    } else {
-                        store.all().filter { it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN }
+                    if (account.platform != AccountStore.SKLAND) {
+                        HuaweiCloudSession.forgetHoyoCookie(accountId)
                     }
-                    val anchorAccount = remaining.first()
+                    val remaining = if (account.platform == AccountStore.SKLAND) {
+                        store.all().filter { it.platform == AccountStore.SKLAND && it.cloudEligible }
+                    } else {
+                        store.all().filter { it.cloudEligible && (it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN) }
+                    }
+                    val anchorAccount = remaining.firstOrNull()
+                        ?: error("没有剩余的可上传账号，已停止云端更新。")
                     if (account.platform == AccountStore.SKLAND) {
                         deploySklandAccount(anchorAccount.id, JSONArray(anchorAccount.games.sorted()).toString())
                     } else {
@@ -1049,7 +1073,6 @@ open class HuaweiCloudActivity : Activity() {
             return
         }
         val acquiredCookie = HuaweiCloudSession.hoyoCookieFor(accountId)
-        val pendingCookie = acquiredCookie?.first.orEmpty()
         val pendingServer = acquiredCookie?.second.orEmpty()
         val pendingAccountId = accountId.takeIf { acquiredCookie != null }.orEmpty()
         val account = AccountStore(this).find(accountId)
@@ -1058,8 +1081,8 @@ open class HuaweiCloudActivity : Activity() {
             showAccountDeployMessage(accountId, "$title 失败", "当前账号不是 HoYoLAB/米游社账号，已停止上传。", false)
             return
         }
-        // A process-session Cookie belongs only to the account that acquired it.
-        // Updating another account must never copy or consume that Cookie.
+        // Each process-session Cookie remains bound to its own account ID.
+        // A platform CSV update may include it, even when another account initiated the update.
         val hasPendingCookie = acquiredCookie != null
         val pendingAccount = if (hasPendingCookie) AccountStore(this).find(pendingAccountId) else null
         if (hasPendingCookie && (pendingAccount == null || pendingAccount.platform !in setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))) {
