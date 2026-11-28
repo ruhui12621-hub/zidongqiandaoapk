@@ -84,6 +84,9 @@ export default function App() {
     if (snapshot === lastStateRef.current) return;
     lastStateRef.current = snapshot;
     setState(next);
+    if (Object.prototype.hasOwnProperty.call(next, "selectedAccountId")) {
+      setSelectedId(next.selectedAccountId || null);
+    }
     setCloudDraft(old => ({...old, region: old.region === "cn-east-3" ? (next.region || old.region) : old.region}));
   }, []);
 
@@ -129,7 +132,7 @@ export default function App() {
   const goBack = () => {
     if (modal) { closeModal(); return; }
     if (selectedTodayId) { setSelectedTodayId(null); setPage("home"); return; }
-    if (selectedId) { setSelectedId(null); setPage("home"); return; }
+    if (selectedId) { setSelectedId(null); setPage("home"); callNative("backToHome"); return; }
     if (page !== "home") { setPage("home"); return; }
     notify("再按一次可退出应用");
   };
@@ -242,6 +245,7 @@ export default function App() {
               setCsvPlatform(row.platform === "skland" ? "skland" : "hoyolab");
               setSelectedTodayId(null);
               setSelectedId(row.id);
+              callNative("openAccount", row.id);
             }}>
               <span className="account-overview-title">
                 <strong>{row.name || "未命名账号"}</strong>
