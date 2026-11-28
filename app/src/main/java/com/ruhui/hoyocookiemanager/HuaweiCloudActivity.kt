@@ -42,16 +42,12 @@ open class HuaweiCloudActivity : Activity() {
     private var projectId = ""
     // Huawei IAM tenant/account ID (domain_id), distinct from the regional project ID.
     private var domainId = ""
-    private var configYaml = ""
-    private var configProvider: (() -> String)? = null
     private var panelService = "hoyolab"
 
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState) }
 
     /** The HTML interface owns every visible control. */
     protected fun prepareHtmlCloudBackend(host: android.widget.FrameLayout) {
-        configProvider = { HuaweiCloudSession.lastConfigYaml }
-        configYaml = HuaweiCloudSession.lastConfigYaml
         regionValue = getSharedPreferences("app_settings", MODE_PRIVATE).getString("cloud_region", "cn-east-3") ?: "cn-east-3"
         runCatching { AndroidCredentialVault(this).latest() }.getOrNull()?.let {
             accessKeyValue = it.first
@@ -182,7 +178,6 @@ open class HuaweiCloudActivity : Activity() {
                     store.reconcileCloudAccounts(setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN), emptySet())
                     HuaweiCloudSession.lastHoyoFunctionExisted = false
                     HuaweiCloudSession.lastHoyoCsvPresent = false
-                    HuaweiCloudSession.lastConfigYaml = ""
                     HuaweiCloudSession.lastHoyoAccountsCsv =
                         PlatformAccountsCsvAdapter.encode(emptyList(), setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN))
                 }
@@ -190,15 +185,13 @@ open class HuaweiCloudActivity : Activity() {
                 if (hoyoFunction != null) {
                     val archive = downloadZip(hoyoFunction, "HoYoLAB")
                     HuaweiCloudSession.lastHoyoFunctionExisted = true
-                    val yaml = readZipTextFromArchive(archive, "config/config.yaml", "HoYoLAB")
                     val cloudCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
-                        ?: error("HoYoLAB 函数包缺少必需的 config/accounts.csv；已拒绝读取旧版 YAML 账号配置。")
+                        ?: error("HoYoLAB 函数包缺少必需的 config/accounts.csv；请先部署 CSV 版本的云函数。")
                     HuaweiCloudSession.lastHoyoCsvPresent = true
                     val rows = PlatformAccountsCsvAdapter.parse(
                         cloudCsv,
                         setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
                     )
-                    HuaweiCloudSession.lastConfigYaml = HoYoLabCloudConfigAdapter.clearAccountCredentials(yaml)
                     HuaweiCloudSession.lastHoyoAccountsCsv = PlatformAccountsCsvAdapter.encode(
                         rows,
                         setOf(AccountStore.HOYOLAB, AccountStore.MIYOUSHE_CN)
@@ -437,11 +430,6 @@ open class HuaweiCloudActivity : Activity() {
 
     protected fun htmlCloudBackendReady(): Boolean = true
 
-    protected fun updateHuaweiCloudConfig(value: String) {
-        configYaml = value
-        HuaweiCloudSession.lastConfigYaml = value
-
-    }
 
     /**
      * FunctionGraph returns an OBS object URL for ZIP code packages. The URL is not
@@ -1120,13 +1108,6 @@ open class HuaweiCloudActivity : Activity() {
                 logAccountDeployStep(accountId, "正在读取 APK 内置函数包 cloud/hoyolab.zip。")
                 val packaged = readPackagedZip("cloud/hoyolab.zip")
                 logAccountDeployStep(accountId, "内置函数包读取成功，大小：${packaged.size} 字节。", true)
-                val baseYaml = HuaweiCloudSession.lastConfigYaml.ifBlank {
-                    readZipTextFromArchive(packaged, "config/config.yaml", "HoYoLAB")
-                        .let(HoYoLabCloudConfigAdapter::clearAccountCredentials)
-                }
-                val baseArchive = if (baseYaml.isNotBlank()) {
-                    replaceZip(packaged, "config/config.yaml", baseYaml, allowCreate = false)
-                } else packaged
                 val selectedGames = try {
                     val array = JSONArray(selectedGamesJson)
                     (0 until array.length()).map { array.getString(it) }.toSet()
@@ -1144,7 +1125,7 @@ open class HuaweiCloudActivity : Activity() {
                     val cookie = HuaweiCloudSession.hoyoCookieFor(managed.id)?.first
                         ?: old?.credential.orEmpty()
                     val fields = if (managed.platform == AccountStore.MIYOUSHE_CN)
-                        HoYoLabCloudConfigAdapter.cookieFields(cookie) else emptyMap()
+                        parseCookieFields(cookie) else emptyMap()
                     val identity = managed.platformUserId ?: old?.userId
                         ?: HoYoAccountIdentity.fromCookie(cookie, managed.platform).orEmpty()
                     val deviceInfo = DeviceInfoProvider.forAccount(managed.id)
@@ -1175,7 +1156,7 @@ open class HuaweiCloudActivity : Activity() {
                 val csvText = PlatformAccountsCsvAdapter.encode(csvAccounts, allowedPlatforms)
                 logAccountDeployStep(accountId, "CSV 校验完成：共 " + csvAccounts.size +
                     " 个账号；当前账号启用 " + selectedGames.size + " 款游戏。未输出 Cookie 原文。", true)
-                val archive = replaceZip(baseArchive, "config/accounts.csv", csvText, allowCreate = true)
+                val archive = replaceZip(packaged, "config/accounts.csv", csvText, allowCreate = true)
                 logAccountDeployStep(accountId, "正在核对云端账号 CSV 是否被其他设备更新……", true)
                 verifyHoyoCsvSnapshotUnchanged()
                 logAccountDeployStep(accountId, "函数 ZIP 重新打包完成，大小：${archive.size} 字节。", true)
@@ -1205,10 +1186,6 @@ open class HuaweiCloudActivity : Activity() {
                 HuaweiCloudSession.removeUploadedHoyoCookies(csvAccounts.map { it.accountId }.toSet())
                 HuaweiCloudSession.lastHoyoFunctionExisted = true
                 HuaweiCloudSession.lastHoyoCsvPresent = true
-                if (baseYaml.isNotBlank()) {
-                    HuaweiCloudSession.lastConfigYaml = baseYaml
-                    configYaml = baseYaml
-                }
 
                 AppMessageBus.setAccountStage(this, accountId, "lts", "LTS 日志隔离", "进行中", "正在检查并配置 HoYoLAB 专属日志流。")
                 val ltsSummary = ensureLtsIsolation(urn, "hoyolab") { detail, success ->
@@ -1311,6 +1288,13 @@ open class HuaweiCloudActivity : Activity() {
         return bytes
     }
 
+    private fun parseCookieFields(cookie: String): Map<String, String> =
+        cookie.split(';').mapNotNull { part ->
+            val trimmed = part.trim()
+            val split = trimmed.indexOf('=')
+            if (split <= 0) null else trimmed.substring(0, split).trim() to trimmed.substring(split + 1).trim()
+        }.toMap()
+
     private fun verifyHoyoCsvSnapshotUnchanged() {
         val function = findFunctionForSnapshot(HOYOLAB_FUNCTION)
         if (!HuaweiCloudSession.lastHoyoFunctionExisted) {
@@ -1319,11 +1303,6 @@ open class HuaweiCloudActivity : Activity() {
         }
         if (function == null) error("HoYoLAB 云函数在本次同步后已被删除；请重新同步。")
         val archive = downloadFunctionZipForSnapshot(function, "HoYoLAB")
-        val currentYaml = readZipTextFromArchive(archive, "config/config.yaml", "HoYoLAB")
-        val sanitizedYaml = HoYoLabCloudConfigAdapter.clearAccountCredentials(currentYaml)
-        if (sanitizedYaml != HuaweiCloudSession.lastConfigYaml) {
-            error("HoYoLAB 云端基础配置在本次同步后发生变化；已停止上传，请重新同步，避免覆盖其他设置。")
-        }
         val currentCsv = readZipEntryTextOrNull(archive, "config/accounts.csv")
         if (currentCsv == null) {
             error("HoYoLAB 云端 accounts.csv 在本次同步后被移除；已停止上传，请重新创建函数或重新同步。")
