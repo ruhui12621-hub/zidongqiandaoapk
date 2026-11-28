@@ -54,6 +54,7 @@ class MainActivity : HuaweiCloudActivity() {
     private var detectedGameServer: String? = null
     private var activeAccountId: String? = null
     private var activePlatform: String? = null
+    private lateinit var loginDeviceInfo: DeviceInfoSnapshot
     private var lastLoggedCookieAccountId: String? = null
     private var lastLoggedCookieServer: String? = null
     private var returnToAccountDetail = false
@@ -70,6 +71,7 @@ class MainActivity : HuaweiCloudActivity() {
         AccountStore.clearLegacyLocalData(this)
         activeAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
         activePlatform = intent.getStringExtra(AccountStore.EXTRA_PLATFORM)
+        loginDeviceInfo = DeviceInfoProvider.capture(this)
         loginProfileName = LoginWebSession.profileName(activeAccountId ?: "unassigned")
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
             Toast.makeText(this, "当前系统 WebView 不支持独立登录空间，请更新 Android System WebView 后重试。", Toast.LENGTH_LONG).show()
@@ -509,6 +511,7 @@ class MainActivity : HuaweiCloudActivity() {
             pageCookieAcquired = true
             cookieRefreshHandler.removeCallbacks(cookieFallbackTask)
             activeAccountId = account.id
+            DeviceInfoProvider.bind(account.id, loginDeviceInfo)
 
             val server = detectedGameServer!!
             yamlValue = makeYaml(found, server)
