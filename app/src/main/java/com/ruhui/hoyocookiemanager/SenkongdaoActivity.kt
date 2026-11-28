@@ -50,6 +50,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
     private var statusPageReady = false
     private var lastCheck = 0L
     private var loginProfileName = ""
+    private lateinit var loginDeviceInfo: DeviceInfoSnapshot
     private var sessionCookieManager: CookieManager? = null
     private var sessionWebStorage: android.webkit.WebStorage? = null
     private var profilePrepared = false
@@ -67,6 +68,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
         super.onCreate(savedInstanceState)
         AppMessageBus.setActiveChannel(AppMessageBus.SKLAND)
         loginProfileName = LoginWebSession.profileName(intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID) ?: "unassigned")
+        loginDeviceInfo = DeviceInfoProvider.capture(this)
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
             android.widget.Toast.makeText(this, "当前系统 WebView 不支持独立登录空间，请更新 Android System WebView 后重试。", android.widget.Toast.LENGTH_LONG).show()
             finish()
@@ -434,6 +436,7 @@ class SenkongdaoActivity : HuaweiCloudActivity() {
                 return
             }
             val selectedAccountId = intent.getStringExtra(AccountStore.EXTRA_ACCOUNT_ID)
+            DeviceInfoProvider.bind(selectedAccountId, loginDeviceInfo)
             SklandTokenVault(this, selectedAccountId).save(token)
             selectedAccountId?.let { HtmlMainActivity.markSessionTokenAcquired(it) }
             selectedAccountId?.let { id ->
