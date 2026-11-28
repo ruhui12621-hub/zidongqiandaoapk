@@ -57,7 +57,7 @@ export default function App() {
   const [csvPlatform, setCsvPlatform] = useState("hoyolab");
   const [csvDrafts, setCsvDrafts] = useState<AnyState[]>([]);
   const [csvDirtyIds, setCsvDirtyIds] = useState<Set<string>>(new Set());
-  const accountSnapshot = JSON.stringify((state.accounts || []).map((row: AnyState) => ({ id: row.id, platform: row.platform, name: row.name, userId: row.userId, games: row.games, enabled: row.enabled, remark: row.remark, cookieReady: row.cookieReady, tokenReady: row.tokenReady })));
+  const accountSnapshot = JSON.stringify((state.accounts || []).map((row: AnyState) => ({ id: row.id, platform: row.platform, name: row.name, userId: row.userId, games: row.games, enabled: row.enabled, remark: row.remark, cookieReady: row.cookieReady, tokenReady: row.tokenReady, cloudEligible: row.cloudEligible, cloudBacked: row.cloudBacked })));
 
   useEffect(() => {
     setCsvDrafts(old => {
@@ -391,6 +391,7 @@ export default function App() {
         <div className="info-line"><span>平台</span><strong>{platformLabel(account.platform)}</strong></div>
         <div className="info-line"><span>服务器</span><strong>{account.platform === "miyoushe_cn" ? "国服" : account.platform === "hoyolab" ? "国际服" : "不适用"}</strong></div>
         <div className="info-line"><span>账号标识</span><strong>{account.userId || "尚未识别"}</strong></div>
+        <div className="info-line"><span>云端状态</span><strong>{account.cloudBacked ? "已同步到云端 CSV" : account.cloudEligible ? "登录已完成，等待上传" : "本地暂存，登录后才可上传"}</strong></div>
         <div className="field-label">启用游戏</div>
         <div className="csv-game-options detail-game-options">
           {options.map((game: AnyState) => <label className="csv-game-option" key={game.key}>
@@ -404,7 +405,7 @@ export default function App() {
         </label>
         <label className="field-label" htmlFor="account-remark">备注</label>
         <input id="account-remark" value={draft.remark || ""} onChange={e => updateCsvRow(account.id, {remark: e.target.value})} placeholder="添加备注"/>
-        <p className="helper-text">账号资料和游戏设置会在上方点击“保存并更新云函数”时写入平台 CSV。</p>
+        <p className="helper-text">未完成 Cookie/Token 获取与解析的新账号仅保留在本机；即使更新其他账号的云函数，也不会上传这条记录。登录成功后，它才会在后续平台 CSV 更新中一并上传。</p>
         <button className="csv-delete-button detail-delete-button" onClick={() => callNative("deletePlatformAccount", account.id)} disabled={!state.canAddAccount}>删除此账号</button>
       </section>
     </>;
