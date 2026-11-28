@@ -329,17 +329,20 @@ open class HuaweiCloudActivity : Activity() {
                     store.update(next)
                     updated += next
                 }
+                val eligibleUpdated = updated.filter { it.cloudEligible }
                 val anchor = if (platform == AccountStore.SKLAND) {
-                    updated.firstOrNull { it.id == preferredAccountId } ?: updated.first()
+                    eligibleUpdated.firstOrNull { it.id == preferredAccountId }
+                        ?: eligibleUpdated.firstOrNull()
+                        ?: error("当前平台没有已完成凭据解析、允许上传的账号；新账号仍保留在本地。")
                 } else {
-                    val allHoyo = store.all().filter {
-                        it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN
+                    val eligibleHoyo = store.all().filter {
+                        it.cloudEligible && (it.platform == AccountStore.HOYOLAB || it.platform == AccountStore.MIYOUSHE_CN)
                     }
-                    allHoyo.firstOrNull { it.id == preferredAccountId }
-                        ?: allHoyo.firstOrNull { it.id == HuaweiCloudSession.pendingHoyoCookieAccountId }
-                        ?: updated.firstOrNull()
-                        ?: allHoyo.firstOrNull()
-                        ?: error("HoYoLAB 平台账号为空。")
+                    eligibleHoyo.firstOrNull { it.id == preferredAccountId }
+                        ?: eligibleHoyo.firstOrNull { it.id == HuaweiCloudSession.pendingHoyoCookieAccountId }
+                        ?: eligibleUpdated.firstOrNull()
+                        ?: eligibleHoyo.firstOrNull()
+                        ?: error("HoYoLAB 平台没有已完成凭据解析、允许上传的账号；新账号仍保留在本地。")
                 }
                 if (platform == AccountStore.SKLAND) {
                     deploySklandAccount(anchor.id, JSONArray(anchor.games.sorted()).toString())
