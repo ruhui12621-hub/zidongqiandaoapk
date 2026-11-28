@@ -21,7 +21,11 @@ data class ManagedAccount(
     val cookieReady: Boolean = credentialReady,
     val tokenReady: Boolean = false,
     val enabled: Boolean = true,
-    val remark: String = ""
+    val remark: String = "",
+    // New accounts remain local-only until a real Cookie/Token has been parsed.
+    val cloudEligible: Boolean = false,
+    // True only after the account row has actually been accepted into the cloud CSV.
+    val cloudBacked: Boolean = false
 )
 
 class AccountStore(context: Context) {
@@ -46,7 +50,9 @@ class AccountStore(context: Context) {
             platformUserId = normalized,
             games = if (games.isNotEmpty()) games else GlobalModuleRegistry.defaultGamesFor(platform),
             enabled = enabled,
-            remark = remark
+            remark = remark,
+            cloudEligible = false,
+            cloudBacked = false
         )
         synchronized(cache) { cache.add(account) }
         return account
@@ -56,7 +62,8 @@ class AccountStore(context: Context) {
     fun reconcileCloudAccounts(platforms: Set<String>, incomingIds: Set<String>) {
         require(platforms.isNotEmpty() && platforms.all { it in PLATFORMS }) { "云端账号同步的平台范围无效" }
         synchronized(cache) {
-            cache.removeAll { it.platform in platforms && it.id !in incomingIds }
+            // Keep newly created local-only accounts while refreshing cloud-backed rows.
+            cache.removeAll { it.platform in platforms && it.cloudBacked && it.id !in incomingIds }
         }
     }
 
@@ -85,7 +92,9 @@ class AccountStore(context: Context) {
             cookieReady = if (platform == HOYOLAB || platform == MIYOUSHE_CN) credentialReady else false,
             tokenReady = platform == SKLAND && credentialReady,
             enabled = enabled,
-            remark = remark
+            remark = remark,
+            cloudEligible = true,
+            cloudBacked = true
         )
         synchronized(cache) {
             val sameId = cache.firstOrNull { it.id == id }
@@ -96,6 +105,19 @@ class AccountStore(context: Context) {
             if (index >= 0) cache[index] = imported else cache.add(imported)
         }
         return imported
+    }
+
+    @Synchronized
+    fun markCloudBacked(accountIds: Set<String>) {
+        if (accountIds.isEmpty()) return
+        synchronized(cache) {
+            for (index in cache.indices) {
+                val account = cache[index]
+                if (account.id in accountIds) {
+                    cache[index] = account.copy(cloudEligible = true, cloudBacked = true)
+                }
+            }
+        }
     }
 
     @Synchronized
