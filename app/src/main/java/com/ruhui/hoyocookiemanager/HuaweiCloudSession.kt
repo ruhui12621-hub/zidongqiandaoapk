@@ -38,9 +38,13 @@ object HuaweiCloudSession {
     fun hoyoCookieFor(accountId: String): Pair<String, String>? =
         acquiredHoyoCookies[accountId]
 
+    fun forgetHoyoCookie(accountId: String) {
+        acquiredHoyoCookies.remove(accountId)
+        if (pendingHoyoCookieAccountId == accountId) clearPendingHoyoCookie()
+    }
+
     fun removeUploadedHoyoCookies(accountIds: Set<String>) {
-        accountIds.forEach { acquiredHoyoCookies.remove(it) }
-        if (pendingHoyoCookieAccountId in accountIds) clearPendingHoyoCookie()
+        accountIds.forEach { forgetHoyoCookie(it) }
     }
 
     fun clearPendingHoyoCookie() {
