@@ -518,7 +518,6 @@ open class HuaweiCloudActivity : Activity() {
                 }
                 runOnUiThread {
                     // 登录成功后才保存凭据；Toast 不再承担连接状态提示。
-                    configYaml = configProvider?.invoke().orEmpty()
                     projectId = pid
                     domainId = accountDomainId
                     HuaweiCloudSession.ak = authAk
